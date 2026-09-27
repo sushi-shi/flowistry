@@ -19,17 +19,15 @@ cached results so different analysis modes cannot share stale results.
 
 ## Packaging and backend ownership
 
-`patches/cached-callee-summaries.patch` is the Rust-crate diff of local Flowistry
-fork commit `54f8e9e` against its `fork-base` commit `6097c62`. The preceding two
-patches reproduce that base on pinned upstream `693ceda925bd1d39d8de413ce239cfa6a87bb665`.
-The patch includes the backend regression tests. Analysis implementation remains
-in the editor-independent Rust backend; the Lua adapter only selects the mode.
-This packaging PR is separate from the fork's backend implementation branch.
+The flake pins [Flowistry fork commit
+`54f8e9ee556b4b1251924ca15b7838d3d2117494`](https://github.com/sushi-shi/flowistry/commit/54f8e9ee556b4b1251924ca15b7838d3d2117494)
+directly. It contains the combined command, precise source ranges, and cached
+callee summaries, so the Neovim package needs no build patches.
 
-This carries a reproducible snapshot while the backend fork is local. A later
-package update can pin the published fork commit and remove all three patches.
-Installing vanilla upstream via the README's Cargo command does not include
-the new summary implementation.
+The backend implementation is reviewed in [Flowistry PR #1](https://github.com/sushi-shi/flowistry/pull/1),
+against its `fork-base` branch. The Lua adapter only selects the analysis mode;
+the implementation and its regression tests remain editor-independent in Rust.
+The full commit pin makes builds independent of branch movement or merge timing.
 
 ## Cache and precision boundaries
 

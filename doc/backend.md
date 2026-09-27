@@ -13,14 +13,15 @@ checking, or information-flow computation are implemented in this repository.
        Neovim transport + UI        future Zed adapter
 ```
 
-The integration targets Flowistry revision
-`693ceda925bd1d39d8de413ce239cfa6a87bb665` (0.5.44), with its locked
+The integration targets Flowistry fork revision
+`54f8e9ee556b4b1251924ca15b7838d3d2117494` (0.5.44), with its locked
 `rustc_utils = 0.15.0-nightly-2026-05-01` dependency. This is a description of that
-upstream protocol, not a claim of upstream version stability. The packaged build
-also applies `patches/file-focus.patch`, adding the combined command below,
-and `patches/precise-focus.patch`, refining human-facing focus ranges.
+protocol, not a claim of upstream version stability. The fork includes the
+combined command below, refined human-facing focus ranges, and optional
+[cached callee summaries](summaries.md). The package consumes this commit
+directly without build patches.
 
-The latter keeps simple independent arguments dimmed in forward uses of a value.
+The range refinement keeps simple independent arguments dimmed in forward uses of a value.
 For example, focusing `section` leaves `camera[0]` dim in a call whose other
 arguments depend on `section`. Selecting the call result retains all its inputs.
 It uses the existing dependency analysis before the call; it does not infer
@@ -162,7 +163,7 @@ server is added later, put it beside the Rust backend and share it between edito
 
 ## Sources and fixtures
 
-Protocol details were checked against the pinned upstream
+Protocol details were checked against the pinned fork's
 `crates/flowistry_ide/src/{plugin.rs,spans.rs,focus/mod.rs}` and the locked
 `rustc_utils` crate's `source_map/{range.rs,filename.rs}`. The upstream TypeScript
 `Range` declaration is older than the numeric filename serialization and should

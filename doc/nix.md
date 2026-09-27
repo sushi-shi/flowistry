@@ -1,8 +1,9 @@
 # NixOS and Home Manager
 
 Enable Nix's `nix-command` and `flakes` experimental features. The lock file pins
-nixpkgs, Fenix, the Rust nightly (including rustc-dev), and upstream Flowistry;
-backend changes are shipped as patches. No ambient rustup installation is needed.
+nixpkgs, Fenix, the Rust nightly (including rustc-dev), and an exact commit of
+[the Flowistry fork](https://github.com/sushi-shi/flowistry). No ambient rustup
+installation is needed.
 
 Try the launcher from your Cargo project's development shell:
 

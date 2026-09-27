@@ -103,7 +103,7 @@ The launcher also enables progress=true: analysis opens an elapsed-time popup
 using CoC's progress notifications, or a Neovim float when CoC is not installed.
 Completion, errors and cancellation close the popup; cached cursor moves do not
 open one.
-Batch mode is enabled for its patched backend: files up to
+Batch mode is enabled for its fork backend: files up to
 batch_max_lines (600) are analyzed together; larger files load functions on
 demand. Set batch=false for the unmodified upstream backend (the setup default).
 

@@ -18,8 +18,8 @@ same executable and protocol; see [the backend contract](doc/backend.md).
 
 ## Backend installation
 
-The default targets upstream revision
-[`693ceda925bd1d39d8de413ce239cfa6a87bb665`](https://github.com/willcrichton/flowistry/tree/693ceda925bd1d39d8de413ce239cfa6a87bb665),
+The package targets Flowistry fork revision
+[`54f8e9ee556b4b1251924ca15b7838d3d2117494`](https://github.com/sushi-shi/flowistry/tree/54f8e9ee556b4b1251924ca15b7838d3d2117494),
 which identifies itself as **0.5.44** and pins **nightly-2026-05-01**. The compiler
 API and wire format are version-sensitive. Install that revision, rather than
 assuming an arbitrary published version or latest nightly is compatible:
@@ -28,8 +28,8 @@ assuming an arbitrary published version or latest nightly is compatible:
 rustup toolchain install nightly-2026-05-01 \
   --component rust-src --component rustc-dev --component llvm-tools-preview
 cargo +nightly-2026-05-01 install --locked \
-  --git https://github.com/willcrichton/flowistry \
-  --rev 693ceda925bd1d39d8de413ce239cfa6a87bb665 flowistry_ide
+  --git https://github.com/sushi-shi/flowistry \
+  --rev 54f8e9ee556b4b1251924ca15b7838d3d2117494 flowistry_ide
 ```
 
 Make sure Cargo's bin directory is on Neovim's PATH. The frontend discovers the
@@ -156,7 +156,7 @@ require("flowistry").setup({
   context_mode = nil,            -- default SigOnly; "Recurse" enables callee analysis
   command = nil,                 -- e.g. { "/path/to/flowistry-wrapper" }
   root = nil,                    -- explicit Cargo workspace root for a wrapper
-  batch = false,                 -- true for the patched backend; Nix launcher sets it
+  batch = false,                 -- true for the fork backend; Nix launcher sets it
   batch_max_lines = 600,          -- analyze larger files one function at a time
   env = {},                      -- extra environment, merged with the process env
   gzip = "gzip",
@@ -265,6 +265,6 @@ Highlighted code may be relevant. Upstream documents limitations around interior
 async bodies, and mapping compiler IR back to source. This is a reading aid, not a
 proof that dimmed code can be deleted or ignored in a correctness/security review.
 
-The Rust backend remains an upstream dependency. No Zed adapter or LSP server is
+The Rust backend remains a separate fork dependency. No Zed adapter or LSP server is
 implemented here. The Lua frontend is MIT licensed; see [LICENSE](LICENSE) for
 the upstream attribution.

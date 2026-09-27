@@ -7,7 +7,7 @@
     fenix.url = "github:nix-community/fenix/5f7e7d793cb2553410f857554de86f277ebe2f71";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
     flowistry-src = {
-      url = "github:willcrichton/flowistry/693ceda925bd1d39d8de413ce239cfa6a87bb665";
+      url = "github:sushi-shi/flowistry/54f8e9ee556b4b1251924ca15b7838d3d2117494";
       flake = false;
     };
   };
@@ -29,13 +29,8 @@
           compilerLibraries = "${toolchain}/lib:${toolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/lib";
           backend = rustPlatform.buildRustPackage {
             pname = "flowistry-backend";
-            version = "0.5.44-693ceda-cached-callees";
+            version = "0.5.44-54f8e9e";
             src = flowistry-src;
-            patches = [
-              ./patches/file-focus.patch
-              ./patches/precise-focus.patch
-              ./patches/cached-callee-summaries.patch
-            ];
             cargoLock.lockFile = "${flowistry-src}/Cargo.lock";
             cargoBuildFlags = [ "-p" "flowistry_ide" ];
             doCheck = false;
