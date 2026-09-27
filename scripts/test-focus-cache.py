@@ -69,7 +69,7 @@ def main():
         source.write_text(SOURCE)
         count = 0
 
-        def run(expect_hit, mode='Recurse', cache_mode='', extra_env=None):
+        def run(expect_hit, mode='Recurse', cache_mode='', extra_env=None, fast=False):
             nonlocal count
             env = dict(os.environ, FLOWISTRY_CACHE_DIR=str(cache), FLOWISTRY_CACHE=cache_mode)
             env.update(extra_env or {})
@@ -81,6 +81,8 @@ def main():
                 assert result.returncode == 0, result.stderr.decode()
                 assert output['cache']['hits'] == int(expect_hit), output['cache']
                 assert output['cache']['misses'] == int(not expect_hit), output['cache']
+                if fast:
+                    assert output['cache'].get('validation') == 'snapshot', output['cache']
                 assert any(body['focus'] and 'Ok' in body['focus'] for body in output['bodies'])
             except Exception as error:
                 raise AssertionError(f'case {count + 1}: {error}\n{result.stderr.decode()}') from error
@@ -88,7 +90,7 @@ def main():
             return output
 
         fresh = run(False)
-        assert canonical(run(True)) == canonical(fresh)
+        assert canonical(run(True, fast=True)) == canonical(fresh)
         # Whitespace and Unicode comments move unchanged tokens, including within the body.
         source.write_text('\n// é🦀\n' + SOURCE.replace(' let input', '\n    let input'))
         moved = run(True)

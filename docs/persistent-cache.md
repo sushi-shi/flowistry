@@ -31,19 +31,40 @@ can move code without stale coordinates. Whitespace inside literals remains
 significant. Comments inside the selected function are included conservatively
 in its token key. Unsupported ranges fall back to analysis.
 
-## Compiler validation still runs
+## Lookup before compiler startup
 
-Cargo and rustc check the current crate before accepting a persistent hit. This
-supplies resolved types, macros, dependencies and borrow facts for the key, and
-prevents cached results from hiding compilation errors elsewhere. The cache
-skips Flowistry analysis; it does not skip compiler validation or analyze
-incomplete unsaved Rust.
+For `file-focus`, an unchanged saved-input snapshot replays the prepared wire
+response before Cargo metadata, Cargo check or rustc starts. Different cursor
+positions inside the same analyzed body share that result; other functions and
+nested bodies need their own completed analysis. Both analysis modes support
+this path. The legacy `focus` command uses compiler-validated results only.
 
-In one `gameplay.rs` check of `load_sublevel_runtime`, forced computation took
-3.4 seconds and two confirmed persistent hits took 3.2 and 3.3 seconds. Compiler
-validation dominated. These are individual warm-Cargo samples, not a general
-speedup claim. Neovim separately avoids subprocesses for unchanged saves,
-edit-and-undo, and off/on using retained memory results.
+The snapshot watches the selected package's dependency closure, including
+registry and path sources; all resolved manifests and the workspace lockfile;
+Cargo config and toolchain files; backend/compiler executables and configured
+wrappers; compiler-declared include/proc-macro inputs; and Cargo build-script
+outputs, generated files and declared rerun inputs. The invocation environment
+participates in its key. Changes during analysis prevent saving a response.
+Input checks use filesystem size, nanosecond mtime, ctime and inode on Unix.
+Changed stamps trigger content hashing, so an unchanged save or undo can still
+replay a response;
+other platforms fall back to compiler validation. Missing/unreadable inputs,
+symlink cycles and excessive trees also fall back. As with Cargo, external
+inputs used by build scripts or proc macros must be declared. Changes to
+untracked network/time inputs require an explicit refresh.
+
+After any recorded input changes, Cargo/rustc validation runs again. The
+function-level cache below it can still skip solving and slicing when the
+function and its dependencies remain semantically unchanged. This catches
+compilation errors elsewhere rather than accepting a stale snapshot. Unsaved
+incomplete Rust is not compiled.
+
+Warm `gameplay.rs` requests for `load_sublevel_runtime` measured about 200 ms
+with snapshot replay, versus about 3.2 seconds with compiler validation. These
+are individual local warm-filesystem samples, not a universal latency guarantee.
+The response is stored ready to send, avoiding reconstruction of several MB of
+JSON on each hit. Neovim separately avoids backend processes for retained
+memory results.
 
 ## Controls and storage
 
@@ -54,17 +75,19 @@ edit-and-undo, and off/on using retained memory results.
 | `FLOWISTRY_CACHE_DIR=/path` | Override the shared cache root |
 
 The default root is `$XDG_CACHE_HOME/flowistry`, or `$HOME/.cache/flowistry`.
-Entries live under `focus-v1`. Without a cache location or executable identity,
+Function entries live under `focus-v1`; prepared responses under `responses-v1`. Without a cache location or executable identity,
 analysis proceeds without persistent caching. Deleting the cache is safe.
 
 Writes are atomic. Invalid JSON, schema/key/checksum mismatches, invalid ranges,
 missing files and cache I/O failures become misses. Only successful analyses are
 written. Entries are limited to 32 MiB each; storage is trimmed to 256 MiB and
-2048 entries by removing the oldest written results. Concurrent access may cause
+2048 function entries by removing the oldest written results. The response cache
+has its own 256 MiB / 256-entry cap. Concurrent access may cause
 additional misses but does not require editor-owned locks.
 
 `file-focus` adds `cache: { hits, misses }` metadata and a nullable `cached` flag
-on each body. `FocusOutput` itself is unchanged. Set
+on each body. Compiler-free responses also report `cache.validation: "snapshot"`.
+`FocusOutput` itself is unchanged. Set
 `RUST_LOG=flowistry_ide::cache=info` for stderr hit/miss logs; stdout remains
 compressed JSON. Debug logs also report uncacheable ranges.
 
@@ -73,6 +96,7 @@ compressed JSON. Debug logs also report uncacheable ranges.
 ```sh
 cargo test --locked --workspace --all-targets
 python3 scripts/test-focus-cache.py --backend /path/to/flowistry-backend
+python3 scripts/test-fast-cache.py --backend /path/to/flowistry-backend
 ```
 
 The integration script starts fresh backend processes and checks invalidation,
@@ -80,3 +104,8 @@ formatting/Unicode relocation against fresh results, unrelated edits, transitive
 and cross-file calls, cycles, closures, macros, constants, types, visibility,
 compiler flags, dependency metadata, undo, corrupt entries, unwritable cache
 locations and compilation-error rejection. Its fixture and cache are temporary.
+
+The fast-cache tests instrument `RUSTC_WRAPPER` to prove warm hits invoke no
+compiler, including cursor changes within a function. They cover external
+includes, build-script inputs, environment/config changes, restored mtimes,
+refresh, opt-out, corrupted responses and compile-error propagation.

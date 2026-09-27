@@ -34,3 +34,5 @@ mod plugin;
 mod spans;
 
 pub use plugin::FlowistryPlugin;
+
+pub mod fast_cache;

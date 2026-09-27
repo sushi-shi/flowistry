@@ -1,6 +1,6 @@
 #![feature(rustc_private)]
 
-fn main() {
+fn main() -> std::process::ExitCode {
   env_logger::init();
-  rustc_plugin::cli_main(flowistry_ide::FlowistryPlugin);
+  flowistry_ide::fast_cache::run()
 }

@@ -123,6 +123,7 @@ impl rustc_driver::Callbacks for Callbacks {
         },
       })
     })());
+    crate::fast_cache::record_inputs(tcx);
     rustc_driver::Compilation::Stop
   }
 }
