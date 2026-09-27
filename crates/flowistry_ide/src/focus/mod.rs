@@ -1,5 +1,5 @@
 use anyhow::Result;
-use flowistry::infoflow::{self, Direction};
+use flowistry::infoflow;
 use itertools::Itertools;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
@@ -13,8 +13,10 @@ use rustc_utils::{
   },
 };
 use serde::Serialize;
+use std::collections::HashMap;
 
 mod direct_influence;
+mod simple_args;
 
 #[derive(Debug, Serialize)]
 pub struct PlaceInfo {
@@ -54,7 +56,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     })
     .into_group_map()
     .into_iter()
-    .map(|(k, vs)| (k, vs.concat()))
+    .map(|(k, vs)| (k, vs.into_iter().flatten().unique().collect::<Vec<_>>()))
     .collect::<Vec<_>>();
 
   let targets = grouped_spans
@@ -62,11 +64,29 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     .map(|(_, target)| target.clone())
     .collect();
 
-  let relevant =
-    infoflow::compute_dependency_spans(results, targets, Direction::Both, &spanner);
+  let simple_args = simple_args::collect(tcx, body_id);
+  let relevant = infoflow::compute_focus_spans(results, targets, &spanner, &simple_args);
 
   let direct =
     direct_influence::DirectInfluence::build(body, &results.analysis.place_info);
+
+  let mut direct_spans = HashMap::new();
+  let mut range_cache = HashMap::new();
+  let mut to_ranges = |spans: Vec<Span>| {
+    let mut output = Vec::new();
+    for span in spans {
+      let ranges = range_cache.entry(span).or_insert_with(|| {
+        span
+          .trim_leading_whitespace(source_map)
+          .into_iter()
+          .flatten()
+          .filter_map(|span| CharRange::from_span(span, source_map).ok())
+          .collect::<Vec<_>>()
+      });
+      output.extend_from_slice(ranges);
+    }
+    output
+  };
 
   let slices = grouped_spans
     .iter()
@@ -78,20 +98,17 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
         .iter()
         .flat_map(|(target, _)| direct.lookup(*target))
         .flat_map(|location| {
-          spanner.location_to_spans(location, body, EnclosingHirSpans::None)
+          direct_spans
+            .entry(location)
+            .or_insert_with(|| {
+              spanner.location_to_spans(location, body, EnclosingHirSpans::None)
+            })
+            .clone()
         })
         .filter(|span| relevant.iter().any(|slice_span| slice_span.contains(*span)))
         .collect::<Vec<_>>();
 
       let slice = relevant;
-
-      let to_ranges = |v: Vec<Span>| {
-        v.into_iter()
-          .filter_map(|span| span.trim_leading_whitespace(source_map))
-          .flatten()
-          .filter_map(|span| CharRange::from_span(span, source_map).ok())
-          .collect::<Vec<_>>()
-      };
 
       log::debug!("{:#?}", to_ranges(slice.clone()));
 

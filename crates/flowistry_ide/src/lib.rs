@@ -19,11 +19,14 @@ extern crate rustc_macros;
 extern crate rustc_middle;
 extern crate rustc_mir_dataflow;
 extern crate rustc_serialize;
+extern crate rustc_session;
 extern crate rustc_span;
 
 #[cfg(feature = "decompose")]
 mod decompose;
 mod focus;
+mod file_focus;
+mod scoped_borrowck;
 mod playground;
 mod plugin;
 mod spans;
