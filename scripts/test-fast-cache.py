@@ -81,6 +81,11 @@ def main():
         run(True)
         source.write_text(source.read_text())
         run(True)  # Unchanged save changes stamps, not analysis inputs.
+        # Nix changes scratch directories each launch; irrelevant launcher
+        # variables must not force a compiler restart.
+        env['NIX_BUILD_TOP'] = str(outside / 'new-nix-build-top')
+        env['SHLVL'] = '42'
+        run(True)
         run(True, line=2, column=6)  # Different cursor, same saved function.
         run(False, line=0, column=24)  # Another body must be analyzed first.
         run(True, line=0, column=24)
@@ -122,6 +127,9 @@ def main():
         source.write_text(good)
         run(True)  # Undo restores the previous successful snapshot.
         run(True)
+        source.write_text(good.replace('option_env!("FLOWISTRY_TEST_ENV")', 'option_env!("NIX_BUILD_TOP")'))
+        run(False)
+        run(False)  # Explicit semantic use of a transient variable disables replay.
         print(f'Passed {count} fast-cache cases; {len(times)} hits invoked no compiler; warm request min={min(times):.3f}s max={max(times):.3f}s')
 
 

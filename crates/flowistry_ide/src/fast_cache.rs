@@ -21,6 +21,24 @@ use serde_json::Value;
 const CHILD: &str = "FLOWISTRY_CACHE_CHILD_INPUTS";
 const LIMIT: u64 = 32 * 1024 * 1024;
 
+// These describe the launcher, rather than the build. Nix changes its scratch
+// directory on every invocation. Explicit use in Rust/build-script dep-info
+// disables replay, so excluding them cannot hide declared semantic inputs.
+fn transient_env(name: &str) -> bool {
+  matches!(
+    name,
+    "NIX_BUILD_TOP"
+      | "TMPDIR"
+      | "TMP"
+      | "TEMP"
+      | "TEMPDIR"
+      | "SHLVL"
+      | "_"
+      | "FLOWISTRY_CACHE"
+      | CHILD
+  )
+}
+
 fn digest(value: &impl Hash) -> String {
   let mut h = StableHasher::new();
   value.hash(&mut h);
@@ -369,6 +387,15 @@ pub(crate) fn record_inputs(tcx: TyCtxt<'_>) {
   let Some(path) = env::var_os(CHILD) else {
     return;
   };
+  if tcx
+    .sess
+    .env_depinfo
+    .borrow()
+    .iter()
+    .any(|(key, _)| transient_env(key.as_str()))
+  {
+    return;
+  }
   let mut files = BTreeSet::new();
   for file in tcx.sess.source_map().files().iter() {
     if let rustc_span::FileName::Real(name) = &file.name {
@@ -421,6 +448,13 @@ fn build_inputs(entry: &mut Entry) -> Option<()> {
       } else if child.extension().is_some_and(|n| n == "d") {
         // Dependency-crate includes are absent from the selected SourceMap.
         let text = fs::read_to_string(&child).ok()?;
+        if text
+          .lines()
+          .filter_map(|line| line.strip_prefix("# env-dep:"))
+          .any(|input| transient_env(input.split('=').next().unwrap_or(input)))
+        {
+          return None;
+        }
         let line = text.lines().next()?;
         let (_, inputs) = line.split_once(": ")?;
         let mut input = String::new();
@@ -457,6 +491,13 @@ fn build_inputs(entry: &mut Entry) -> Option<()> {
         }
         let text = fs::read_to_string(&child).ok()?;
         for line in text.lines() {
+          if line
+            .strip_prefix("cargo:rerun-if-env-changed=")
+            .or_else(|| line.strip_prefix("cargo::rerun-if-env-changed="))
+            .is_some_and(transient_env)
+          {
+            return None;
+          }
           if let Some(path) = line
             .strip_prefix("cargo:rerun-if-changed=")
             .or_else(|| line.strip_prefix("cargo::rerun-if-changed="))
@@ -653,10 +694,10 @@ fn cached_run() -> Option<ExitCode> {
     return None;
   }
   let environment: BTreeMap<_, _> = env::vars_os()
-    .filter(|(k, _)| k != "FLOWISTRY_CACHE" && k != CHILD)
+    .filter(|(k, _)| !k.to_str().is_some_and(transient_env))
     .collect();
   let key = digest(&(
-    5u32,
+    6u32,
     env::current_dir().ok()?,
     env::current_exe().ok()?,
     &args[.. index + 2],

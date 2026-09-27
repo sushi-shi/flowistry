@@ -44,7 +44,9 @@ registry and path sources; all resolved manifests and the workspace lockfile;
 Cargo config and toolchain files; backend/compiler executables and configured
 wrappers; compiler-declared include/proc-macro inputs; and Cargo build-script
 outputs, generated files and declared rerun inputs. The invocation environment
-participates in its key. Changes during analysis prevent saving a response.
+participates in its key, excluding Nix scratch-directory and shell-launcher
+variables. Explicit uses of those variables in compiler/build-script dep-info
+disable fast replay, preserving declared semantic dependencies. Changes during analysis prevent saving a response.
 Input checks use filesystem size, nanosecond mtime, ctime and inode on Unix.
 Changed stamps trigger content hashing, so an unchanged save or undo can still
 replay a response;
