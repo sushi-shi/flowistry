@@ -1,0 +1,284 @@
+diff --git a/crates/flowistry_ide/src/file_focus.rs b/crates/flowistry_ide/src/file_focus.rs
+new file mode 100644
+index 0000000..8315c46
+--- /dev/null
++++ b/crates/flowistry_ide/src/file_focus.rs
+@@ -0,0 +1,119 @@
++//! Editor-independent batch analysis: reuse one compiler session for a file.
++use crate::{
++  focus::FocusOutput,
++  plugin::{FlowistryError, FlowistryResult},
++};
++use flowistry::extensions::{EVAL_MODE, EvalMode};
++use fluid_let::fluid_set;
++use rustc_middle::ty::TyCtxt;
++use rustc_utils::{
++  SpanExt,
++  mir::borrowck_facts,
++  source_map::{
++    filename::Filename,
++    find_bodies::find_bodies,
++    range::{CharPos, CharRange, ToSpan},
++  },
++};
++use serde::Serialize;
++
++#[derive(Serialize)]
++pub struct BodyOutput {
++  range: CharRange,
++  focus: Option<Result<FocusOutput, String>>,
++}
++
++#[derive(Serialize)]
++pub struct FileOutput {
++  bodies: Vec<BodyOutput>,
++}
++
++struct Callbacks {
++  filename: String,
++  eval_mode: EvalMode,
++  position: Option<CharPos>,
++  output: Option<FlowistryResult<FileOutput>>,
++}
++
++impl rustc_driver::Callbacks for Callbacks {
++  fn config(&mut self, config: &mut rustc_interface::Config) {
++    borrowck_facts::enable_mir_simplification();
++    if matches!(
++      self.eval_mode.context_mode,
++      flowistry::extensions::ContextMode::SigOnly
++    ) {
++      crate::scoped_borrowck::configure(self.filename.clone(), self.position);
++      config.override_queries = Some(crate::scoped_borrowck::override_queries);
++    } else {
++      config.override_queries = Some(borrowck_facts::override_queries);
++    }
++  }
++
++  fn after_analysis<'tcx>(
++    &mut self,
++    _compiler: &rustc_interface::interface::Compiler,
++    tcx: TyCtxt<'tcx>,
++  ) -> rustc_driver::Compilation {
++    fluid_set!(EVAL_MODE, self.eval_mode);
++    self.output = Some((|| {
++      let source_map = tcx.sess.source_map();
++      let filename = Filename::intern(&self.filename);
++      let file = filename
++        .find_source_file(source_map)
++        .map_err(|_| FlowistryError::FileNotFound)?;
++      let candidates = find_bodies(tcx);
++      let selected = if let Some(position) = self.position {
++        let target = CharRange {
++          start: position,
++          end: position,
++          filename,
++        }
++        .to_span(tcx)
++        .map_err(|error| FlowistryError::AnalysisError {
++          error: error.to_string(),
++        })?;
++        candidates
++          .iter()
++          .filter(|(span, _)| span.contains(target))
++          .min_by_key(|(span, _)| span.size())
++          .map(|(_, id)| *id)
++      } else {
++        None
++      };
++      let mut bodies = Vec::new();
++      for (span, id) in candidates {
++        if source_map.lookup_source_file(span.lo()).name != file.name {
++          continue;
++        }
++        let Ok(range) = CharRange::from_span(span, source_map) else {
++          continue;
++        };
++        bodies.push(BodyOutput {
++          range,
++          focus: if self.position.is_none() || selected == Some(id) {
++            Some(crate::focus::focus(tcx, id).map_err(|error| error.to_string()))
++          } else {
++            None
++          },
++        });
++      }
++      Ok(FileOutput { bodies })
++    })());
++    rustc_driver::Compilation::Stop
++  }
++}
++
++pub fn analyze(
++  args: &[String],
++  filename: String,
++  position: Option<CharPos>,
++) -> FlowistryResult<FileOutput> {
++  let mut callbacks = Callbacks {
++    filename,
++    position,
++    eval_mode: EVAL_MODE.copied().unwrap_or_default(),
++    output: None,
++  };
++  crate::plugin::run_with_callbacks(args, &mut callbacks)?;
++  callbacks.output.unwrap()
++}
+diff --git a/crates/flowistry_ide/src/lib.rs b/crates/flowistry_ide/src/lib.rs
+index 9fb0ea0..8471c31 100644
+--- a/crates/flowistry_ide/src/lib.rs
++++ b/crates/flowistry_ide/src/lib.rs
+@@ -19,11 +19,14 @@ extern crate rustc_macros;
+ extern crate rustc_middle;
+ extern crate rustc_mir_dataflow;
+ extern crate rustc_serialize;
++extern crate rustc_session;
+ extern crate rustc_span;
+ 
+ #[cfg(feature = "decompose")]
+ mod decompose;
+ mod focus;
++mod file_focus;
++mod scoped_borrowck;
+ mod playground;
+ mod plugin;
+ mod spans;
+diff --git a/crates/flowistry_ide/src/plugin.rs b/crates/flowistry_ide/src/plugin.rs
+index 311c1df..5042e6e 100644
+--- a/crates/flowistry_ide/src/plugin.rs
++++ b/crates/flowistry_ide/src/plugin.rs
+@@ -48,6 +48,7 @@ pub struct FlowistryPluginArgs {
+ 
+ #[derive(Subcommand, Serialize, Deserialize)]
+ enum FlowistryCommand {
++  FileFocus { file: String, pos_line: Option<usize>, pos_column: Option<usize> },
+   Spans {
+     file: String,
+   },
+@@ -114,6 +115,7 @@ impl RustcPlugin for FlowistryPlugin {
+     };
+ 
+     let file = match &args.command {
++      FileFocus { file, .. } => file,
+       Spans { file, .. } => file,
+       Focus { file, .. } => file,
+       Decompose { file, .. } => file,
+@@ -143,6 +145,9 @@ impl RustcPlugin for FlowistryPlugin {
+ 
+     use FlowistryCommand::*;
+     match plugin_args.command {
++      FileFocus { file, pos_line, pos_column } => postprocess(crate::file_focus::analyze(
++        &compiler_args, file, pos_line.zip(pos_column).map(|(line, column)| CharPos { line, column }),
++      )),
+       Spans { file, .. } => postprocess(crate::spans::spans(&compiler_args, file)),
+       Playground {
+         file,
+diff --git a/crates/flowistry_ide/src/scoped_borrowck.rs b/crates/flowistry_ide/src/scoped_borrowck.rs
+new file mode 100644
+index 0000000..3919f70
+--- /dev/null
++++ b/crates/flowistry_ide/src/scoped_borrowck.rs
+@@ -0,0 +1,104 @@
++//! Collect Polonius facts only for bodies the IDE may analyze. Ordinary rustc
++//! borrow checking still runs for every body, using its original provider.
++use rustc_hir::def_id::LocalDefId;
++use rustc_middle::{ty::TyCtxt, util::Providers};
++use rustc_span::{FileName, Span};
++use rustc_utils::{
++  mir::borrowck_facts,
++  source_map::{
++    filename::Filename,
++    range::{CharPos, CharRange, ToSpan},
++  },
++};
++use std::{
++  cell::{Cell, RefCell},
++  sync::Mutex,
++};
++
++type Borrowck = for<'tcx> fn(
++  TyCtxt<'tcx>,
++  LocalDefId,
++) -> rustc_middle::queries::mir_borrowck::ProvidedValue<'tcx>;
++
++struct Scope {
++  filename: String,
++  position: Option<CharPos>,
++  resolved: Option<(FileName, Option<Span>)>,
++}
++
++thread_local! {
++  static SCOPE: RefCell<Option<Scope>> = const { RefCell::new(None) };
++  static PROVIDERS: Cell<Option<(Borrowck, Borrowck)>> = const { Cell::new(None) };
++}
++
++// rustc config and query installation can run on different threads. Transfer
++// only owned request data; compiler spans remain local to the query thread.
++static REQUEST: Mutex<Option<(String, Option<CharPos>)>> = Mutex::new(None);
++
++pub fn configure(filename: String, position: Option<CharPos>) {
++  *REQUEST.lock().unwrap() = Some((filename, position));
++}
++
++fn relevant(tcx: TyCtxt<'_>, def_id: LocalDefId) -> bool {
++  SCOPE.with(|scope| {
++    let mut scope = scope.borrow_mut();
++    let Some(scope) = scope.as_mut() else {
++      return true;
++    };
++    if scope.resolved.is_none() {
++      let filename = Filename::intern(&scope.filename);
++      let Ok(file) = filename.find_source_file(tcx.sess.source_map()) else {
++        return true;
++      };
++      let target = if let Some(position) = scope.position {
++        let Ok(span) = (CharRange {
++          filename,
++          start: position,
++          end: position,
++        })
++        .to_span(tcx) else {
++          return true;
++        };
++        Some(span)
++      } else {
++        None
++      };
++      scope.resolved = Some((file.name.clone(), target));
++    }
++    let (filename, target) = scope.resolved.as_ref().unwrap();
++    let span = tcx
++      .hir_span_with_body(tcx.local_def_id_to_hir_id(def_id))
++      .source_callsite();
++    if span.is_dummy() {
++      return true;
++    }
++    if let Some(target) = target {
++      span.contains(*target)
++    } else {
++      tcx.sess.source_map().lookup_source_file(span.lo()).name == *filename
++    }
++  })
++}
++
++pub fn override_queries(session: &rustc_session::Session, providers: &mut Providers) {
++  let request = REQUEST.lock().unwrap().clone();
++  SCOPE.with(|scope| {
++    *scope.borrow_mut() = request.map(|(filename, position)| Scope {
++      filename,
++      position,
++      resolved: None,
++    });
++  });
++  let original = providers.queries.mir_borrowck;
++  borrowck_facts::override_queries(session, providers);
++  let collecting = providers.queries.mir_borrowck;
++  PROVIDERS.with(|saved| saved.set(Some((original, collecting))));
++  providers.queries.mir_borrowck = |tcx, def_id| {
++    let (original, collecting) = PROVIDERS.with(|saved| saved.get().unwrap());
++    if relevant(tcx, def_id) {
++      collecting(tcx, def_id)
++    } else {
++      original(tcx, def_id)
++    }
++  };
++}
