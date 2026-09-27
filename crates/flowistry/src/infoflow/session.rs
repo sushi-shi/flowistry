@@ -87,6 +87,21 @@ impl<'tcx> AnalysisSession<'tcx> {
     self.tcx
   }
 
+  /// Local bodies contributing to a root's recursive analysis, including cycles.
+  /// These identities are valid only within this compiler session.
+  pub fn dependencies(&self, root: LocalDefId) -> Vec<LocalDefId> {
+    self.explore(root);
+    let graph = self.graph.borrow();
+    let mut seen = FxHashSet::default();
+    let mut pending = vec![root];
+    while let Some(def) = pending.pop() {
+      if seen.insert(def) {
+        pending.extend(graph[&def].iter().copied());
+      }
+    }
+    seen.into_iter().collect()
+  }
+
   pub(crate) fn record_fallback(&self, reason: FallbackReason) {
     *self.stats.borrow_mut().fallbacks.entry(reason).or_default() += 1;
   }
