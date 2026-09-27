@@ -19,7 +19,7 @@ same executable and protocol; see [the backend contract](doc/backend.md).
 ## Backend installation
 
 The package targets Flowistry fork revision
-[`aef2d08d1334617ef71f153f97ebb0f99cf181e9`](https://github.com/sushi-shi/flowistry/tree/aef2d08d1334617ef71f153f97ebb0f99cf181e9),
+[`9528045feec9f48abf4383f9b43bdcf7e0c6c341`](https://github.com/sushi-shi/flowistry/tree/9528045feec9f48abf4383f9b43bdcf7e0c6c341),
 which identifies itself as **0.5.44** and pins **nightly-2026-05-01**. The compiler
 API and wire format are version-sensitive. Install that revision, rather than
 assuming an arbitrary published version or latest nightly is compatible:
@@ -29,7 +29,7 @@ rustup toolchain install nightly-2026-05-01 \
   --component rust-src --component rustc-dev --component llvm-tools-preview
 cargo +nightly-2026-05-01 install --locked \
   --git https://github.com/sushi-shi/flowistry \
-  --rev aef2d08d1334617ef71f153f97ebb0f99cf181e9 flowistry_ide
+  --rev 9528045feec9f48abf4383f9b43bdcf7e0c6c341 flowistry_ide
 ```
 
 Make sure Cargo's bin directory is on Neovim's PATH. The frontend discovers the
@@ -130,14 +130,15 @@ smallest enclosing body. Unchanged saves, edit-and-undo, and off/on retain memor
 results without a compiler request. Edits while disabled still invalidate them.
 Off clears the pin, and enabling resumes cursor tracking.
 
-The shared backend also stores successful results on disk. After a real edit or
-editor restart, it validates the function, its transitive callees in `Recurse`,
-and compiler inputs, then reuses an unchanged result. Blank lines and formatting
-relocate cached highlights. Changes to callees, types, constants, macros or build
-settings invalidate affected results; some declaration changes invalidate broadly.
-Cargo and rustc validation still run for disk hits, so these requests can still
-take seconds. There is no idle background cache warming yet. See
-[persistent caching](doc/cache.md) for controls and limits.
+The shared backend also stores successful results on disk. When recorded inputs
+are unchanged, it replays a prepared response before starting Cargo or rustc;
+warm requests for the measured large game function took about 200 ms. After
+source or build inputs change, compiler validation runs, then the function cache
+can reuse unchanged analysis. Blank lines and formatting relocate highlights;
+changes to callees, types, constants, macros or build settings invalidate
+affected results. First-time analysis can still take seconds. There is no idle
+background cache warming yet. See [persistent caching](doc/cache.md) for scope,
+controls and limits.
 Unsaved Rust buffers or manifests in the workspace suspend new analysis; the
 plugin never writes buffers for you. Editing preserves the last successful
 highlights and moves pins with the text. The status marks this as saved analysis.

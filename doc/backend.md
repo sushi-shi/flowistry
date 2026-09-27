@@ -14,7 +14,7 @@ checking, or information-flow computation are implemented in this repository.
 ```
 
 The integration targets Flowistry fork revision
-`aef2d08d1334617ef71f153f97ebb0f99cf181e9` (0.5.44), with its locked
+`9528045feec9f48abf4383f9b43bdcf7e0c6c341` (0.5.44), with its locked
 `rustc_utils = 0.15.0-nightly-2026-05-01` dependency. This is a description of that
 protocol, not a claim of upstream version stability. The fork includes the
 combined command below, refined human-facing focus ranges, and optional
@@ -47,7 +47,7 @@ The response uses the same encoding as upstream:
 Ok: {
   bodies: [{ range: Range, focus: { Ok: FocusOutput } | { Err: string } | null,
              cached: boolean | null }],
-  cache: { hits: number, misses: number }
+  cache: { hits: number, misses: number, validation?: "snapshot" }
 }
 ```
 

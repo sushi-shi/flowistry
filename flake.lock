@@ -25,17 +25,17 @@
     "flowistry-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1790475347,
-        "narHash": "sha256-17TcY2p59EjtrS03wnVfGOOMLqBLQlgXQ7QLigj1iwg=",
+        "lastModified": 1790477734,
+        "narHash": "sha256-/V20xg96PZtLaKPqmmUQsPxB4TIduY6zVAVGWQjlwtQ=",
         "owner": "sushi-shi",
         "repo": "flowistry",
-        "rev": "aef2d08d1334617ef71f153f97ebb0f99cf181e9",
+        "rev": "9528045feec9f48abf4383f9b43bdcf7e0c6c341",
         "type": "github"
       },
       "original": {
         "owner": "sushi-shi",
         "repo": "flowistry",
-        "rev": "aef2d08d1334617ef71f153f97ebb0f99cf181e9",
+        "rev": "9528045feec9f48abf4383f9b43bdcf7e0c6c341",
         "type": "github"
       }
     },

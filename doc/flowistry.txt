@@ -65,7 +65,8 @@ effects. See doc/summaries.md and doc/cache.md.
 `cache = false` disables persistent caching; `cache_dir` overrides its shared
 directory. The default is $XDG_CACHE_HOME/flowistry or $HOME/.cache/flowistry.
 Unchanged saves, edit-and-undo, and off/on retain memory results. Real edits and
-editor restarts still run compiler validation before reusing disk results.
+editor restarts reuse unchanged input snapshots before compiler startup. Changed
+inputs still require compiler validation before function-level reuse.
 `:Flow refresh` forces the next analysis to bypass cached results.
 
 On NixOS, the repository flake provides the matching backend/compiler libraries:

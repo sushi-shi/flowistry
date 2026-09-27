@@ -56,6 +56,7 @@ local function run()
   -- Reset all Lua state, as a new editor would; results remain on disk.
   flow.setup(opts)
   flow.enable(); ready("active"); hit(true)
+  check(flow.cache_status().validation == "snapshot", "editor restart must reuse disk analysis without compiler startup")
   check(flow.indicator():find("disk cache", 1, true), "cache hit is observable")
   flow.mark()
   before = requests

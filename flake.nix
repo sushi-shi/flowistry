@@ -7,7 +7,7 @@
     fenix.url = "github:nix-community/fenix/5f7e7d793cb2553410f857554de86f277ebe2f71";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
     flowistry-src = {
-      url = "github:sushi-shi/flowistry/aef2d08d1334617ef71f153f97ebb0f99cf181e9";
+      url = "github:sushi-shi/flowistry/9528045feec9f48abf4383f9b43bdcf7e0c6c341";
       flake = false;
     };
   };
@@ -29,7 +29,7 @@
           compilerLibraries = "${toolchain}/lib:${toolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/lib";
           backend = rustPlatform.buildRustPackage {
             pname = "flowistry-backend";
-            version = "0.5.44-aef2d08";
+            version = "0.5.44-9528045";
             src = flowistry-src;
             cargoLock.lockFile = "${flowistry-src}/Cargo.lock";
             cargoBuildFlags = [ "-p" "flowistry_ide" ];
@@ -107,6 +107,7 @@
             export FLOWISTRY_BACKEND_EXE=${packages.backend}/bin/flowistry-backend
             nvim --headless -u NONE -i NONE -l tests/cache.lua
             python3 ${flowistry-src}/scripts/test-focus-cache.py --backend "$FLOWISTRY_BACKEND_EXE"
+            python3 ${flowistry-src}/scripts/test-fast-cache.py --backend "$FLOWISTRY_BACKEND_EXE"
           '' [ packages.backend pkgs.python3 ];
         });
       devShells = eachSystem (system:
