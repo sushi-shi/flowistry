@@ -2,9 +2,10 @@ use std::{cell::RefCell, rc::Rc};
 
 // use indexical::impls::RustcIndexMatrix as IndexMatrix;
 use indexical::bitset::rustc::IndexMatrix;
-use log::{debug, trace};
+use indexical::{IndexedValue, bitset::rustc::IndexSet};
+use log::debug;
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_hir::{BodyId, def_id::DefId};
+use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{visit::Visitor, *},
   ty::TyCtxt,
@@ -23,8 +24,9 @@ use rustc_utils::{
 use smallvec::SmallVec;
 
 use super::{
-  FlowResults,
+  effects::CallEffects,
   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
+  session::AnalysisSession,
 };
 use crate::{
   extensions::{ContextMode, MutabilityMode, is_extension_active},
@@ -73,7 +75,9 @@ pub struct FlowAnalysis<'a, 'tcx> {
   pub place_info: PlaceInfo<'a, 'tcx>,
 
   pub(crate) control_dependencies: ControlDependencies<BasicBlock>,
-  pub(crate) recurse_cache: RefCell<HashMap<BodyId, FlowResults<'a, 'tcx>>>,
+  pub(crate) session: Rc<AnalysisSession<'tcx>>,
+  pub(crate) call_effects: RefCell<HashMap<Location, Rc<CallEffects<'tcx>>>>,
+  pub(crate) call_reads: RefCell<HashMap<Location, LocationOrArgSet>>,
 }
 
 impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
@@ -84,7 +88,16 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     body: &'a Body<'tcx>,
     place_info: PlaceInfo<'a, 'tcx>,
   ) -> Self {
-    let recurse_cache = RefCell::new(HashMap::default());
+    Self::with_session(tcx, def_id, body, place_info, AnalysisSession::new(tcx))
+  }
+
+  pub(crate) fn with_session(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    body: &'a Body<'tcx>,
+    place_info: PlaceInfo<'a, 'tcx>,
+    session: Rc<AnalysisSession<'tcx>>,
+  ) -> Self {
     let control_dependencies = body.control_dependencies();
     debug!("Control dependencies: {control_dependencies:?}");
     FlowAnalysis {
@@ -93,7 +106,9 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       body,
       place_info,
       control_dependencies,
-      recurse_cache,
+      session,
+      call_effects: RefCell::new(HashMap::default()),
+      call_reads: RefCell::new(HashMap::default()),
     }
   }
 
@@ -102,7 +117,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     self.place_info.location_domain()
   }
 
-  fn influences(&self, place: Place<'tcx>) -> SmallVec<[Place<'tcx>; 8]> {
+  pub(crate) fn influences(&self, place: Place<'tcx>) -> SmallVec<[Place<'tcx>; 8]> {
     let conflicts = self
       .place_info
       .aliases(place)
@@ -148,28 +163,38 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     mutations: Vec<Mutation<'tcx>>,
     location: Location,
   ) {
+    self.transfer(state, &mutations, location, |loc, deps| {
+      deps.insert(loc);
+    });
+  }
+
+  // Shared by location-based flow and field-origin summary analysis.
+  pub(crate) fn transfer<D: IndexedValue + std::fmt::Debug + 'static>(
+    &self,
+    state: &mut IndexMatrix<Place<'tcx>, D>,
+    mutations: &[Mutation<'tcx>],
+    location: Location,
+    seed: impl Fn(Location, &mut IndexSet<D>),
+  ) {
     debug!("  Applying mutations {mutations:?}");
-    let location_domain = self.location_domain();
+    let location_domain = state.col_domain().clone();
 
     // Initialize dependencies to include current location of mutation.
     let mut all_deps = {
-      let mut deps = LocationOrArgSet::new(location_domain);
-      deps.insert(location);
+      let mut deps = IndexSet::new(&location_domain);
+      seed(location, &mut deps);
       vec![deps; mutations.len()]
     };
 
     // Add every influence on `input` to `deps`.
-    let add_deps = |state: &FlowDomain<'tcx>,
-                    input,
-                    target_deps: &mut LocationOrArgSet| {
-      for relevant in self.influences(input) {
-        let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
-        trace!(
-          "    For relevant {relevant:?} for input {input:?} adding deps {relevant_deps:?}"
-        );
-        target_deps.union(relevant_deps);
-      }
-    };
+    let add_deps =
+      |state: &IndexMatrix<Place<'tcx>, D>, input, target_deps: &mut IndexSet<D>| {
+        for relevant in self.influences(input) {
+          let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
+
+          target_deps.union(relevant_deps);
+        }
+      };
 
     // Register every explicitly provided input as an input.
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
@@ -183,7 +208,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     let body = self.body;
     for block in controlled_by.into_iter().flat_map(|set| set.iter()) {
       for deps in &mut all_deps {
-        deps.insert(body.terminator_loc(block));
+        seed(body.terminator_loc(block), deps);
       }
 
       // Include dependencies of the switch's operand.
@@ -264,10 +289,8 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     statement: &Statement<'tcx>,
     location: Location,
   ) {
-    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
-      self.transfer_function(state, mutations, location)
-    })
-    .visit_statement(statement, location);
+    let mutations = self.statement_mutations(statement, location);
+    self.transfer_function(state, mutations, location);
   }
 
   fn apply_primary_terminator_effect<'mir>(
@@ -276,17 +299,26 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     terminator: &'mir Terminator<'tcx>,
     location: Location,
   ) -> TerminatorEdges<'mir, 'tcx> {
-    if matches!(terminator.kind, TerminatorKind::Call { .. })
-      && is_extension_active(|mode| mode.context_mode == ContextMode::Recurse)
-      && self.recurse_into_call(state, &terminator.kind, location)
-    {
-      return terminator.edges();
+    if self.session.mode().context_mode == ContextMode::Recurse {
+      let effects = self.effects_at(terminator, location);
+      let reads = self.inputs_deps(state, &effects.reads);
+      self
+        .call_reads
+        .borrow_mut()
+        .entry(location)
+        .and_modify(|prior| {
+          prior.union(&reads);
+        })
+        .or_insert(reads);
+      self.transfer(state, &effects.mutations, location, |loc, deps| {
+        deps.insert(loc);
+      });
+    } else {
+      ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+        self.transfer_function(state, mutations, location)
+      })
+      .visit_terminator(terminator, location);
     }
-
-    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
-      self.transfer_function(state, mutations, location)
-    })
-    .visit_terminator(terminator, location);
 
     terminator.edges()
   }

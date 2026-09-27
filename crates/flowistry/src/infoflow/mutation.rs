@@ -15,7 +15,7 @@ use crate::mir::{
 
 /// Indicator of certainty about whether a place is being mutated.
 /// Used to determine whether an update should be strong or weak.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MutationStatus {
   /// A place is definitely mutated, e.g. `x = y` definitely mutates `x`.
   Definitely,
@@ -25,7 +25,7 @@ pub enum MutationStatus {
 }
 
 /// Information about a particular mutation.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Mutation<'tcx> {
   /// The place that is being mutated.
   pub mutated: Place<'tcx>,

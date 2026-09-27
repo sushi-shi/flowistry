@@ -11,7 +11,9 @@ use rustc_utils::{
 };
 
 use super::{FlowDomain, FlowResults, mutation::ModularMutationVisitor};
-use crate::{infoflow::mutation::Mutation, mir::placeinfo::PlaceInfo};
+use crate::{
+  extensions::ContextMode, infoflow::mutation::Mutation, mir::placeinfo::PlaceInfo,
+};
 
 /// Which way to look for dependencies
 #[derive(Clone, Copy, Debug)]
@@ -184,6 +186,29 @@ fn compute_dependencies_inner<'tcx>(
         }) => {
           if let Some(place) = discr.as_place() {
             check(place);
+          }
+        }
+        Either::Right(term)
+          if results.analysis.session.mode().context_mode == ContextMode::Recurse =>
+        {
+          let effects = results.analysis.effects_at(term, location);
+          for mutation in &effects.mutations {
+            check(mutation.mutated);
+          }
+          // Read dependencies were captured before call mutations. Looking only
+          // at the return or mutated rows loses read-only/unit-returning calls.
+          if let Some(reads) = results.analysis.call_reads.borrow().get(&location) {
+            for (target_deps, outputs) in
+              iter::zip(all_target_deps, &mut *outputs.borrow_mut())
+            {
+              if target_deps
+                .all_forward
+                .iter()
+                .any(|fwd| reads.is_superset(fwd))
+              {
+                outputs.insert(location);
+              }
+            }
           }
         }
         _ => ModularMutationVisitor::new(&results.analysis.place_info, |_, mutations| {

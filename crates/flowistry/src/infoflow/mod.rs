@@ -3,8 +3,9 @@
 //! The main function is [`compute_flow`]. See [`FlowResults`] and [`FlowDomain`] for an explanation
 //! of what it returns.
 
-use std::cell::RefCell;
+use std::rc::Rc;
 
+use fluid_let::fluid_set;
 use log::debug;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_hir::BodyId;
@@ -16,13 +17,19 @@ pub use self::{
   dependencies::{
     Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans,
   },
+  session::{AnalysisSession, SummaryStats},
 };
-use crate::mir::{engine, placeinfo::PlaceInfo};
+use crate::{
+  extensions::{ContextMode, EVAL_MODE},
+  mir::{engine, placeinfo::PlaceInfo},
+};
 
 mod analysis;
 mod dependencies;
+mod effects;
 pub mod mutation;
-mod recursive;
+mod session;
+mod summary;
 
 /// The output of the information flow analysis.
 ///
@@ -63,11 +70,6 @@ mod recursive;
 /// which replaces [`rustc_mir_dataflow::Results`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_dataflow/struct.Results.html).
 pub type FlowResults<'a, 'tcx> = engine::AnalysisResults<'tcx, FlowAnalysis<'a, 'tcx>>;
 
-thread_local! {
-  pub(super) static BODY_STACK: RefCell<Vec<BodyId>> =
-    const { RefCell::new(Vec::new()) };
-}
-
 /// Computes information flow for a MIR body.
 ///
 /// See [example.rs](https://github.com/willcrichton/flowistry/tree/master/crates/flowistry/examples/example.rs)
@@ -83,55 +85,60 @@ pub fn compute_flow<'a, 'tcx>(
   body_id: BodyId,
   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
 ) -> FlowResults<'a, 'tcx> {
-  BODY_STACK.with(|body_stack| {
-    body_stack.borrow_mut().push(body_id);
-    debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
+  compute_flow_with_session(AnalysisSession::new(tcx), tcx, body_id, body_with_facts)
+}
 
-    let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
-    let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
-    let location_domain = place_info.location_domain().clone();
+/// Computes flow while reusing the session's completed callee summaries.
+///
+/// The session must belong to this compiler context. Its evaluation mode is
+/// restored for the duration of analysis, including alias construction.
+pub fn compute_flow_with_session<'a, 'tcx>(
+  session: Rc<AnalysisSession<'tcx>>,
+  tcx: TyCtxt<'tcx>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+) -> FlowResults<'a, 'tcx> {
+  fluid_set!(EVAL_MODE, session.mode());
+  debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
 
-    let body = &body_with_facts.body;
+  let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+  if session.mode().context_mode == ContextMode::Recurse {
+    session.prepare(def_id);
+  }
+  let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+  let location_domain = place_info.location_domain().clone();
 
-    let results = {
-      block_timer!("Flow");
+  let body = &body_with_facts.body;
 
-      let analysis = FlowAnalysis::new(tcx, def_id, body, place_info);
-      engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
-      // analysis.into_engine(tcx, body).iterate_to_fixpoint()
-    };
+  let results = {
+    block_timer!("Flow");
 
-    if log::log_enabled!(log::Level::Info) {
-      let counts = body
-        .all_locations()
-        .flat_map(|loc| {
-          let state = results.state_at(loc);
-          state
-            .rows()
-            .map(|(_, locations)| locations.len())
-            .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
+    let analysis = FlowAnalysis::with_session(tcx, def_id, body, place_info, session);
+    engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
+    // analysis.into_engine(tcx, body).iterate_to_fixpoint()
+  };
 
-      let nloc = body.all_locations().count();
-      let np = counts.len();
-      let pavg = np as f64 / (nloc as f64);
-      let nl = counts.into_iter().sum::<usize>();
-      let lavg = nl as f64 / (nloc as f64);
-      log::info!(
-        "Over {nloc} locations, total number of place entries: {np} (avg {pavg:.0}/loc), total size of location sets: {nl} (avg {lavg:.0}/loc)",
-      );
-    }
+  if log::log_enabled!(log::Level::Info) {
+    let counts = body
+      .all_locations()
+      .flat_map(|loc| {
+        let state = results.state_at(loc);
+        state
+          .rows()
+          .map(|(_, locations)| locations.len())
+          .collect::<Vec<_>>()
+      })
+      .collect::<Vec<_>>();
 
-    if std::env::var("DUMP_MIR").is_ok()
-      && BODY_STACK.with(|body_stack| body_stack.borrow().len() == 1)
-    {
-      todo!()
-      // utils::dump_results(body, &results, def_id, tcx).unwrap();
-    }
+    let nloc = body.all_locations().count();
+    let np = counts.len();
+    let pavg = np as f64 / (nloc as f64);
+    let nl = counts.into_iter().sum::<usize>();
+    let lavg = nl as f64 / (nloc as f64);
+    log::info!(
+      "Over {nloc} locations, total number of place entries: {np} (avg {pavg:.0}/loc), total size of location sets: {nl} (avg {lavg:.0}/loc)",
+    );
+  }
 
-    body_stack.borrow_mut().pop();
-
-    results
-  })
+  results
 }

@@ -1,8 +1,4 @@
 //! Editor-independent batch analysis: reuse one compiler session for a file.
-use crate::{
-  focus::FocusOutput,
-  plugin::{FlowistryError, FlowistryResult},
-};
 use flowistry::extensions::{EVAL_MODE, EvalMode};
 use fluid_let::fluid_set;
 use rustc_middle::ty::TyCtxt;
@@ -16,6 +12,11 @@ use rustc_utils::{
   },
 };
 use serde::Serialize;
+
+use crate::{
+  focus::FocusOutput,
+  plugin::{FlowistryError, FlowistryResult},
+};
 
 #[derive(Serialize)]
 pub struct BodyOutput {
@@ -80,6 +81,7 @@ impl rustc_driver::Callbacks for Callbacks {
       } else {
         None
       };
+      let session = flowistry::infoflow::AnalysisSession::new(tcx);
       let mut bodies = Vec::new();
       for (span, id) in candidates {
         if source_map.lookup_source_file(span.lo()).name != file.name {
@@ -91,7 +93,10 @@ impl rustc_driver::Callbacks for Callbacks {
         bodies.push(BodyOutput {
           range,
           focus: if self.position.is_none() || selected == Some(id) {
-            Some(crate::focus::focus(tcx, id).map_err(|error| error.to_string()))
+            Some(
+              crate::focus::focus_with_session(tcx, id, session.clone())
+                .map_err(|error| error.to_string()),
+            )
           } else {
             None
           },

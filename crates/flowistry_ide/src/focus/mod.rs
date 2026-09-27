@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use flowistry::infoflow;
 use itertools::Itertools;
@@ -13,10 +15,12 @@ use rustc_utils::{
   },
 };
 use serde::Serialize;
-use std::collections::HashMap;
 
 mod direct_influence;
 mod simple_args;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Serialize)]
 pub struct PlaceInfo {
@@ -33,10 +37,19 @@ pub struct FocusOutput {
 }
 
 pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
+  focus_with_session(tcx, body_id, infoflow::AnalysisSession::new(tcx))
+}
+
+pub(crate) fn focus_with_session<'tcx>(
+  tcx: TyCtxt<'tcx>,
+  body_id: BodyId,
+  session: std::rc::Rc<infoflow::AnalysisSession<'tcx>>,
+) -> Result<FocusOutput> {
   let def_id = tcx.hir_body_owner_def_id(body_id);
   let body_with_facts = get_body_with_borrowck_facts(tcx, def_id);
   let body = &body_with_facts.body;
-  let results = &infoflow::compute_flow(tcx, body_id, body_with_facts);
+  let results =
+    &infoflow::compute_flow_with_session(session, tcx, body_id, body_with_facts);
 
   let source_map = tcx.sess.source_map();
   let spanner = Spanner::new(tcx, body_id, body);
@@ -67,8 +80,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
   let simple_args = simple_args::collect(tcx, body_id);
   let relevant = infoflow::compute_focus_spans(results, targets, &spanner, &simple_args);
 
-  let direct =
-    direct_influence::DirectInfluence::build(body, &results.analysis.place_info);
+  let direct = direct_influence::DirectInfluence::build(&results.analysis);
 
   let mut direct_spans = HashMap::new();
   let mut range_cache = HashMap::new();
