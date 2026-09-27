@@ -22,11 +22,19 @@ use crate::{
 pub struct BodyOutput {
   range: CharRange,
   focus: Option<Result<FocusOutput, String>>,
+  cached: Option<bool>,
 }
 
 #[derive(Serialize)]
 pub struct FileOutput {
   bodies: Vec<BodyOutput>,
+  cache: CacheStats,
+}
+
+#[derive(Serialize)]
+struct CacheStats {
+  hits: usize,
+  misses: usize,
 }
 
 struct Callbacks {
@@ -82,6 +90,7 @@ impl rustc_driver::Callbacks for Callbacks {
         None
       };
       let session = flowistry::infoflow::AnalysisSession::new(tcx);
+      let cache = crate::cache::FocusCache::new(tcx);
       let mut bodies = Vec::new();
       for (span, id) in candidates {
         if source_map.lookup_source_file(span.lo()).name != file.name {
@@ -90,19 +99,29 @@ impl rustc_driver::Callbacks for Callbacks {
         let Ok(range) = CharRange::from_span(span, source_map) else {
           continue;
         };
+        let previous_hits = cache.hits.get();
+        let focus = if self.position.is_none() || selected == Some(id) {
+          Some(
+            cache
+              .focus(tcx, id, session.clone())
+              .map_err(|error| error.to_string()),
+          )
+        } else {
+          None
+        };
         bodies.push(BodyOutput {
           range,
-          focus: if self.position.is_none() || selected == Some(id) {
-            Some(
-              crate::focus::focus_with_session(tcx, id, session.clone())
-                .map_err(|error| error.to_string()),
-            )
-          } else {
-            None
-          },
+          cached: focus.as_ref().map(|_| cache.hits.get() > previous_hits),
+          focus,
         });
       }
-      Ok(FileOutput { bodies })
+      Ok(FileOutput {
+        bodies,
+        cache: CacheStats {
+          hits: cache.hits.get(),
+          misses: cache.misses.get(),
+        },
+      })
     })());
     rustc_driver::Compilation::Stop
   }

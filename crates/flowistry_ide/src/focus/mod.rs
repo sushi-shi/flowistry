@@ -37,7 +37,11 @@ pub struct FocusOutput {
 }
 
 pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
-  focus_with_session(tcx, body_id, infoflow::AnalysisSession::new(tcx))
+  crate::cache::FocusCache::new(tcx).focus(
+    tcx,
+    body_id,
+    infoflow::AnalysisSession::new(tcx),
+  )
 }
 
 pub(crate) fn focus_with_session<'tcx>(

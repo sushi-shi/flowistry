@@ -56,7 +56,9 @@ The cache retains compact summaries, not the full per-location flow tables of
 every callee. Temporary tables are released after summarization. Unsupported
 bodies are cached too. No cache contains identities from another compiler run;
 each process starts fresh, so changed methods or dependencies are reanalyzed.
-This is not a persistent editor cache or a background whole-project index.
+These session-owned summaries are not persisted. A separate
+[persistent focus cache](persistent-cache.md) can reuse completed source-range
+results across compiler runs after validating their dependencies.
 
 ## Conservative boundaries
 

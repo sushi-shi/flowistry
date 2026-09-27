@@ -8,6 +8,8 @@ Flowistry is a tool that analyzes the [information flow](https://en.wikipedia.or
 
 This fork adds editor-independent file analysis and opt-in [cached callee summaries](docs/callee-summaries.md). The backend guide documents the pinned compiler, conservative boundaries, tests, and performance measurements.
 
+[Persistent focus results](docs/persistent-cache.md) reuse completed analysis across sessions when the function and its compiler-resolved dependencies remain unchanged.
+
 For example, this GIF shows the focus mode when reading a function that unions two sets together:
 
 <kbd>
