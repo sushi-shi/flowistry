@@ -1,4 +1,4 @@
-.PHONY: test test-ui test-live test-precision test-save test-summaries
+.PHONY: test test-ui test-live test-precision test-save test-summaries test-cache
 test:
 	nvim --headless -u NONE -i NONE -l tests/run.lua
 
@@ -16,3 +16,6 @@ test-save:
 
 test-summaries:
 	nvim --headless -u NONE -i NONE -l tests/summaries.lua
+
+test-cache:
+	nvim --headless -u NONE -i NONE -l tests/cache.lua

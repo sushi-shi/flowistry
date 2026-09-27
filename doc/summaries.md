@@ -20,7 +20,7 @@ cached results so different analysis modes cannot share stale results.
 ## Packaging and backend ownership
 
 The flake pins [Flowistry fork commit
-`54f8e9ee556b4b1251924ca15b7838d3d2117494`](https://github.com/sushi-shi/flowistry/commit/54f8e9ee556b4b1251924ca15b7838d3d2117494)
+`aef2d08d1334617ef71f153f97ebb0f99cf181e9`](https://github.com/sushi-shi/flowistry/commit/aef2d08d1334617ef71f153f97ebb0f99cf181e9)
 directly. It contains the combined command, precise source ranges, and cached
 callee summaries, so the Neovim package needs no build patches.
 
@@ -33,10 +33,11 @@ The full commit pin makes builds independent of branch movement or merge timing.
 
 Each compiler invocation caches compact field read/write and input/output
 summaries by resolved callee instance. Batched roots and repeated calls reuse
-them. The cache ends with the compiler process; saving starts fresh analysis,
-including updated callees. There is no persistent disk cache or background
-whole-project analysis. The editor's existing function-result cache still
-handles cursor movement without compiler requests.
+them. These session-owned summaries end with the compiler process. A separate
+[persistent focus cache](cache.md) reuses completed analysis across processes
+after validating the function and callees. There is no background whole-project
+analysis. The editor's memory cache handles cursor movement, unchanged saves,
+and off/on without compiler requests.
 
 Direct local functions, inherent methods and statically resolved local trait
 implementations can be summarized. Dynamic or unresolved calls, external bodies,

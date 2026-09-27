@@ -14,7 +14,7 @@ checking, or information-flow computation are implemented in this repository.
 ```
 
 The integration targets Flowistry fork revision
-`54f8e9ee556b4b1251924ca15b7838d3d2117494` (0.5.44), with its locked
+`aef2d08d1334617ef71f153f97ebb0f99cf181e9` (0.5.44), with its locked
 `rustc_utils = 0.15.0-nightly-2026-05-01` dependency. This is a description of that
 protocol, not a claim of upstream version stability. The fork includes the
 combined command below, refined human-facing focus ranges, and optional
@@ -29,7 +29,7 @@ dependencies from identifier spelling. Macros, methods, adjusted/overloaded
 expressions and side-effecting arguments retain conservative ranges.
 
 Repeated target dependencies, location-to-source mappings and character-range
-conversions are reused within each function analysis. The wire format remains
+conversions are reused within each function analysis. FocusOutput remains
 unchanged, and both per-function and combined requests use the same refinement.
 
 ## Packaged combined analysis
@@ -44,7 +44,11 @@ enclosing body. This avoids a separate compiler run just to discover functions.
 The response uses the same encoding as upstream:
 
 ```text
-Ok: { bodies: [{ range: Range, focus: { Ok: FocusOutput } | { Err: string } | null }] }
+Ok: {
+  bodies: [{ range: Range, focus: { Ok: FocusOutput } | { Err: string } | null,
+             cached: boolean | null }],
+  cache: { hits: number, misses: number }
+}
 ```
 
 An unanalyzed body has `focus: null`; clients can later use upstream's `focus`
@@ -52,6 +56,9 @@ command for that body. All file IDs in this response share one compiler session.
 The Neovim adapter instead sends another position-specific `file-focus` request
 and merges that function's result into its existing cache.
 Individual analysis errors do not remove other bodies' successful results.
+Cache metadata is additive and may be absent from older backends. Persistent
+results are validated by the compiler and reconstructed using the current file
+IDs and source coordinates; see [caching](cache.md).
 The Neovim launcher batches only files of at most 600 lines by default, avoiding
 an eager analysis of every function in large generated files. This command and
 its results remain editor-independent and can be reused by a Zed adapter.

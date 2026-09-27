@@ -95,6 +95,7 @@ build environment has been tested with it.
 | `devShells.<system>.default` | Frontend development and real-backend tests |
 | `checks.<system>.frontend` | Headless frontend regressions |
 | `checks.<system>.summaries` | Real compiler and highlight regressions |
+| `checks.<system>.persistent-cache` | Editor reuse and cross-process cache invalidation |
 
 Run `nix flake check` to build and test for your host system. Linux outputs exist
 for x86_64 and aarch64; x86_64 is build-tested here. Run `nix build .#plugin

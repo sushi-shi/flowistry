@@ -19,7 +19,7 @@ same executable and protocol; see [the backend contract](doc/backend.md).
 ## Backend installation
 
 The package targets Flowistry fork revision
-[`54f8e9ee556b4b1251924ca15b7838d3d2117494`](https://github.com/sushi-shi/flowistry/tree/54f8e9ee556b4b1251924ca15b7838d3d2117494),
+[`aef2d08d1334617ef71f153f97ebb0f99cf181e9`](https://github.com/sushi-shi/flowistry/tree/aef2d08d1334617ef71f153f97ebb0f99cf181e9),
 which identifies itself as **0.5.44** and pins **nightly-2026-05-01**. The compiler
 API and wire format are version-sensitive. Install that revision, rather than
 assuming an arbitrary published version or latest nightly is compatible:
@@ -29,7 +29,7 @@ rustup toolchain install nightly-2026-05-01 \
   --component rust-src --component rustc-dev --component llvm-tools-preview
 cargo +nightly-2026-05-01 install --locked \
   --git https://github.com/sushi-shi/flowistry \
-  --rev 54f8e9ee556b4b1251924ca15b7838d3d2117494 flowistry_ide
+  --rev aef2d08d1334617ef71f153f97ebb0f99cf181e9 flowistry_ide
 ```
 
 Make sure Cargo's bin directory is on Neovim's PATH. The frontend discovers the
@@ -107,7 +107,7 @@ are available.
 | `:Flowistry toggle` | Toggle focus mode |
 | `:Flowistry enable` / `disable` | Enable or disable for the current buffer |
 | `:Flowistry mark` / `unmark` | Pin or release the current position |
-| `:Flowistry refresh` | Clear analysis caches and retry, including after errors |
+| `:Flowistry refresh` | Force fresh analysis, bypassing cached results |
 | `:Flowistry log` | Show the current buffer's latest error; `q` closes the window |
 | `:checkhealth flowistry` | Check basic prerequisites |
 
@@ -126,8 +126,18 @@ on demand. First-time analysis can still take seconds, especially in large
 crates; the elapsed timer is activity feedback, not a percentage estimate.
 Function results are cached in memory for the editor session, so moving within an
 analyzed function does not run Cargo again. Nested functions and closures use the
-smallest enclosing body. Saving a Rust file or Cargo manifest invalidates caches.
-There is no persistent result cache or idle background cache warming yet.
+smallest enclosing body. Unchanged saves, edit-and-undo, and off/on retain memory
+results without a compiler request. Edits while disabled still invalidate them.
+Off clears the pin, and enabling resumes cursor tracking.
+
+The shared backend also stores successful results on disk. After a real edit or
+editor restart, it validates the function, its transitive callees in `Recurse`,
+and compiler inputs, then reuses an unchanged result. Blank lines and formatting
+relocate cached highlights. Changes to callees, types, constants, macros or build
+settings invalidate affected results; some declaration changes invalidate broadly.
+Cargo and rustc validation still run for disk hits, so these requests can still
+take seconds. There is no idle background cache warming yet. See
+[persistent caching](doc/cache.md) for controls and limits.
 Unsaved Rust buffers or manifests in the workspace suspend new analysis; the
 plugin never writes buffers for you. Editing preserves the last successful
 highlights and moves pins with the text. The status marks this as saved analysis.
@@ -154,6 +164,8 @@ require("flowistry").setup({
   auto_enable = true,            -- enable saved Rust buffers in Cargo projects
   toolchain = "nightly-2026-05-01", -- false uses the ambient compiler
   context_mode = nil,            -- default SigOnly; "Recurse" enables callee analysis
+  cache = true,                 -- persistent backend results; memory cache stays enabled
+  cache_dir = nil,              -- shared XDG cache by default
   command = nil,                 -- e.g. { "/path/to/flowistry-wrapper" }
   root = nil,                    -- explicit Cargo workspace root for a wrapper
   batch = false,                 -- true for the fork backend; Nix launcher sets it
@@ -218,6 +230,9 @@ With Nix, `nix flake check` runs the frontend and real-compiler callee-summary
 checks in isolated build environments. `nix develop` provides Neovim, Make,
 gzip, and the packaged backend; run `make test-summaries` there to verify field
 precision, nested calls, both request protocols, and invalidation after a save.
+`make test-cache` checks real compiler cache reuse, moved pins, off/on, refresh,
+and edits while disabled. The flake also runs the backend's cross-process cache
+invalidation suite.
 
 The headless suite exercises real Neovim extmarks and subprocess transport with a
 synthetic backend fixture. It covers Unicode, range unions, nested bodies, cached

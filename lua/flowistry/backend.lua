@@ -79,7 +79,11 @@ function M.request(context, args, config, callback)
   local argv = vim.deepcopy(context.command)
   if config.context_mode then vim.list_extend(argv, { "--context-mode", config.context_mode }) end
   vim.list_extend(argv, args)
-  op:run(argv, { cwd = context.root, env = context.env, text = true, timeout = config.timeout_ms }, function(result)
+  local env = vim.deepcopy(context.env or {})
+  if config.cache == false then env.FLOWISTRY_CACHE = "off" end
+  if config.cache_dir then env.FLOWISTRY_CACHE_DIR = config.cache_dir end
+  if config.cache_refresh and config.cache ~= false then env.FLOWISTRY_CACHE = "refresh" end
+  op:run(argv, { cwd = context.root, env = env, text = true, timeout = config.timeout_ms }, function(result)
     if result.code ~= 0 then callback(table.concat(argv, " ") .. "\n" .. failure(result)); return end
     local encoded = (result.stdout or ""):gsub("%s", "")
     if encoded == "" and vim.trim(result.stderr or "") ~= "" then

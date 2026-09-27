@@ -5,6 +5,7 @@ local render = require("flowistry.render")
 local progress = require("flowistry.progress")
 local pins = require("flowistry.pin")
 local states = {}
+local suspended = {}
 local disabled = {}
 local configured = false
 local uv = vim.uv or vim.loop
@@ -13,6 +14,8 @@ local defaults = {
   auto_enable = true,
   toolchain = "nightly-2026-05-01",
   context_mode = nil, -- Backend default (SigOnly); Recurse opts into callee summaries.
+  cache = true, -- Persistent compiler-validated results in the shared backend.
+  cache_dir = nil, -- nil uses the backend's XDG cache location.
   command = nil, -- Full backend argv; bypasses rustup/sysroot discovery when set.
   root = nil, -- Optional workspace root for externally managed backend commands.
   batch = false, -- Packaged backend supports file-focus; vanilla upstream does not.
@@ -58,15 +61,42 @@ end
 
 local function dispose(buf)
   if states[buf] then stop(states[buf]); clear_pin(states[buf]); states[buf] = nil end
+  if suspended[buf] then stop(suspended[buf]); clear_pin(suspended[buf]); suspended[buf] = nil end
   render.clear(buf)
+end
+
+local function all_states()
+  return vim.tbl_extend("force", suspended, states)
 end
 
 local function invalidate(state, preserve)
   stop(state)
+  if preserve and state.bodies and not state.retained then
+    state.retained = { bodies = state.bodies, inputs = {} }
+  elseif not preserve then
+    state.retained = nil
+  end
   state.stale = preserve and (state.stale or state.slice ~= nil) or false
   state.bodies, state.slice, state.error = nil, nil, nil
+  state.cached = nil
   state.status = "idle"
   if not preserve then clear_pin(state); render.clear(state.buf) end
+end
+
+local function disk_source(name)
+  local ok, lines = pcall(vim.fn.readfile, name, "b")
+  return ok and lines or false
+end
+
+local function restore_unchanged(state)
+  local retained = state.retained
+  if not retained or not next(retained.inputs) then return end
+  for name, source in pairs(retained.inputs) do
+    if source == false or not vim.deep_equal(source, disk_source(name)) then return end
+  end
+  stop(state)
+  state.bodies, state.retained, state.error = retained.bodies, nil, nil
+  state.stale = false
 end
 
 local function inside_root(name, root)
@@ -128,6 +158,7 @@ local function callback(state, handler, phase)
     if err then fail(state, err); return end
     local ok, reason = pcall(handler, value)
     if not ok then fail(state, "Invalid analysis response: " .. tostring(reason)); return end
+    if type(value) == "table" and value.cache then state.cache_stats = value.cache end
     state.status = "idle"
     if current() == state.buf then update(state) end
     vim.cmd("redrawstatus")
@@ -166,6 +197,7 @@ update = function(state)
     state.status = "waiting for save"
     return
   end
+  if not state.busy then restore_unchanged(state) end
   if state.busy or state.error then return end
   local pinned = pin_position(state)
   if state.mark and not pinned then
@@ -191,7 +223,8 @@ update = function(state)
         vim.list_extend(args, { tostring(pos[1]), tostring(pos[2]) })
         phase = "Analyzing function"
       end
-      state.operation = backend.request(state.context, args, config, callback(state, function(value)
+      local request_config = vim.tbl_extend("force", config, { cache_refresh = state.cache_refresh })
+      state.operation = backend.request(state.context, args, request_config, callback(state, function(value)
         assert(type(value.bodies) == "table" and vim.islist(value.bodies), "Missing bodies")
         local source_id = value.bodies[1] and value.bodies[1].range.filename
         local convert = ranges.converter(state.buf, state.context.root, source_id)
@@ -205,9 +238,11 @@ update = function(state)
               range = range,
               focus = focus and focus.Ok and prepare_focus(state, focus.Ok) or nil,
               error = focus and focus.Err,
+              cached = item.cached == true,
             }
           end
         end
+        state.retained, state.cache_refresh = nil, nil
       end, phase))
       return
     end
@@ -240,13 +275,16 @@ update = function(state)
     local char = ranges.position(state.buf, { pos[1] + 1, pos[2] })
     state.operation = backend.request(state.context, {
       config.batch and "file-focus" or "focus", filename, tostring(char[1]), tostring(char[2]),
-    }, config, callback(state, function(value)
+    }, vim.tbl_extend("force", config, { cache_refresh = state.cache_refresh }), callback(state, function(value)
+      state.retained, state.cache_refresh = nil, nil
       if not config.batch then body.focus = prepare_focus(state, value); return end
       assert(type(value.bodies) == "table" and vim.islist(value.bodies), "Missing bodies")
       local convert = ranges.converter(state.buf, state.context.root, value.bodies[1] and value.bodies[1].range.filename)
       for _, item in ipairs(value.bodies) do
         if vim.deep_equal(convert(item.range), body.range) and item.focus ~= vim.NIL then
-          if item.focus.Ok then body.focus = prepare_focus(state, item.focus.Ok)
+          if item.focus.Ok then
+            body.focus = prepare_focus(state, item.focus.Ok)
+            body.cached = item.cached == true
           elseif item.focus.Err then body.error = item.focus.Err
           else error("Invalid selected function result") end
           return
@@ -257,6 +295,7 @@ update = function(state)
     return
   end
   state.slice = render.show(state.buf, body.focus, pos, config.priority, config.show_influence)
+  state.cached = body.cached == true
   state.stale = false
   state.status = state.slice and (state.mark and "pinned" or "active") or "no place"
 end
@@ -276,20 +315,26 @@ function M.setup(opts)
   local mode = opts and opts.context_mode
   assert(mode == nil or mode == "SigOnly" or mode == "Recurse", "context_mode must be SigOnly or Recurse")
   if progress_timer then progress_timer:stop(); progress_timer:close() end
-  for _, state in pairs(states) do stop(state); clear_pin(state); render.clear(state.buf) end
-  states, disabled = {}, {}
+  for _, state in pairs(all_states()) do stop(state); clear_pin(state); render.clear(state.buf) end
+  states, suspended, disabled = {}, {}, {}
   config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
   assert(type(config.debounce_ms) == "number" and config.debounce_ms >= 0, "debounce_ms must be nonnegative")
   assert(type(config.timeout_ms) == "number" and config.timeout_ms > 0, "timeout_ms must be positive")
   assert(type(config.auto_enable) == "boolean", "auto_enable must be a boolean")
+  assert(type(config.cache) == "boolean", "cache must be a boolean")
+  assert(config.cache_dir == nil or (type(config.cache_dir) == "string" and config.cache_dir ~= ""), "cache_dir must be a nonempty path")
   assert(not config.command or (vim.islist(config.command) and #config.command > 0), "command must be an argv list")
   render.highlights()
   local group = vim.api.nvim_create_augroup("Flowistry", { clear = true })
-  local observed_ticks, observed_names = {}, {}
+  local observed_ticks, observed_names, saved_sources = {}, {}, {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) then
       observed_ticks[buf] = vim.api.nvim_buf_get_changedtick(buf)
       observed_names[buf] = vim.api.nvim_buf_get_name(buf)
+      local name = observed_names[buf]
+      if is_rust(buf) or name:match("Cargo%.toml$") or name:match("Cargo%.lock$") then
+        saved_sources[name] = disk_source(name)
+      end
     end
   end
   vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter" }, {
@@ -311,18 +356,26 @@ function M.setup(opts)
       observed_names[args.buf] = name
       -- Reading a file for the first time does not change the compiler's disk
       -- inputs. Reloads of known buffers still invalidate stale analysis.
-      if args.event == "BufReadPost" and previous_tick == nil then return end
+      if args.event == "BufReadPost" and previous_tick == nil then
+        if is_rust(args.buf) or name:match("Cargo%.toml$") or name:match("Cargo%.lock$") then
+          saved_sources[name] = disk_source(name)
+        end
+        return
+      end
       -- TextChanged may be delivered when entering a buffer even though no edit
       -- happened since its read/write or the last observed change.
       if args.event:match("^TextChanged") and (previous_tick == tick
         or (previous_tick == nil and not vim.bo[args.buf].modified)) then return end
       -- Another Rust file or a manifest can change this function's analysis.
       if not is_rust(args.buf) and not name:match("Cargo%.toml$") and not name:match("Cargo%.lock$") then return end
-      for _, state in pairs(states) do
+      for _, state in pairs(all_states()) do
         local root = state.context and state.context.root or state.root
         if state.buf == args.buf or inside_root(name, root)
           or (args.event == "BufFilePost" and previous_name and inside_root(previous_name, root)) then
           invalidate(state, args.event ~= "BufReadPost" and args.event ~= "BufFilePost")
+          if state.retained and state.retained.inputs[name] == nil then
+            state.retained.inputs[name] = saved_sources[name] or false
+          end
         end
         if args.event == "BufFilePost" and state.buf == args.buf then
           state.context = nil
@@ -332,6 +385,7 @@ function M.setup(opts)
           end
         end
       end
+      if args.event == "BufWritePost" or args.event == "BufReadPost" then saved_sources[name] = disk_source(name) end
       -- :wall and nvim_buf_call temporarily switch the current buffer while
       -- writing a dependency. Resolve the active editor after that switch ends.
       vim.schedule(function()
@@ -392,7 +446,9 @@ function M.enable(quiet)
   if root then root = vim.fs.normalize(root) end
   if not root then notify("No Cargo.toml found above this file.", vim.log.levels.WARN); return end
   if vim.fn.filereadable(filename) ~= 1 then notify("Save this file before enabling focus mode.", vim.log.levels.WARN); return end
-  local state = { buf = buf, root = root, epoch = 0, status = "idle" }
+  local state = suspended[buf] or { buf = buf, root = root, epoch = 0, status = "idle" }
+  if state.error then invalidate(state, true) end
+  suspended[buf] = nil
   disabled[buf] = nil
   states[buf] = state
   update(state)
@@ -402,7 +458,13 @@ end
 function M.disable(buf)
   buf = buf or current()
   disabled[buf] = true
-  dispose(buf)
+  local state = states[buf]
+  if state then
+    stop(state)
+    clear_pin(state)
+    states[buf], suspended[buf] = nil, state
+  end
+  render.clear(buf)
 end
 
 function M.toggle()
@@ -431,8 +493,16 @@ end
 
 function M.refresh()
   -- Also refresh sibling buffers whose dependencies may have changed on disk.
-  for _, state in pairs(states) do invalidate(state); state.context = nil end
+  for _, state in pairs(all_states()) do
+    invalidate(state)
+    state.context, state.cache_stats, state.cache_refresh = nil, nil, true
+  end
   if states[current()] then update(states[current()]) else M.enable() end
+end
+
+function M.cache_status(buf)
+  local state = states[buf or current()]
+  return state and state.cache_stats and vim.deepcopy(state.cache_stats) or nil
 end
 
 function M.status(buf)
@@ -463,6 +533,7 @@ function M.indicator(buf)
   }
   return "Flowistry: " .. (labels[state.status] or state.status)
     .. (state.stale and " (showing saved analysis)" or "")
+    .. (not state.stale and state.slice and state.cached and " (disk cache)" or "")
 end
 
 function M.log()
