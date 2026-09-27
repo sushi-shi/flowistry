@@ -113,6 +113,7 @@ impl rustc_driver::Callbacks for Callbacks {
       }
       Ok(FileOutput { bodies, cache: CacheStats { hits: cache.hits.get(), misses: cache.misses.get() } })
     })());
+    crate::fast_cache::record_inputs(tcx);
     if tcx.dcx().has_errors().is_none() {
       if crate::plugin::postprocess(self.output.take().unwrap()).is_ok() {
         use std::io::Write;

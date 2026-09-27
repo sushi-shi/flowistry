@@ -23,8 +23,8 @@ extern crate rustc_serialize;
 extern crate rustc_session;
 extern crate rustc_span;
 
-#[cfg(feature = "decompose")]
 mod cache;
+#[cfg(feature = "decompose")]
 mod decompose;
 mod file_focus;
 mod focus;
@@ -36,3 +36,5 @@ mod spans;
 
 pub use plugin::{FlowistryPlugin, replay_request};
 pub use replay::{prepare as prepare_replay, try_replay};
+
+pub mod fast_cache;
