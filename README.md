@@ -19,7 +19,7 @@ same executable and protocol; see [the backend contract](doc/backend.md).
 ## Backend installation
 
 The package targets Flowistry fork revision
-[`9528045feec9f48abf4383f9b43bdcf7e0c6c341`](https://github.com/sushi-shi/flowistry/tree/9528045feec9f48abf4383f9b43bdcf7e0c6c341),
+[`ad859be49003040aac7f6767db6798d971d0d4a2`](https://github.com/sushi-shi/flowistry/tree/ad859be49003040aac7f6767db6798d971d0d4a2),
 which identifies itself as **0.5.44** and pins **nightly-2026-05-01**. The compiler
 API and wire format are version-sensitive. Install that revision, rather than
 assuming an arbitrary published version or latest nightly is compatible:
@@ -29,7 +29,7 @@ rustup toolchain install nightly-2026-05-01 \
   --component rust-src --component rustc-dev --component llvm-tools-preview
 cargo +nightly-2026-05-01 install --locked \
   --git https://github.com/sushi-shi/flowistry \
-  --rev 9528045feec9f48abf4383f9b43bdcf7e0c6c341 flowistry_ide
+  --rev ad859be49003040aac7f6767db6798d971d0d4a2 flowistry_ide
 ```
 
 Make sure Cargo's bin directory is on Neovim's PATH. The frontend discovers the

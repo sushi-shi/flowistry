@@ -20,7 +20,7 @@ cached results so different analysis modes cannot share stale results.
 ## Packaging and backend ownership
 
 The flake pins [Flowistry fork commit
-`9528045feec9f48abf4383f9b43bdcf7e0c6c341`](https://github.com/sushi-shi/flowistry/commit/9528045feec9f48abf4383f9b43bdcf7e0c6c341)
+`ad859be49003040aac7f6767db6798d971d0d4a2`](https://github.com/sushi-shi/flowistry/commit/ad859be49003040aac7f6767db6798d971d0d4a2)
 directly. It contains the combined command, precise source ranges, and cached
 callee summaries, so the Neovim package needs no build patches.
 

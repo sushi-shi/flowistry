@@ -14,7 +14,7 @@ checking, or information-flow computation are implemented in this repository.
 ```
 
 The integration targets Flowistry fork revision
-`9528045feec9f48abf4383f9b43bdcf7e0c6c341` (0.5.44), with its locked
+`ad859be49003040aac7f6767db6798d971d0d4a2` (0.5.44), with its locked
 `rustc_utils = 0.15.0-nightly-2026-05-01` dependency. This is a description of that
 protocol, not a claim of upstream version stability. The fork includes the
 combined command below, refined human-facing focus ranges, and optional

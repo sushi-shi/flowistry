@@ -67,8 +67,10 @@ that backend request. These are sample timings, not a universal guarantee.
 After an input changes, compiler validation still runs; the function-level cache
 can then reuse semantically unchanged analysis, including after unrelated edits
 or whitespace changes. First-time analysis still takes seconds. This fast path
-uses Unix filesystem change stamps and applies to batched `file-focus` requests;
-other platforms and the legacy `focus` command use compiler validation. Build
+uses Unix filesystem change stamps and applies to batched `file-focus` requests.
+Transient Nix scratch directories do not invalidate replay across launches;
+explicit semantic use of those variables requires compiler validation.
+Other platforms and the legacy `focus` command use compiler validation. Build
 scripts/proc macros must declare external inputs, as they do for Cargo caching.
 
 Unsaved edits retain the previous display with its saved-analysis label; they
