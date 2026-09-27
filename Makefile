@@ -1,4 +1,4 @@
-.PHONY: test test-ui test-live test-precision test-save
+.PHONY: test test-ui test-live test-precision test-save test-summaries
 test:
 	nvim --headless -u NONE -i NONE -l tests/run.lua
 
@@ -13,3 +13,6 @@ test-precision:
 
 test-save:
 	nvim --headless -n -i NONE --cmd 'let g:coc_start_at_startup=0' -c 'luafile tests/save.lua'
+
+test-summaries:
+	nvim --headless -u NONE -i NONE -l tests/summaries.lua

@@ -12,6 +12,7 @@ local progress_timer
 local defaults = {
   auto_enable = true,
   toolchain = "nightly-2026-05-01",
+  context_mode = nil, -- Backend default (SigOnly); Recurse opts into callee summaries.
   command = nil, -- Full backend argv; bypasses rustup/sysroot discovery when set.
   root = nil, -- Optional workspace root for externally managed backend commands.
   batch = false, -- Packaged backend supports file-focus; vanilla upstream does not.
@@ -272,6 +273,8 @@ local function schedule(state)
 end
 
 function M.setup(opts)
+  local mode = opts and opts.context_mode
+  assert(mode == nil or mode == "SigOnly" or mode == "Recurse", "context_mode must be SigOnly or Recurse")
   if progress_timer then progress_timer:stop(); progress_timer:close() end
   for _, state in pairs(states) do stop(state); clear_pin(state); render.clear(state.buf) end
   states, disabled = {}, {}

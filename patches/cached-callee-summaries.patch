@@ -1,0 +1,2424 @@
+diff --git a/crates/flowistry/src/infoflow/analysis.rs b/crates/flowistry/src/infoflow/analysis.rs
+index 39aab2e..83619a4 100644
+--- a/crates/flowistry/src/infoflow/analysis.rs
++++ b/crates/flowistry/src/infoflow/analysis.rs
+@@ -2,9 +2,10 @@ use std::{cell::RefCell, rc::Rc};
+ 
+ // use indexical::impls::RustcIndexMatrix as IndexMatrix;
+ use indexical::bitset::rustc::IndexMatrix;
+-use log::{debug, trace};
++use indexical::{IndexedValue, bitset::rustc::IndexSet};
++use log::debug;
+ use rustc_data_structures::fx::FxHashMap as HashMap;
+-use rustc_hir::{BodyId, def_id::DefId};
++use rustc_hir::def_id::DefId;
+ use rustc_middle::{
+   mir::{visit::Visitor, *},
+   ty::TyCtxt,
+@@ -23,8 +24,9 @@ use rustc_utils::{
+ use smallvec::SmallVec;
+ 
+ use super::{
+-  FlowResults,
++  effects::CallEffects,
+   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
++  session::AnalysisSession,
+ };
+ use crate::{
+   extensions::{ContextMode, MutabilityMode, is_extension_active},
+@@ -73,7 +75,9 @@ pub struct FlowAnalysis<'a, 'tcx> {
+   pub place_info: PlaceInfo<'a, 'tcx>,
+ 
+   pub(crate) control_dependencies: ControlDependencies<BasicBlock>,
+-  pub(crate) recurse_cache: RefCell<HashMap<BodyId, FlowResults<'a, 'tcx>>>,
++  pub(crate) session: Rc<AnalysisSession<'tcx>>,
++  pub(crate) call_effects: RefCell<HashMap<Location, Rc<CallEffects<'tcx>>>>,
++  pub(crate) call_reads: RefCell<HashMap<Location, LocationOrArgSet>>,
+ }
+ 
+ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
+@@ -84,7 +88,16 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
+     body: &'a Body<'tcx>,
+     place_info: PlaceInfo<'a, 'tcx>,
+   ) -> Self {
+-    let recurse_cache = RefCell::new(HashMap::default());
++    Self::with_session(tcx, def_id, body, place_info, AnalysisSession::new(tcx))
++  }
++
++  pub(crate) fn with_session(
++    tcx: TyCtxt<'tcx>,
++    def_id: DefId,
++    body: &'a Body<'tcx>,
++    place_info: PlaceInfo<'a, 'tcx>,
++    session: Rc<AnalysisSession<'tcx>>,
++  ) -> Self {
+     let control_dependencies = body.control_dependencies();
+     debug!("Control dependencies: {control_dependencies:?}");
+     FlowAnalysis {
+@@ -93,7 +106,9 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
+       body,
+       place_info,
+       control_dependencies,
+-      recurse_cache,
++      session,
++      call_effects: RefCell::new(HashMap::default()),
++      call_reads: RefCell::new(HashMap::default()),
+     }
+   }
+ 
+@@ -102,7 +117,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
+     self.place_info.location_domain()
+   }
+ 
+-  fn influences(&self, place: Place<'tcx>) -> SmallVec<[Place<'tcx>; 8]> {
++  pub(crate) fn influences(&self, place: Place<'tcx>) -> SmallVec<[Place<'tcx>; 8]> {
+     let conflicts = self
+       .place_info
+       .aliases(place)
+@@ -147,29 +162,39 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
+     state: &mut FlowDomain<'tcx>,
+     mutations: Vec<Mutation<'tcx>>,
+     location: Location,
++  ) {
++    self.transfer(state, &mutations, location, |loc, deps| {
++      deps.insert(loc);
++    });
++  }
++
++  // Shared by location-based flow and field-origin summary analysis.
++  pub(crate) fn transfer<D: IndexedValue + std::fmt::Debug + 'static>(
++    &self,
++    state: &mut IndexMatrix<Place<'tcx>, D>,
++    mutations: &[Mutation<'tcx>],
++    location: Location,
++    seed: impl Fn(Location, &mut IndexSet<D>),
+   ) {
+     debug!("  Applying mutations {mutations:?}");
+-    let location_domain = self.location_domain();
++    let location_domain = state.col_domain().clone();
+ 
+     // Initialize dependencies to include current location of mutation.
+     let mut all_deps = {
+-      let mut deps = LocationOrArgSet::new(location_domain);
+-      deps.insert(location);
++      let mut deps = IndexSet::new(&location_domain);
++      seed(location, &mut deps);
+       vec![deps; mutations.len()]
+     };
+ 
+     // Add every influence on `input` to `deps`.
+-    let add_deps = |state: &FlowDomain<'tcx>,
+-                    input,
+-                    target_deps: &mut LocationOrArgSet| {
+-      for relevant in self.influences(input) {
+-        let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
+-        trace!(
+-          "    For relevant {relevant:?} for input {input:?} adding deps {relevant_deps:?}"
+-        );
+-        target_deps.union(relevant_deps);
+-      }
+-    };
++    let add_deps =
++      |state: &IndexMatrix<Place<'tcx>, D>, input, target_deps: &mut IndexSet<D>| {
++        for relevant in self.influences(input) {
++          let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
++
++          target_deps.union(relevant_deps);
++        }
++      };
+ 
+     // Register every explicitly provided input as an input.
+     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
+@@ -183,7 +208,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
+     let body = self.body;
+     for block in controlled_by.into_iter().flat_map(|set| set.iter()) {
+       for deps in &mut all_deps {
+-        deps.insert(body.terminator_loc(block));
++        seed(body.terminator_loc(block), deps);
+       }
+ 
+       // Include dependencies of the switch's operand.
+@@ -264,10 +289,8 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
+     statement: &Statement<'tcx>,
+     location: Location,
+   ) {
+-    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+-      self.transfer_function(state, mutations, location)
+-    })
+-    .visit_statement(statement, location);
++    let mutations = self.statement_mutations(statement, location);
++    self.transfer_function(state, mutations, location);
+   }
+ 
+   fn apply_primary_terminator_effect<'mir>(
+@@ -276,18 +299,27 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
+     terminator: &'mir Terminator<'tcx>,
+     location: Location,
+   ) -> TerminatorEdges<'mir, 'tcx> {
+-    if matches!(terminator.kind, TerminatorKind::Call { .. })
+-      && is_extension_active(|mode| mode.context_mode == ContextMode::Recurse)
+-      && self.recurse_into_call(state, &terminator.kind, location)
+-    {
+-      return terminator.edges();
++    if self.session.mode().context_mode == ContextMode::Recurse {
++      let effects = self.effects_at(terminator, location);
++      let reads = self.inputs_deps(state, &effects.reads);
++      self
++        .call_reads
++        .borrow_mut()
++        .entry(location)
++        .and_modify(|prior| {
++          prior.union(&reads);
++        })
++        .or_insert(reads);
++      self.transfer(state, &effects.mutations, location, |loc, deps| {
++        deps.insert(loc);
++      });
++    } else {
++      ModularMutationVisitor::new(&self.place_info, |_, mutations| {
++        self.transfer_function(state, mutations, location)
++      })
++      .visit_terminator(terminator, location);
+     }
+ 
+-    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+-      self.transfer_function(state, mutations, location)
+-    })
+-    .visit_terminator(terminator, location);
+-
+     terminator.edges()
+   }
+ 
+diff --git a/crates/flowistry/src/infoflow/dependencies.rs b/crates/flowistry/src/infoflow/dependencies.rs
+index f1ca712..05b61b9 100644
+--- a/crates/flowistry/src/infoflow/dependencies.rs
++++ b/crates/flowistry/src/infoflow/dependencies.rs
+@@ -11,7 +11,9 @@ use rustc_utils::{
+ };
+ 
+ use super::{FlowDomain, FlowResults, mutation::ModularMutationVisitor};
+-use crate::{infoflow::mutation::Mutation, mir::placeinfo::PlaceInfo};
++use crate::{
++  extensions::ContextMode, infoflow::mutation::Mutation, mir::placeinfo::PlaceInfo,
++};
+ 
+ /// Which way to look for dependencies
+ #[derive(Clone, Copy, Debug)]
+@@ -186,6 +188,29 @@ fn compute_dependencies_inner<'tcx>(
+             check(place);
+           }
+         }
++        Either::Right(term)
++          if results.analysis.session.mode().context_mode == ContextMode::Recurse =>
++        {
++          let effects = results.analysis.effects_at(term, location);
++          for mutation in &effects.mutations {
++            check(mutation.mutated);
++          }
++          // Read dependencies were captured before call mutations. Looking only
++          // at the return or mutated rows loses read-only/unit-returning calls.
++          if let Some(reads) = results.analysis.call_reads.borrow().get(&location) {
++            for (target_deps, outputs) in
++              iter::zip(all_target_deps, &mut *outputs.borrow_mut())
++            {
++              if target_deps
++                .all_forward
++                .iter()
++                .any(|fwd| reads.is_superset(fwd))
++              {
++                outputs.insert(location);
++              }
++            }
++          }
++        }
+         _ => ModularMutationVisitor::new(&results.analysis.place_info, |_, mutations| {
+           for Mutation { mutated, .. } in mutations {
+             check(mutated);
+diff --git a/crates/flowistry/src/infoflow/effects.rs b/crates/flowistry/src/infoflow/effects.rs
+new file mode 100644
+index 0000000..1d2f301
+--- /dev/null
++++ b/crates/flowistry/src/infoflow/effects.rs
+@@ -0,0 +1,303 @@
++//! One call-effects path for propagation, summarization and source slicing.
++
++use std::rc::Rc;
++
++use indexical::{
++  IndexedValue,
++  bitset::rustc::{IndexMatrix, IndexSet},
++};
++use rustc_middle::{
++  mir::{visit::Visitor, *},
++  ty::TyKind,
++};
++use rustc_utils::{BodyExt, OperandExt, PlaceExt};
++
++use super::{
++  analysis::FlowAnalysis,
++  mutation::{ModularMutationVisitor, Mutation, MutationStatus},
++};
++use crate::{extensions::ContextMode, mir::utils};
++
++#[derive(Default)]
++pub(crate) struct CallEffects<'tcx> {
++  pub mutations: Vec<Mutation<'tcx>>,
++  // These are values consumed by the call, even when there is no result/write.
++  pub reads: Vec<Place<'tcx>>,
++}
++
++impl<'tcx> FlowAnalysis<'_, 'tcx> {
++  /// Visits the effects used by this analysis, including read-only calls.
++  ///
++  /// Consumers should use this instead of independently approximating call
++  /// mutations from signatures, which would discard `Recurse` precision.
++  pub fn visit_effects(
++    &self,
++    mut visit: impl FnMut(Location, &[Mutation<'tcx>], &[Place<'tcx>]),
++  ) {
++    if self.session.mode().context_mode == ContextMode::SigOnly {
++      ModularMutationVisitor::new(&self.place_info, |loc, mts| visit(loc, &mts, &[]))
++        .visit_body(self.body);
++      return;
++    }
++    for location in self.body.all_locations() {
++      match self.body.stmt_at(location) {
++        either::Either::Left(statement) => {
++          visit(location, &self.statement_mutations(statement, location), &[
++          ])
++        }
++        either::Either::Right(terminator) => {
++          let effects = self.effects_at(terminator, location);
++          visit(location, &effects.mutations, &effects.reads);
++        }
++      }
++    }
++  }
++
++  pub(crate) fn inputs_deps<D: IndexedValue + 'static>(
++    &self,
++    state: &IndexMatrix<Place<'tcx>, D>,
++    inputs: &[Place<'tcx>],
++  ) -> IndexSet<D> {
++    let mut deps = IndexSet::new(state.col_domain());
++    for input in inputs {
++      for relevant in self.influences(*input) {
++        deps.union(state.row_set(&self.place_info.normalize(relevant)));
++      }
++    }
++    deps
++  }
++
++  pub(crate) fn statement_mutations(
++    &self,
++    statement: &Statement<'tcx>,
++    location: Location,
++  ) -> Vec<Mutation<'tcx>> {
++    let mut mutations = Vec::new();
++    ModularMutationVisitor::new(&self.place_info, |_, found| mutations = found)
++      .visit_statement(statement, location);
++    if self.session.mode().context_mode == ContextMode::Recurse
++      && let StatementKind::Assign(assign) = &statement.kind
++      && let (_, Rvalue::Ref(_, _, borrowed)) = &**assign
++    {
++      // Taking an address is not reading the contents of the pointee. Preserve
++      // the pointers and indexes used to form the address, not sibling fields.
++      let inputs = borrowed
++        .refs_in_projection(self.body, self.tcx)
++        .map(|(p, _)| Place::from_ref(p, self.tcx))
++        .chain(borrowed.projection.iter().filter_map(|elem| match elem {
++          ProjectionElem::Index(local) => Some(Place::from(local)),
++          _ => None,
++        }))
++        .collect::<Vec<_>>();
++      for mutation in &mut mutations {
++        mutation.inputs.clone_from(&inputs);
++      }
++    }
++    mutations
++  }
++
++  pub(crate) fn effects_at(
++    &self,
++    terminator: &Terminator<'tcx>,
++    location: Location,
++  ) -> Rc<CallEffects<'tcx>> {
++    if let Some(effects) = self.call_effects.borrow().get(&location) {
++      return effects.clone();
++    }
++    let effects = self.precise_call_effects(terminator).unwrap_or_else(|| {
++      let mut effects = CallEffects::default();
++      ModularMutationVisitor::new(&self.place_info, |_, mutations| {
++        effects.mutations = mutations;
++      })
++      .visit_terminator(terminator, location);
++      match &terminator.kind {
++        TerminatorKind::Call { args, .. } => {
++          // A unit return doesn't mean an unknown function didn't read inputs.
++          for (_, arg) in utils::arg_places(args) {
++            effects.reads.push(arg);
++            effects
++              .reads
++              .extend(self.place_info.reachable_values(arg, Mutability::Not));
++          }
++          // Recurse-mode borrows carry address provenance, not pointee contents.
++          // An opaque call must explicitly read the reachable values for *each
++          // output effect* as well, or e.g. Vec::len would lose its Vec inputs.
++          for mutation in &mut effects.mutations {
++            mutation.inputs = mutation
++              .inputs
++              .iter()
++              .flat_map(|arg| {
++                self
++                  .place_info
++                  .reachable_values(*arg, Mutability::Not)
++                  .iter()
++                  .copied()
++                  .chain(std::iter::once(*arg))
++              })
++              .collect();
++          }
++        }
++        TerminatorKind::Drop { place, .. } => {
++          // Destructors are opaque calls in v1. Include reachable borrowed state.
++          effects.reads.push(*place);
++          effects
++            .reads
++            .extend(self.place_info.reachable_values(*place, Mutability::Not));
++          for place in self.place_info.reachable_values(*place, Mutability::Mut) {
++            effects.mutations.push(Mutation {
++              mutated: *place,
++              inputs: effects.reads.clone(),
++              status: MutationStatus::Possibly,
++            });
++          }
++        }
++        TerminatorKind::SwitchInt { discr, .. } => effects.reads.extend(discr.as_place()),
++        TerminatorKind::Assert { cond, .. } => effects.reads.extend(cond.as_place()),
++        _ => {}
++      }
++      effects
++    });
++    let effects = Rc::new(effects);
++    self
++      .call_effects
++      .borrow_mut()
++      .insert(location, effects.clone());
++    effects
++  }
++
++  fn precise_call_effects(
++    &self,
++    terminator: &Terminator<'tcx>,
++  ) -> Option<CallEffects<'tcx>> {
++    let TerminatorKind::Call {
++      func,
++      args,
++      destination,
++      unwind,
++      ..
++    } = &terminator.kind
++    else {
++      return None;
++    };
++    let key = self.session.resolve(self.def_id, func)?;
++    if self.session.cyclic_edge(self.def_id, key.def_id()) {
++      self.session.fallback("recursive edge");
++      return None;
++    }
++    let summary = self.session.summary(key)?;
++    let child_body = &self.session.body(key.def_id()).body;
++    let actuals = utils::arg_places(args);
++    let translate = |child: Place<'tcx>| -> Option<(Place<'tcx>, bool)> {
++      let parent = if child.local == RETURN_PLACE {
++        *destination
++      } else {
++        actuals
++          .iter()
++          .find(|(i, _)| *i + 1 == child.local.as_usize())?
++          .1
++      };
++      let mut projection = parent.projection.to_vec();
++      let mut ty = parent.ty(self.body, self.tcx);
++      for elem in child.projection.iter() {
++        // Widen at inaccessible fields, preserving the existing privacy boundary.
++        if let ProjectionElem::Field(field, _) = elem
++          && let Some(adt) = ty.ty.ty_adt_def()
++          && !adt
++            .variant(ty.variant_index.unwrap_or(rustc_abi::FIRST_VARIANT))
++            .fields[field]
++            .vis
++            .is_accessible_from(self.def_id, self.tcx)
++        {
++          break;
++        }
++        // A callee's index local has no meaning in its caller. Widen arrays and
++        // opaque casts rather than exporting that local into another MIR body.
++        if !matches!(
++          elem,
++          ProjectionElem::Deref
++            | ProjectionElem::Field(..)
++            | ProjectionElem::Downcast(..)
++        ) {
++          break;
++        }
++        // Field MIR types belong to the generic callee. Recompute them from the
++        // actual caller type before projecting (Wrap<T>::field may be an i32).
++        let elem = match elem {
++          ProjectionElem::Field(field, _) => {
++            let field_ty = match ty.ty.kind() {
++              TyKind::Adt(adt, args) => adt
++                .variant(ty.variant_index.unwrap_or(rustc_abi::FIRST_VARIANT))
++                .fields[field]
++                .ty(self.tcx, args),
++              TyKind::Tuple(fields) => fields[field.as_usize()],
++              _ => break,
++            };
++            ProjectionElem::Field(field, field_ty)
++          }
++          elem => elem,
++        };
++        ty = ty.projection_ty(self.tcx, elem);
++        projection.push(elem);
++      }
++      let widened = projection.len() < parent.projection.len() + child.projection.len();
++      Some((Place::make(parent.local, &projection, self.tcx), widened))
++    };
++    let translate_input = |child: Place<'tcx>| -> Vec<Place<'tcx>> {
++      let Some((parent, _)) = translate(child) else {
++        return Vec::new();
++      };
++      let ty = child.ty(child_body, self.tcx).ty;
++      if ty.is_ref() || ty.is_raw_ptr() {
++        // An address origin must not acquire all of its pointee's contents.
++        vec![parent]
++      } else {
++        // A symbolic T or opaque aggregate can hide borrowed contents that
++        // become visible in the caller. Widen value origins at that boundary.
++        self
++          .place_info
++          .reachable_values(parent, Mutability::Not)
++          .iter()
++          .copied()
++          .chain(std::iter::once(parent))
++          .collect()
++      }
++    };
++    let mut effects = CallEffects::default();
++    effects.reads = summary
++      .reads
++      .iter()
++      .flat_map(|p| translate_input(*p))
++      .collect();
++    let widened_return = summary
++      .writes
++      .iter()
++      .filter(|effect| effect.place.local == RETURN_PLACE)
++      .any(|effect| translate(effect.place).is_some_and(|(_, widened)| widened));
++    for effect in &summary.writes {
++      let Some((mutated, _)) = translate(effect.place) else {
++        continue;
++      };
++      // A constant actual argument has no caller provenance. Its projections
++      // cannot name mutable caller state, either.
++      effects.mutations.push(Mutation {
++        mutated,
++        inputs: effect
++          .inputs
++          .iter()
++          .flat_map(|p| translate_input(*p))
++          .collect(),
++        // Widened fields can overlap other output fields. A strong update of an
++        // ancestor must not erase another effect from this same call.
++        status: if effect.place.local == RETURN_PLACE
++          && !widened_return
++          && !matches!(unwind, UnwindAction::Cleanup(_))
++        {
++          MutationStatus::Definitely
++        } else {
++          MutationStatus::Possibly
++        },
++      });
++    }
++    Some(effects)
++  }
++}
+diff --git a/crates/flowistry/src/infoflow/mod.rs b/crates/flowistry/src/infoflow/mod.rs
+index 3b07837..01fe19d 100644
+--- a/crates/flowistry/src/infoflow/mod.rs
++++ b/crates/flowistry/src/infoflow/mod.rs
+@@ -3,8 +3,9 @@
+ //! The main function is [`compute_flow`]. See [`FlowResults`] and [`FlowDomain`] for an explanation
+ //! of what it returns.
+ 
+-use std::cell::RefCell;
++use std::rc::Rc;
+ 
++use fluid_let::fluid_set;
+ use log::debug;
+ use rustc_borrowck::consumers::BodyWithBorrowckFacts;
+ use rustc_hir::BodyId;
+@@ -16,13 +17,19 @@ pub use self::{
+   dependencies::{
+     Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans,
+   },
++  session::{AnalysisSession, SummaryStats},
++};
++use crate::{
++  extensions::{ContextMode, EVAL_MODE},
++  mir::{engine, placeinfo::PlaceInfo},
+ };
+-use crate::mir::{engine, placeinfo::PlaceInfo};
+ 
+ mod analysis;
+ mod dependencies;
++mod effects;
+ pub mod mutation;
+-mod recursive;
++mod session;
++mod summary;
+ 
+ /// The output of the information flow analysis.
+ ///
+@@ -63,11 +70,6 @@ mod recursive;
+ /// which replaces [`rustc_mir_dataflow::Results`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_dataflow/struct.Results.html).
+ pub type FlowResults<'a, 'tcx> = engine::AnalysisResults<'tcx, FlowAnalysis<'a, 'tcx>>;
+ 
+-thread_local! {
+-  pub(super) static BODY_STACK: RefCell<Vec<BodyId>> =
+-    const { RefCell::new(Vec::new()) };
+-}
+-
+ /// Computes information flow for a MIR body.
+ ///
+ /// See [example.rs](https://github.com/willcrichton/flowistry/tree/master/crates/flowistry/examples/example.rs)
+@@ -83,55 +85,60 @@ pub fn compute_flow<'a, 'tcx>(
+   body_id: BodyId,
+   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+ ) -> FlowResults<'a, 'tcx> {
+-  BODY_STACK.with(|body_stack| {
+-    body_stack.borrow_mut().push(body_id);
+-    debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
+-
+-    let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+-    let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+-    let location_domain = place_info.location_domain().clone();
+-
+-    let body = &body_with_facts.body;
+-
+-    let results = {
+-      block_timer!("Flow");
+-
+-      let analysis = FlowAnalysis::new(tcx, def_id, body, place_info);
+-      engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
+-      // analysis.into_engine(tcx, body).iterate_to_fixpoint()
+-    };
+-
+-    if log::log_enabled!(log::Level::Info) {
+-      let counts = body
+-        .all_locations()
+-        .flat_map(|loc| {
+-          let state = results.state_at(loc);
+-          state
+-            .rows()
+-            .map(|(_, locations)| locations.len())
+-            .collect::<Vec<_>>()
+-        })
+-        .collect::<Vec<_>>();
+-
+-      let nloc = body.all_locations().count();
+-      let np = counts.len();
+-      let pavg = np as f64 / (nloc as f64);
+-      let nl = counts.into_iter().sum::<usize>();
+-      let lavg = nl as f64 / (nloc as f64);
+-      log::info!(
+-        "Over {nloc} locations, total number of place entries: {np} (avg {pavg:.0}/loc), total size of location sets: {nl} (avg {lavg:.0}/loc)",
+-      );
+-    }
+-
+-    if std::env::var("DUMP_MIR").is_ok()
+-      && BODY_STACK.with(|body_stack| body_stack.borrow().len() == 1)
+-    {
+-      todo!()
+-      // utils::dump_results(body, &results, def_id, tcx).unwrap();
+-    }
+-
+-    body_stack.borrow_mut().pop();
++  compute_flow_with_session(AnalysisSession::new(tcx), tcx, body_id, body_with_facts)
++}
+ 
+-    results
+-  })
++/// Computes flow while reusing the session's completed callee summaries.
++///
++/// The session must belong to this compiler context. Its evaluation mode is
++/// restored for the duration of analysis, including alias construction.
++pub fn compute_flow_with_session<'a, 'tcx>(
++  session: Rc<AnalysisSession<'tcx>>,
++  tcx: TyCtxt<'tcx>,
++  body_id: BodyId,
++  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
++) -> FlowResults<'a, 'tcx> {
++  fluid_set!(EVAL_MODE, session.mode());
++  debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
++
++  let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
++  if session.mode().context_mode == ContextMode::Recurse {
++    session.prepare(def_id);
++  }
++  let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
++  let location_domain = place_info.location_domain().clone();
++
++  let body = &body_with_facts.body;
++
++  let results = {
++    block_timer!("Flow");
++
++    let analysis = FlowAnalysis::with_session(tcx, def_id, body, place_info, session);
++    engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
++    // analysis.into_engine(tcx, body).iterate_to_fixpoint()
++  };
++
++  if log::log_enabled!(log::Level::Info) {
++    let counts = body
++      .all_locations()
++      .flat_map(|loc| {
++        let state = results.state_at(loc);
++        state
++          .rows()
++          .map(|(_, locations)| locations.len())
++          .collect::<Vec<_>>()
++      })
++      .collect::<Vec<_>>();
++
++    let nloc = body.all_locations().count();
++    let np = counts.len();
++    let pavg = np as f64 / (nloc as f64);
++    let nl = counts.into_iter().sum::<usize>();
++    let lavg = nl as f64 / (nloc as f64);
++    log::info!(
++      "Over {nloc} locations, total number of place entries: {np} (avg {pavg:.0}/loc), total size of location sets: {nl} (avg {lavg:.0}/loc)",
++    );
++  }
++
++  results
+ }
+diff --git a/crates/flowistry/src/infoflow/mutation.rs b/crates/flowistry/src/infoflow/mutation.rs
+index 572245b..0d8db0b 100644
+--- a/crates/flowistry/src/infoflow/mutation.rs
++++ b/crates/flowistry/src/infoflow/mutation.rs
+@@ -15,7 +15,7 @@ use crate::mir::{
+ 
+ /// Indicator of certainty about whether a place is being mutated.
+ /// Used to determine whether an update should be strong or weak.
+-#[derive(Debug)]
++#[derive(Debug, Clone)]
+ pub enum MutationStatus {
+   /// A place is definitely mutated, e.g. `x = y` definitely mutates `x`.
+   Definitely,
+@@ -25,7 +25,7 @@ pub enum MutationStatus {
+ }
+ 
+ /// Information about a particular mutation.
+-#[derive(Debug)]
++#[derive(Debug, Clone)]
+ pub struct Mutation<'tcx> {
+   /// The place that is being mutated.
+   pub mutated: Place<'tcx>,
+diff --git a/crates/flowistry/src/infoflow/recursive.rs b/crates/flowistry/src/infoflow/recursive.rs
+deleted file mode 100644
+index d03faca..0000000
+--- a/crates/flowistry/src/infoflow/recursive.rs
++++ /dev/null
+@@ -1,240 +0,0 @@
+-#![allow(unused)]
+-
+-use log::{debug, info};
+-use rustc_middle::{
+-  mir::*,
+-  ty::{ClosureKind, GenericArgKind, TyKind},
+-};
+-use rustc_mir_dataflow::JoinSemiLattice;
+-use rustc_utils::{PlaceExt, mir::borrowck_facts::get_body_with_borrowck_facts};
+-
+-use super::{BODY_STACK, analysis::FlowAnalysis};
+-use crate::{
+-  extensions::REACHED_LIBRARY,
+-  infoflow::{
+-    FlowDomain,
+-    mutation::{Mutation, MutationStatus},
+-  },
+-  mir::utils,
+-};
+-
+-impl<'tcx> FlowAnalysis<'_, 'tcx> {
+-  pub(crate) fn recurse_into_call(
+-    &self,
+-    state: &mut FlowDomain<'tcx>,
+-    call: &TerminatorKind<'tcx>,
+-    location: Location,
+-  ) -> bool {
+-    let tcx = self.tcx;
+-    let (func, parent_args, destination) = match call {
+-      TerminatorKind::Call {
+-        func,
+-        args,
+-        destination,
+-        ..
+-      } => (func, args, destination),
+-      _ => unreachable!(),
+-    };
+-    debug!("Checking whether can recurse into {func:?}");
+-
+-    let func = match func.constant() {
+-      Some(func) => func,
+-      None => {
+-        debug!("  Func is not constant");
+-        return false;
+-      }
+-    };
+-
+-    let def_id = match func.const_.ty().kind() {
+-      TyKind::FnDef(def_id, _) => def_id,
+-      _ => {
+-        debug!("  Func is not a FnDef");
+-        return false;
+-      }
+-    };
+-
+-    // If a function returns never (fn () -> !) then there are no exit points,
+-    // so we can't analyze effects on exit
+-    let fn_sig = tcx.fn_sig(*def_id);
+-    if fn_sig.skip_binder().output().skip_binder().is_never() {
+-      debug!("  Func returns never");
+-      return false;
+-    }
+-
+-    let node = match tcx.hir_get_if_local(*def_id) {
+-      Some(node) => node,
+-      None => {
+-        debug!("  Func is not in local crate");
+-        REACHED_LIBRARY.get(|reached_library| {
+-          if let Some(reached_library) = reached_library {
+-            *reached_library.borrow_mut() = true;
+-          }
+-        });
+-        return false;
+-      }
+-    };
+-
+-    let body_id = match node.body_id() {
+-      Some(body_id) => body_id,
+-      None => {
+-        debug!("  Func does not have a BodyId");
+-        return false;
+-      }
+-    };
+-
+-    // TODO(wcrichto, 2024-12-02): mir_unsafety_check_result got removed, need to find a replacement
+-    // let unsafety = tcx.mir_unsafety_check_result(def_id.expect_local());
+-    // if !unsafety.used_unsafe_blocks.is_empty() {
+-    //   debug!("  Func contains unsafe blocks");
+-    //   return false;
+-    // }
+-
+-    let parent_arg_places = utils::arg_places(parent_args);
+-    let any_closure_inputs = parent_arg_places.iter().any(|(_, place)| {
+-      let ty = place.ty(self.body.local_decls(), tcx).ty;
+-      ty.walk().any(|arg| match arg.kind() {
+-        GenericArgKind::Type(ty) => match ty.kind() {
+-          TyKind::Closure(_, substs) => matches!(
+-            substs.as_closure().kind(),
+-            ClosureKind::FnOnce | ClosureKind::FnMut
+-          ),
+-          _ => false,
+-        },
+-        _ => false,
+-      })
+-    });
+-    if any_closure_inputs {
+-      debug!("  Func has closure inputs");
+-      return false;
+-    }
+-
+-    let recursive = BODY_STACK.with(|body_stack| {
+-      let body_stack = body_stack.borrow();
+-      body_stack.contains(&body_id)
+-    });
+-    if recursive {
+-      debug!("  Func is a recursive call");
+-      return false;
+-    }
+-
+-    let body_with_facts = get_body_with_borrowck_facts(tcx, def_id.expect_local());
+-    let mut recurse_cache = self.recurse_cache.borrow_mut();
+-    let flow = recurse_cache.entry(body_id).or_insert_with(|| {
+-      info!("Recursing into {}", tcx.def_path_debug_str(*def_id));
+-      super::compute_flow(tcx, body_id, body_with_facts)
+-    });
+-    let body = &body_with_facts.body;
+-
+-    let mut return_state = FlowDomain::new(flow.analysis.location_domain());
+-    {
+-      let return_locs = body
+-        .basic_blocks
+-        .iter_enumerated()
+-        .filter_map(|(bb, data)| match data.terminator().kind {
+-          TerminatorKind::Return => Some(body.terminator_loc(bb)),
+-          _ => None,
+-        });
+-
+-      for loc in return_locs {
+-        return_state.join(flow.state_at(loc));
+-      }
+-    };
+-
+-    let translate_child_to_parent = |child: Place<'tcx>,
+-                                     mutated: bool|
+-     -> Option<Place<'tcx>> {
+-      let child_ty = child.ty(body.local_decls(), tcx).ty;
+-      if child_ty.is_unit() {
+-        return None;
+-      }
+-
+-      let can_translate = child.local == RETURN_PLACE
+-        || (child.is_arg(body) && (!mutated || child.is_indirect()));
+-      if !can_translate {
+-        return None;
+-      }
+-
+-      // For example, say we're calling f(_5.0) and child = (*_1).1 where
+-      // .1 is private to parent. Then:
+-      //    parent_toplevel_arg = _5.0
+-      //    child.projection = (*□).1
+-      //    parent_arg_projected = (*_5.0)
+-
+-      let parent_toplevel_arg = if child.local == RETURN_PLACE {
+-        *destination
+-      } else {
+-        parent_arg_places
+-          .iter()
+-          .find(|(j, _)| child.local.as_usize() - 1 == *j)
+-          .map(|(_, place)| *place)?
+-      };
+-
+-      let mut projection = parent_toplevel_arg.projection.to_vec();
+-      let mut ty = parent_toplevel_arg.ty(self.body.local_decls(), tcx);
+-      log::debug!("Adding child {child:?} to parent {parent_toplevel_arg:?}");
+-      for elem in child.projection.iter() {
+-        // Don't continue if we reach a private field
+-        if let ProjectionElem::Field(field, _) = elem
+-          && let Some(adt_def) = ty.ty.ty_adt_def()
+-          && let field = adt_def.all_fields().nth(field.as_usize()).unwrap()
+-          && !field.vis.is_accessible_from(self.def_id, self.tcx)
+-        {
+-          break;
+-        }
+-
+-        // ty = ty.projection_ty_core(tcx, elem, structurally_normalize, handle_field, handle_opaque_cast_and_subtype)
+-        ty = ty.projection_ty(tcx, elem);
+-        // ty = ty.projection_ty_core(
+-        //   tcx,
+-        //   &elem,
+-        //   |_, field, _| ty.field_ty(tcx, field),
+-        //   |_, ty| ty,
+-        // );
+-        let elem = match elem {
+-          ProjectionElem::Field(field, _) => ProjectionElem::Field(field, ty.ty),
+-          elem => elem,
+-        };
+-        projection.push(elem);
+-      }
+-
+-      let parent_arg_projected = Place::make(parent_toplevel_arg.local, &projection, tcx);
+-      Some(parent_arg_projected)
+-    };
+-
+-    let mutations = return_state.rows().filter_map(|(child, _)| {
+-      let parent = translate_child_to_parent(*child, true)?;
+-
+-      let was_return: bool = child.local == RETURN_PLACE;
+-      // > 1 because arguments will always have their synthetic location in their dep set
+-      let was_mutated = return_state.row_set(child).len() > 1;
+-      if !was_mutated && !was_return {
+-        return None;
+-      }
+-
+-      let child_deps = return_state.row_set(child);
+-      let parent_deps = return_state
+-        .rows()
+-        .filter(|(_, deps)| child_deps.is_superset(deps))
+-        .filter_map(|(row, _)| translate_child_to_parent(*row, false))
+-        .collect::<Vec<_>>();
+-
+-      debug!(
+-        "child {child:?} \n  / child_deps {child_deps:?}\n-->\nparent {parent:?}\n   / parent_deps {parent_deps:?}"
+-      );
+-
+-      Some(Mutation {
+-        mutated: parent,
+-        inputs: parent_deps.clone(),
+-        status: if was_return {
+-          MutationStatus::Definitely
+-        } else {
+-          MutationStatus::Possibly
+-        },
+-      })
+-    }).collect::<Vec<_>>();
+-
+-    self.transfer_function(state, mutations, location);
+-
+-    true
+-  }
+-}
+diff --git a/crates/flowistry/src/infoflow/session.rs b/crates/flowistry/src/infoflow/session.rs
+new file mode 100644
+index 0000000..ff2cf34
+--- /dev/null
++++ b/crates/flowistry/src/infoflow/session.rs
+@@ -0,0 +1,227 @@
++//! Compiler-scoped summary ownership. Nothing here survives its `TyCtxt`.
++
++use std::{cell::RefCell, rc::Rc, time::Duration};
++
++use rustc_borrowck::consumers::BodyWithBorrowckFacts;
++use rustc_data_structures::{
++  fx::{FxHashMap, FxHashSet},
++  graph::{scc::Sccs, vec_graph::VecGraph},
++};
++use rustc_hir::def_id::DefId;
++use rustc_middle::{
++  mir::{Operand, TerminatorKind},
++  ty::{self, Instance, TyCtxt},
++};
++use rustc_utils::mir::borrowck_facts::get_body_with_borrowck_facts;
++
++use super::summary::{self, CalleeSummary};
++use crate::extensions::{EVAL_MODE, EvalMode, REACHED_LIBRARY};
++
++/// Counters for one compiler session; logging never changes the JSON protocol.
++#[derive(Clone, Debug, Default)]
++pub struct SummaryStats {
++  /// Completed summary computations, including unsupported-body checks.
++  pub computations: usize,
++  /// Requests served from the completed summary cache.
++  pub cache_hits: usize,
++  /// Conservative call effects, grouped by reason.
++  pub fallbacks: FxHashMap<&'static str, usize>,
++  /// Total summary construction time (nested builds counted once).
++  pub construction_time: Duration,
++}
++
++/// Shared analysis state for a single compiler invocation and evaluation mode.
++///
++/// Use [`super::compute_flow_with_session`] to reuse summaries across roots. A
++/// session is deliberately neither global nor serializable: rustc identities
++/// and borrow-checker facts are only valid in the originating compiler context.
++pub struct AnalysisSession<'tcx> {
++  tcx: TyCtxt<'tcx>,
++  mode: EvalMode,
++  summaries: RefCell<FxHashMap<Instance<'tcx>, Option<Rc<CalleeSummary<'tcx>>>>>,
++  graph: RefCell<FxHashMap<DefId, Vec<DefId>>>,
++  components: RefCell<FxHashMap<DefId, usize>>,
++  stats: RefCell<SummaryStats>,
++  active: RefCell<FxHashSet<DefId>>,
++}
++
++impl<'tcx> AnalysisSession<'tcx> {
++  /// Creates a session with the currently selected evaluation mode.
++  pub fn new(tcx: TyCtxt<'tcx>) -> Rc<Self> {
++    Rc::new(Self {
++      tcx,
++      mode: EVAL_MODE.copied().unwrap_or_default(),
++      summaries: RefCell::default(),
++      graph: RefCell::default(),
++      components: RefCell::default(),
++      stats: RefCell::default(),
++      active: RefCell::default(),
++    })
++  }
++
++  /// The mode is fixed for the lifetime of this session.
++  pub fn mode(&self) -> EvalMode {
++    self.mode
++  }
++
++  /// Returns a snapshot of cache and fallback instrumentation.
++  pub fn stats(&self) -> SummaryStats {
++    self.stats.borrow().clone()
++  }
++
++  pub(crate) fn fallback(&self, reason: &'static str) {
++    *self.stats.borrow_mut().fallbacks.entry(reason).or_default() += 1;
++    log::debug!("Summary fallback: {reason}");
++  }
++
++  pub(crate) fn body(&self, def: DefId) -> &'tcx BodyWithBorrowckFacts<'tcx> {
++    get_body_with_borrowck_facts(self.tcx, def.expect_local())
++  }
++
++  pub(crate) fn resolve(
++    &self,
++    caller: DefId,
++    func: &Operand<'tcx>,
++  ) -> Option<Instance<'tcx>> {
++    let result = self.resolve_inner(caller, func);
++    if let Err(reason) = result {
++      self.fallback(reason);
++      if reason == "external implementation" {
++        REACHED_LIBRARY.get(|reached| {
++          if let Some(reached) = reached {
++            *reached.borrow_mut() = true;
++          }
++        });
++      }
++    }
++    result.ok()
++  }
++
++  fn resolve_inner(
++    &self,
++    caller: DefId,
++    func: &Operand<'tcx>,
++  ) -> Result<Instance<'tcx>, &'static str> {
++    let (def, args) = func.const_fn_def().ok_or("indirect call")?;
++    let env = self.tcx.typing_env_normalized_for_post_analysis(caller);
++    let instance = Instance::try_resolve(self.tcx, env, def, args)
++      .ok()
++      .flatten()
++      .ok_or("unresolved instance")?;
++    if !matches!(instance.def, ty::InstanceKind::Item(_)) {
++      return Err("compiler shim");
++    }
++    if instance.args.types().any(|ty| ty.walk().any(|arg| {
++      matches!(arg.as_type().map(|ty| ty.kind()), Some(ty::TyKind::Closure(_, args))
++        if matches!(args.as_closure().kind(), ty::ClosureKind::FnMut | ty::ClosureKind::FnOnce))
++    })) { return Err("mutable or consuming callback captures"); }
++    let def = instance.def_id();
++    if !def.is_local() {
++      return Err("external implementation");
++    }
++    if self
++      .tcx
++      .hir_get_if_local(def)
++      .and_then(|node| node.body_id())
++      .is_none()
++    {
++      return Err("unavailable body");
++    }
++    Ok(self.tcx.erase_and_anonymize_regions(instance))
++  }
++
++  // Bodies are analyzed parametrically in their own typing environment. Unknown
++  // generic dispatch stays opaque even if an outer call supplies concrete types.
++  // Consequently this definition graph is stable across instantiations, and an
++  // expanding generic recursion cannot create an unbounded instance graph.
++  pub(crate) fn prepare(&self, root: DefId) {
++    if self.graph.borrow().contains_key(&root) {
++      return;
++    }
++    let mut pending = vec![root];
++    while let Some(def) = pending.pop() {
++      if self.graph.borrow().contains_key(&def) {
++        continue;
++      }
++      let body = &self.body(def).body;
++      let callees = body
++        .basic_blocks
++        .iter()
++        .filter_map(|block| {
++          let TerminatorKind::Call { func, .. } = &block.terminator().kind else {
++            return None;
++          };
++          self
++            .resolve_inner(def, func)
++            .ok()
++            .map(|instance| instance.def_id())
++        })
++        .collect::<Vec<_>>();
++      pending.extend(callees.iter().copied());
++      self.graph.borrow_mut().insert(def, callees);
++    }
++    let graph = self.graph.borrow();
++    let nodes = graph.keys().copied().collect::<Vec<_>>();
++    let indexes = nodes
++      .iter()
++      .enumerate()
++      .map(|(i, def)| (*def, i))
++      .collect::<FxHashMap<_, _>>();
++    let edges = graph
++      .iter()
++      .flat_map(|(from, tos)| tos.iter().map(|to| (indexes[from], indexes[to])))
++      .collect();
++    let graph = VecGraph::<usize, false>::new(nodes.len(), edges);
++    let sccs = Sccs::<usize, usize>::new(&graph);
++    *self.components.borrow_mut() = nodes
++      .into_iter()
++      .enumerate()
++      .map(|(i, def)| (def, sccs.scc(i)))
++      .collect();
++  }
++
++  pub(crate) fn cyclic_edge(&self, from: DefId, to: DefId) -> bool {
++    self.prepare(from);
++    let components = self.components.borrow();
++    components.get(&from) == components.get(&to)
++  }
++
++  pub(crate) fn summary(
++    self: &Rc<Self>,
++    key: Instance<'tcx>,
++  ) -> Option<Rc<CalleeSummary<'tcx>>> {
++    if let Some(summary) = self.summaries.borrow().get(&key) {
++      self.stats.borrow_mut().cache_hits += 1;
++      return summary.clone();
++    }
++    // This is an invariant check, not a traversal-order dependent cycle policy.
++    assert!(
++      self.active.borrow_mut().insert(key.def_id()),
++      "cycle escaped SCC classification"
++    );
++    let before = self.stats.borrow().construction_time;
++    let start = std::time::Instant::now();
++    let summary = summary::compute(self.clone(), self.tcx, key.def_id());
++    let elapsed = start.elapsed();
++    self.active.borrow_mut().remove(&key.def_id());
++    let summary = summary.map(Rc::new);
++    self.summaries.borrow_mut().insert(key, summary.clone());
++    let mut stats = self.stats.borrow_mut();
++    stats.computations += 1;
++    stats.construction_time = before + elapsed;
++    log::debug!(
++      "Summary {}: {:?}",
++      self.tcx.def_path_str(key.def_id()),
++      elapsed
++    );
++    summary
++  }
++}
++
++impl Drop for AnalysisSession<'_> {
++  fn drop(&mut self) {
++    if self.stats.get_mut().computations > 0 {
++      log::info!("Callee summaries: {:?}", self.stats.get_mut());
++    }
++  }
++}
+diff --git a/crates/flowistry/src/infoflow/summary.rs b/crates/flowistry/src/infoflow/summary.rs
+new file mode 100644
+index 0000000..204bc4c
+--- /dev/null
++++ b/crates/flowistry/src/infoflow/summary.rs
+@@ -0,0 +1,249 @@
++//! Field-origin summaries, independent of caller source locations.
++
++use std::{cell::RefCell, rc::Rc};
++
++use indexical::{
++  IndexedDomain,
++  bitset::rustc::{IndexMatrix, IndexSet},
++};
++use rustc_data_structures::fx::FxHashSet;
++use rustc_hir::def_id::DefId;
++use rustc_middle::{
++  mir::{visit::Visitor, *},
++  ty::TyCtxt,
++};
++use rustc_mir_dataflow::Analysis;
++use rustc_utils::{OperandExt, PlaceExt};
++
++use super::{
++  FlowAnalysis, effects::CallEffects, mutation::Mutation, session::AnalysisSession,
++};
++use crate::mir::{engine, placeinfo::PlaceInfo};
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
++struct Origin(usize);
++indexical::define_index_type! { struct OriginIndex for Origin = u32; }
++type Domain<'tcx> = IndexMatrix<Place<'tcx>, Origin>;
++
++pub(crate) struct Effect<'tcx> {
++  pub place: Place<'tcx>,
++  pub inputs: Vec<Place<'tcx>>,
++}
++
++pub(crate) struct CalleeSummary<'tcx> {
++  pub reads: Vec<Place<'tcx>>,
++  pub writes: Vec<Effect<'tcx>>,
++}
++
++struct SummaryAnalysis<'a, 'tcx> {
++  flow: FlowAnalysis<'a, 'tcx>,
++  places: Vec<Place<'tcx>>,
++  domain: Rc<IndexedDomain<Origin>>,
++  reads: RefCell<IndexSet<Origin>>,
++  // Accumulate effects at *every* write, not just at normal returns. Rows also
++  // record constant writes with an empty set of input origins.
++  writes: RefCell<Domain<'tcx>>,
++}
++
++impl<'tcx> SummaryAnalysis<'_, 'tcx> {
++  fn apply(
++    &self,
++    state: &mut Domain<'tcx>,
++    mutations: &[Mutation<'tcx>],
++    reads: &[Place<'tcx>],
++    location: Location,
++  ) {
++    let mut inputs = reads.to_vec();
++    for mt in mutations {
++      inputs.extend_from_slice(&mt.inputs);
++    }
++    if let Some(blocks) = self.flow.control_dependencies.dependent_on(location.block) {
++      for block in blocks.iter() {
++        if let TerminatorKind::SwitchInt { discr, .. } =
++          &self.flow.body.basic_blocks[block].terminator().kind
++        {
++          inputs.extend(discr.as_place());
++        }
++      }
++    }
++    self
++      .reads
++      .borrow_mut()
++      .union(&self.flow.inputs_deps(state, &inputs));
++    self.flow.transfer(state, mutations, location, |_, _| {});
++    for mutation in mutations {
++      for alias in self.flow.place_info.aliases(mutation.mutated) {
++        if alias.is_arg(self.flow.body) && alias.is_indirect() {
++          let deps = self.flow.inputs_deps(state, &[*alias]);
++          self.writes.borrow_mut().union_into_row(*alias, &deps);
++        }
++      }
++    }
++  }
++}
++
++impl<'tcx> Analysis<'tcx> for SummaryAnalysis<'_, 'tcx> {
++  type Domain = Domain<'tcx>;
++  const NAME: &'static str = "CalleeSummary";
++  fn bottom_value(&self, _: &Body<'tcx>) -> Self::Domain {
++    Domain::new(&self.domain)
++  }
++  fn initialize_start_block(&self, _: &Body<'tcx>, state: &mut Self::Domain) {
++    for (i, place) in self.places.iter().enumerate() {
++      state.insert(self.flow.place_info.normalize(*place), Origin(i));
++    }
++  }
++  fn apply_primary_statement_effect(
++    &self,
++    state: &mut Self::Domain,
++    statement: &Statement<'tcx>,
++    location: Location,
++  ) {
++    let mutations = self.flow.statement_mutations(statement, location);
++    self.apply(state, &mutations, &[], location);
++  }
++  fn apply_primary_terminator_effect<'mir>(
++    &self,
++    state: &mut Self::Domain,
++    terminator: &'mir Terminator<'tcx>,
++    location: Location,
++  ) -> TerminatorEdges<'mir, 'tcx> {
++    let effects: Rc<CallEffects<'tcx>> = self.flow.effects_at(terminator, location);
++    self.apply(state, &effects.mutations, &effects.reads, location);
++    terminator.edges()
++  }
++  fn apply_call_return_effect(
++    &self,
++    _: &mut Self::Domain,
++    _: BasicBlock,
++    _: CallReturnPlaces<'_, 'tcx>,
++  ) {
++  }
++}
++
++// Refining a body with memory operations outside the alias model would turn
++// missing effects into a false claim of independence. Keep the signature there.
++struct Unsupported<'a, 'tcx> {
++  body: &'a Body<'tcx>,
++  tcx: TyCtxt<'tcx>,
++  found: bool,
++}
++impl<'tcx> Visitor<'tcx> for Unsupported<'_, 'tcx> {
++  fn visit_place(
++    &mut self,
++    place: &Place<'tcx>,
++    context: rustc_middle::mir::visit::PlaceContext,
++    location: Location,
++  ) {
++    for (base, _) in place.iter_projections() {
++      let ty = base.ty(self.body, self.tcx).ty;
++      if ty.is_raw_ptr() || ty.ty_adt_def().is_some_and(|adt| adt.is_union()) {
++        self.found = true;
++      }
++    }
++    self.super_place(place, context, location);
++  }
++  fn visit_terminator(&mut self, term: &Terminator<'tcx>, location: Location) {
++    if !matches!(
++      term.kind,
++      TerminatorKind::Goto { .. }
++        | TerminatorKind::SwitchInt { .. }
++        | TerminatorKind::Return
++        | TerminatorKind::Unreachable
++        | TerminatorKind::UnwindResume
++        | TerminatorKind::UnwindTerminate(..)
++        | TerminatorKind::Call { .. }
++        | TerminatorKind::Drop { .. }
++        | TerminatorKind::Assert { .. }
++        | TerminatorKind::FalseEdge { .. }
++        | TerminatorKind::FalseUnwind { .. }
++    ) {
++      self.found = true;
++    }
++    self.super_terminator(term, location);
++  }
++}
++
++pub(crate) fn compute<'tcx>(
++  session: Rc<AnalysisSession<'tcx>>,
++  tcx: TyCtxt<'tcx>,
++  def: DefId,
++) -> Option<CalleeSummary<'tcx>> {
++  let facts = session.body(def);
++  let body = &facts.body;
++  let mut unsupported = Unsupported {
++    body,
++    tcx,
++    found: false,
++  };
++  unsupported.visit_body(body);
++  if unsupported.found {
++    session.fallback("unsupported MIR operation");
++    return None;
++  }
++  // Aliases::compute_loans and PlaceInfo::all_args deliberately bound incoming
++  // pointer paths to two projections. Do not claim independence based on absent
++  // origins for deeper borrowed contents; use the caller's signature fallback.
++  if body.args_iter().any(|arg| {
++    Place::from(arg)
++      .interior_pointers(tcx, body, def)
++      .into_values()
++      .flatten()
++      .any(|(pointer, _)| pointer.projection.len() > 2)
++  }) {
++    session.fallback("argument pointer depth exceeds alias model");
++    return None;
++  }
++  let place_info = PlaceInfo::build(tcx, def, facts);
++  // Only leaf fields get input origins. Seeding ancestor rows with all their
++  // children's origins would immediately make siblings dependent again.
++  let places = place_info
++    .all_args()
++    .map(|(p, _)| p)
++    .filter(|p| place_info.children(*p).len() == 1)
++    .collect::<FxHashSet<_>>()
++    .into_iter()
++    .collect::<Vec<_>>();
++  let domain = Rc::new(IndexedDomain::from_iter((0 .. places.len()).map(Origin)));
++  let location_domain = place_info.location_domain().clone();
++  let flow = FlowAnalysis::with_session(tcx, def, body, place_info, session);
++  let analysis = SummaryAnalysis {
++    flow,
++    places,
++    reads: RefCell::new(IndexSet::new(&domain)),
++    writes: RefCell::new(Domain::new(&domain)),
++    domain,
++  };
++  let results = engine::iterate_to_fixpoint(tcx, body, location_domain, analysis);
++  let analysis = &results.analysis;
++  let mut writes = analysis.writes.borrow().clone();
++  for (bb, data) in body.basic_blocks.iter_enumerated() {
++    if matches!(data.terminator().kind, TerminatorKind::Return) {
++      let state = results.state_at(body.terminator_loc(bb));
++      for field in analysis.flow.place_info.children(Place::from(RETURN_PLACE)) {
++        if analysis.flow.place_info.children(field).len() == 1
++          && !field.ty(body, tcx).ty.is_unit()
++        {
++          let deps = analysis.flow.inputs_deps(state, &[field]);
++          writes.union_into_row(field, &deps);
++        }
++      }
++    }
++  }
++  let expand = |deps: &IndexSet<Origin>| {
++    deps
++      .iter()
++      .map(|origin| analysis.places[origin.0])
++      .collect()
++  };
++  Some(CalleeSummary {
++    reads: expand(&analysis.reads.borrow()),
++    writes: writes
++      .rows()
++      .map(|(place, deps)| Effect {
++        place: *place,
++        inputs: expand(deps),
++      })
++      .collect(),
++  })
++}
+diff --git a/crates/flowistry/tests/summaries.rs b/crates/flowistry/tests/summaries.rs
+new file mode 100644
+index 0000000..6012c64
+--- /dev/null
++++ b/crates/flowistry/tests/summaries.rs
+@@ -0,0 +1,692 @@
++#![feature(rustc_private)]
++extern crate rustc_middle;
++extern crate rustc_span;
++
++use flowistry::{
++  extensions::{ContextMode, EVAL_MODE, EvalMode},
++  infoflow::{self, AnalysisSession, Direction},
++  test_utils,
++};
++use fluid_let::fluid_set;
++use rustc_utils::{
++  mir::borrowck_facts,
++  source_map::{find_bodies::find_bodies, range::ToSpan, spanner::Spanner},
++  test_utils::CompileBuilder,
++};
++
++fn check_slice(input: &str, direction: Direction, included: &[&str], excluded: &[&str]) {
++  let input = input.to_owned();
++  let (clean, _) = test_utils::parse_ranges(&input, [("`(", ")`")]).unwrap();
++  test_utils::compile_body_with_range(
++    clean,
++    || test_utils::parse_ranges(&input, [("`(", ")`")]).unwrap().1["`("][0],
++    |tcx, body_id, facts, target| {
++      let mode = EvalMode {
++        context_mode: ContextMode::Recurse,
++        ..EvalMode::default()
++      };
++      fluid_set!(EVAL_MODE, mode);
++      let results = infoflow::compute_flow(tcx, body_id, facts);
++      let spanner = Spanner::new(tcx, body_id, &facts.body);
++      let targets = spanner
++        .span_to_places(target.to_span(tcx).unwrap())
++        .iter()
++        .map(|span| {
++          span
++            .locations
++            .iter()
++            .map(|loc| (span.place, *loc))
++            .collect()
++        })
++        .collect();
++      let spans = match direction {
++        Direction::Both => {
++          infoflow::compute_focus_spans(&results, targets, &spanner, &[])
++        }
++        _ => infoflow::compute_dependency_spans(&results, targets, direction, &spanner),
++      };
++      let snippets = spans
++        .iter()
++        .flatten()
++        .map(|span| tcx.sess.source_map().span_to_snippet(*span).unwrap())
++        .collect::<Vec<_>>()
++        .join("\n");
++      for text in included {
++        assert!(snippets.contains(text), "missing {text:?} in:\n{snippets}");
++      }
++      for text in excluded {
++        assert!(
++          !snippets.contains(text),
++          "unexpected {text:?} in:\n{snippets}"
++        );
++      }
++    },
++  );
++}
++
++#[test]
++fn untouched_receiver_field_backward() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++impl State { fn update_b(&mut self, x: i32) { self.b = x; } }
++fn main() {
++  let mut s = State { a: 1, b: 2 };
++  let input = 73;
++  s.update_b(input);
++  `(s.a)`;
++}"#,
++    Direction::Both,
++    &["a: 1"],
++    &["s.update_b(input)", "input = 73"],
++  );
++}
++
++#[test]
++fn untouched_receiver_field_forward() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++impl State { fn update_b(&mut self, x: i32) { self.b = x; } }
++fn main() {
++  let mut s = State { a: 1, b: 2 };
++  `(s.a)` = 37;
++  s.update_b(73);
++  let after = s.b;
++}"#,
++    Direction::Forward,
++    &[],
++    &["s.update_b(73)", "after = s.b"],
++  );
++}
++
++#[test]
++fn nested_calls_keep_real_reads_and_exclude_siblings() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32, c: i32 }
++impl State {
++ fn leaf(&mut self) { self.c = self.b; }
++ fn middle(&mut self) { self.leaf(); }
++ fn outer(&mut self) { self.middle(); }
++}
++fn main() {
++ let mut s = State { a: 0, b: 0, c: 0 };
++ s.a = 11;
++ s.b = 29;
++ s.outer();
++ `(s.c)`;
++}"#,
++    Direction::Backward,
++    &["s.b = 29", "s.outer()"],
++    &["s.a = 11"],
++  );
++}
++
++#[test]
++fn unit_return_still_reads_inputs() {
++  check_slice(
++    r#"
++fn consume(x: &i32) { std::hint::black_box(*x); }
++fn main() {
++ let `(x)` = 23;
++ consume(&x);
++}"#,
++    Direction::Forward,
++    &["consume(&x)"],
++    &[],
++  );
++}
++
++#[test]
++fn conditions_and_aliases_reach_written_fields() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++impl State { fn update(&mut self, flag: bool, x: i32) {
++ let p = &mut self.b;
++ if flag { *p = x; }
++} }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ let flag = true;
++ let value = 49;
++ s.update(flag, value);
++ `(s.b)`;
++}"#,
++    Direction::Backward,
++    &["flag = true", "value = 49", "s.update(flag, value)"],
++    &[],
++  );
++}
++
++#[test]
++fn separate_return_fields() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++impl State { fn pair(&self) -> (i32, i32) { (self.a, self.b) } }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ s.a = 17;
++ s.b = 91;
++ let pair = s.pair();
++ `(pair.0)`;
++}"#,
++    Direction::Backward,
++    &["s.a = 17"],
++    &["s.b = 91"],
++  );
++}
++
++#[test]
++fn opaque_call_on_one_field_does_not_widen_receiver() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++impl State { fn opaque(&mut self, f: fn(&mut i32)) { f(&mut self.b); } }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ `(s.a)` = 17;
++ s.opaque(|b| *b = 9);
++}"#,
++    Direction::Forward,
++    &[],
++    &["s.opaque"],
++  );
++}
++
++#[test]
++fn unresolved_dispatch_is_conservative() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++trait Update { fn update(&mut self, state: &mut State); }
++fn main(f: &mut dyn Update) {
++ let mut s = State { a: 0, b: 0 };
++ `(s.a)` = 17;
++ f.update(&mut s);
++}"#,
++    Direction::Forward,
++    &["f.update(&mut s)"],
++    &[],
++  );
++}
++
++#[test]
++fn statically_resolved_trait_implementation() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++trait Update { fn update(&mut self); }
++impl Update for State { fn update(&mut self) { self.b = 5; } }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ s.update();
++ `(s.a)`;
++}"#,
++    Direction::Backward,
++    &[],
++    &["s.update()"],
++  );
++}
++
++#[test]
++fn raw_pointer_body_falls_back() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++fn unknown(s: &mut State) { unsafe { *(&mut s.b as *mut i32) = 9; } }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ `(s.a)` = 17;
++ unknown(&mut s);
++}"#,
++    Direction::Forward,
++    &["unknown(&mut s)"],
++    &[],
++  );
++}
++
++#[test]
++fn shared_diamond_and_batch_roots_compute_once() {
++  borrowck_facts::enable_mir_simplification();
++  CompileBuilder::new(
++    r#"
++fn leaf(x: i32) -> i32 { x + 1 }
++fn left(x: i32) -> i32 { leaf(x) }
++fn right(x: i32) -> i32 { leaf(x) }
++fn root1(x: i32) -> i32 { left(x) + right(x) + left(x) }
++fn root2(x: i32) -> i32 { right(x) + leaf(x) }
++"#,
++  )
++  .compile(|result| {
++    let tcx = result.tcx;
++    let mode = EvalMode {
++      context_mode: ContextMode::Recurse,
++      ..EvalMode::default()
++    };
++    fluid_set!(EVAL_MODE, mode);
++    let session = AnalysisSession::new(tcx);
++    let roots = find_bodies(tcx)
++      .into_iter()
++      .filter(|(_, id)| {
++        tcx
++          .item_name(tcx.hir_body_owner_def_id(*id).to_def_id())
++          .as_str()
++          .starts_with("root")
++      })
++      .collect::<Vec<_>>();
++    for _ in 0 .. 2 {
++      for (_, id) in &roots {
++        let facts = borrowck_facts::get_body_with_borrowck_facts(
++          tcx,
++          tcx.hir_body_owner_def_id(*id),
++        );
++        infoflow::compute_flow_with_session(session.clone(), tcx, *id, facts);
++      }
++    }
++    assert_eq!(session.stats().computations, 3);
++    assert!(session.stats().cache_hits >= 5);
++  });
++}
++
++#[test]
++fn gameplay_dependency_is_real_transitively() {
++  check_slice(
++    r#"
++struct Runtime { interactive_visual_bounds: i32, unrelated: i32, aim: i32 }
++impl Runtime {
++ fn compute_interactive_aim_bounds(&mut self) { self.aim = self.interactive_visual_bounds; }
++ fn configure_camera_and_aim_bounds(&mut self) { self.compute_interactive_aim_bounds(); }
++ fn load_sublevel_runtime(&mut self) { self.configure_camera_and_aim_bounds(); }
++}
++
++fn main() {
++ let mut r = Runtime { interactive_visual_bounds: 1, unrelated: 2, aim: 0 };
++ `(r.interactive_visual_bounds)` = 0;
++ r.load_sublevel_runtime();
++}"#,
++    Direction::Both,
++    &["r.load_sublevel_runtime()"],
++    &[],
++  );
++}
++
++#[test]
++fn generic_receiver_field_types_are_instantiated() {
++  check_slice(
++    r#"
++struct Pair<T, U> { a: T, b: U }
++impl<T: Copy, U> Pair<T, U> { fn first(&self) -> T { self.a } }
++fn main() {
++ let mut s = Pair { a: 0i32, b: 0u8 };
++ s.a = 13;
++ s.b = 97;
++ let output = s.first();
++ `(output)`;
++}"#,
++    Direction::Backward,
++    &["s.a = 13"],
++    &["s.b = 97"],
++  );
++}
++
++#[test]
++fn constant_write_is_not_mistaken_for_no_effect() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++impl State { fn constant(&mut self) { self.b = 73; } }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ s.constant();
++ `(s.b)`;
++}"#,
++    Direction::Backward,
++    &["s.constant()"],
++    &[],
++  );
++}
++
++#[test]
++fn writes_before_panicking_path_are_retained() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++impl State { fn update(&mut self, flag: bool, x: i32) {
++ if flag { self.b = x; panic!("stop"); }
++} }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ let input = 73;
++ s.update(false, input);
++ `(s.b)`;
++}"#,
++    Direction::Backward,
++    &["input = 73", "s.update(false, input)"],
++    &[],
++  );
++}
++
++#[test]
++fn never_returning_callee_keeps_prior_writes() {
++  check_slice(
++    r#"
++fn update(x: &mut i32, v: i32) -> ! { *x = v; panic!("stop"); }
++fn main() {
++ let mut x = 0;
++ let `(input)` = 73;
++ update(&mut x, input);
++}"#,
++    Direction::Forward,
++    &["update(&mut x, input)"],
++    &[],
++  );
++}
++
++#[test]
++fn loops_preserve_control_and_input_dependencies() {
++  check_slice(
++    r#"
++struct State { a: i32, b: i32 }
++impl State { fn repeat(&mut self, n: i32, x: i32) {
++ let mut i = 0;
++ while i < n { self.b += x; i += 1; }
++} }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ let count = 3;
++ let amount = 73;
++ s.repeat(count, amount);
++ `(s.b)`;
++}"#,
++    Direction::Backward,
++    &["count = 3", "amount = 73"],
++    &[],
++  );
++}
++
++#[test]
++fn recursive_components_are_independent_of_root_order() {
++  borrowck_facts::enable_mir_simplification();
++  CompileBuilder::new(
++    r#"
++struct State { a: i32, b: i32 }
++fn a(s: &mut State, n: u32) { if n > 0 { b(s, n - 1); } s.a = s.b; }
++fn b(s: &mut State, n: u32) { if n > 0 { a(s, n - 1); } s.b = s.a; }
++fn root_a(s: &mut State) { a(s, 3); }
++fn root_b(s: &mut State) { b(s, 3); }
++"#,
++  )
++  .compile(|result| {
++    let tcx = result.tcx;
++    let mode = EvalMode {
++      context_mode: ContextMode::Recurse,
++      ..EvalMode::default()
++    };
++    fluid_set!(EVAL_MODE, mode);
++    let mut roots = find_bodies(tcx)
++      .into_iter()
++      .filter(|(_, id)| {
++        tcx
++          .item_name(tcx.hir_body_owner_def_id(*id).to_def_id())
++          .as_str()
++          .starts_with("root")
++      })
++      .collect::<Vec<_>>();
++    roots.sort_by_key(|(_, id)| {
++      tcx.def_path_str(tcx.hir_body_owner_def_id(*id).to_def_id())
++    });
++    let analyze = |reverse: bool| {
++      let session = AnalysisSession::new(tcx);
++      let mut snapshots = Vec::new();
++      let mut order = roots.clone();
++      if reverse {
++        order.reverse();
++      }
++      for (_, id) in order {
++        let def = tcx.hir_body_owner_def_id(id);
++        let facts = borrowck_facts::get_body_with_borrowck_facts(tcx, def);
++        let results =
++          infoflow::compute_flow_with_session(session.clone(), tcx, id, facts);
++        let mut snapshot = Vec::new();
++        results
++          .analysis
++          .visit_effects(|location, mutations, reads| {
++            for mutation in mutations {
++              let mut deps = results
++                .analysis
++                .deps_for(results.state_at(location), mutation.mutated)
++                .iter()
++                .map(|p| format!("{p:?}"))
++                .collect::<Vec<_>>();
++              deps.sort();
++              snapshot.push(format!("{location:?} {:?} {deps:?}", mutation.mutated));
++            }
++            for read in reads {
++              snapshot.push(format!("{location:?} read {read:?}"));
++            }
++          });
++        snapshot.sort();
++        snapshots.push((tcx.def_path_str(def.to_def_id()), snapshot));
++      }
++      assert_eq!(session.stats().computations, 2);
++      assert!(session.stats().fallbacks["recursive edge"] >= 2);
++      snapshots.sort();
++      snapshots
++    };
++    assert_eq!(analyze(false), analyze(true));
++  });
++}
++
++#[test]
++fn fresh_compiler_observes_changed_callee() {
++  let program = r#"
++struct State { a: i32, b: i32 }
++impl State { fn read(&self) -> i32 { self.FIELD } }
++fn main() {
++ let mut s = State { a: 0, b: 0 };
++ s.a = 13;
++ s.b = 97;
++ let output = s.read();
++ `(output)`;
++}"#;
++  check_slice(
++    &program.replace("FIELD", "a"),
++    Direction::Backward,
++    &["s.a = 13"],
++    &["s.b = 97"],
++  );
++  check_slice(
++    &program.replace("FIELD", "b"),
++    Direction::Backward,
++    &["s.b = 97"],
++    &["s.a = 13"],
++  );
++}
++#[test]
++fn opaque_return_fields_merge_instead_of_overwriting() {
++  check_slice(
++    r#"
++mod private {
++ pub struct Pair { a: i32, b: i32 }
++ pub fn pair(a: i32, b: i32) -> Pair { Pair { a, b } }
++}
++fn main() {
++ let first = 13;
++ let second = 97;
++ let out = private::pair(first, second);
++ `(out)`;
++}"#,
++    Direction::Backward,
++    &["first = 13", "second = 97"],
++    &[],
++  );
++}
++
++#[test]
++fn field_effects_translate_through_nested_actual_projection() {
++  check_slice(
++    r#"
++struct Inner { a: i32, b: i32 }
++struct Outer { inner: Inner, other: i32 }
++fn update(s: &mut Inner, x: i32) { s.b = x; }
++fn main() {
++ let mut s = Outer { inner: Inner { a: 0, b: 0 }, other: 0 };
++ s.inner.a = 13;
++ s.other = 97;
++ let value = 73;
++ update(&mut s.inner, value);
++ `(s.inner.b)`;
++}"#,
++    Direction::Backward,
++    &["value = 73"],
++    &["s.inner.a = 13", "s.other = 97"],
++  );
++}
++
++#[test]
++fn generic_instances_have_separate_cache_entries() {
++  borrowck_facts::enable_mir_simplification();
++  CompileBuilder::new("fn identity<T>(x: T) -> T { x } fn main() { identity(1u8); identity(2u32); identity(3u8); }")
++    .compile(|result| {
++      let tcx = result.tcx;
++      let mode = EvalMode { context_mode: ContextMode::Recurse, ..EvalMode::default() };
++      fluid_set!(EVAL_MODE, mode);
++      let session = AnalysisSession::new(tcx);
++      let (_, id) = find_bodies(tcx).into_iter().find(|(_, id)| tcx.item_name(tcx.hir_body_owner_def_id(*id).to_def_id()).as_str() == "main").unwrap();
++      let facts = borrowck_facts::get_body_with_borrowck_facts(tcx, tcx.hir_body_owner_def_id(id));
++      // The session owns its mode, even if the calling API's ambient mode changes.
++      fluid_set!(EVAL_MODE, EvalMode::default());
++      infoflow::compute_flow_with_session(session.clone(), tcx, id, facts);
++      assert_eq!(session.stats().computations, 2);
++      assert!(session.stats().cache_hits >= 1);
++    });
++}
++
++#[test]
++fn opaque_borrowed_inputs_affect_return_values() {
++  check_slice(
++    r#"
++struct State { items: Vec<i32>, other: i32 }
++impl State { fn count(&self) -> usize { self.items.len() } }
++fn main() {
++ let mut s = State { items: Vec::new(), other: 0 };
++ s.items.push(19);
++ s.other = 97;
++ let count = s.count();
++ `(count)`;
++}"#,
++    Direction::Backward,
++    &["s.items.push(19)", "s.count()"],
++    &["s.other = 97"],
++  );
++}
++
++#[test]
++fn deep_acyclic_chain_has_no_depth_cutoff() {
++  borrowck_facts::enable_mir_simplification();
++  let mut source = String::from("fn f0(x: i32) -> i32 { x }\n");
++  for n in 1 .. 40 {
++    source.push_str(&format!("fn f{n}(x: i32) -> i32 {{ f{}(x) }}\n", n - 1));
++  }
++  source.push_str("fn main() { f39(1); }");
++  CompileBuilder::new(source).compile(|result| {
++    let tcx = result.tcx;
++    let mode = EvalMode {
++      context_mode: ContextMode::Recurse,
++      ..EvalMode::default()
++    };
++    fluid_set!(EVAL_MODE, mode);
++    let session = AnalysisSession::new(tcx);
++    let (_, id) = find_bodies(tcx)
++      .into_iter()
++      .find(|(_, id)| {
++        tcx
++          .item_name(tcx.hir_body_owner_def_id(*id).to_def_id())
++          .as_str()
++          == "main"
++      })
++      .unwrap();
++    let facts =
++      borrowck_facts::get_body_with_borrowck_facts(tcx, tcx.hir_body_owner_def_id(id));
++    infoflow::compute_flow_with_session(session.clone(), tcx, id, facts);
++    assert_eq!(session.stats().computations, 40);
++    assert!(session.stats().fallbacks.is_empty());
++  });
++}
++
++#[test]
++fn deeply_nested_borrowed_value_retains_its_contents() {
++  check_slice(
++    r#"
++struct Inner<'a> { value: &'a i32 }
++struct State<'a> { inner: Inner<'a>, other: i32 }
++fn read(s: &State<'_>) -> i32 { *s.inner.value }
++fn main() {
++ let value = 49;
++ let s = State { inner: Inner { value: &value }, other: 0 };
++ let result = read(&s);
++ `(result)`;
++}"#,
++    Direction::Backward,
++    &["value = 49"],
++    &[],
++  );
++}
++
++#[test]
++fn generic_opaque_values_keep_borrowed_contents() {
++  check_slice(
++    r#"
++struct State<'a> { value: &'a i32 }
++trait Read { fn read(&self) -> i32; }
++impl Read for State<'_> { fn read(&self) -> i32 { *self.value } }
++fn read<T: Read>(s: &T) -> i32 { s.read() }
++fn main() {
++ let value = 49;
++ let s = State { value: &value };
++ let result = read(&s);
++ `(result)`;
++}"#,
++    Direction::Backward,
++    &["value = 49"],
++    &[],
++  );
++}
++
++#[test]
++fn unsupported_summary_is_cached() {
++  borrowck_facts::enable_mir_simplification();
++  CompileBuilder::new(
++    r#"
++fn opaque(x: &mut i32) { unsafe { *(x as *mut i32) = 17; } }
++fn main() { let mut x = 0; opaque(&mut x); opaque(&mut x); }
++"#,
++  )
++  .compile(|result| {
++    let tcx = result.tcx;
++    let mode = EvalMode {
++      context_mode: ContextMode::Recurse,
++      ..EvalMode::default()
++    };
++    fluid_set!(EVAL_MODE, mode);
++    let session = AnalysisSession::new(tcx);
++    let (_, id) = find_bodies(tcx)
++      .into_iter()
++      .find(|(_, id)| {
++        tcx
++          .item_name(tcx.hir_body_owner_def_id(*id).to_def_id())
++          .as_str()
++          == "main"
++      })
++      .unwrap();
++    let facts =
++      borrowck_facts::get_body_with_borrowck_facts(tcx, tcx.hir_body_owner_def_id(id));
++    infoflow::compute_flow_with_session(session.clone(), tcx, id, facts);
++    assert_eq!(session.stats().computations, 1);
++    assert_eq!(session.stats().cache_hits, 1);
++    assert_eq!(session.stats().fallbacks["unsupported MIR operation"], 1);
++  });
++}
+diff --git a/crates/flowistry_ide/Cargo.toml b/crates/flowistry_ide/Cargo.toml
+index 43d7e60..78ad42f 100644
+--- a/crates/flowistry_ide/Cargo.toml
++++ b/crates/flowistry_ide/Cargo.toml
+@@ -34,4 +34,7 @@ rayon = {version = "1.5", optional = true}
+ 
+ # For binaries
+ env_logger = {version = "0.9", default-features = false}
+-clap = {version = "4.4", default-features = false, features = ["std", "derive"]}
+\ No newline at end of file
++clap = {version = "4.4", default-features = false, features = ["std", "derive"]}
++
++[dev-dependencies]
++rustc_utils = {workspace = true, features = ["test"]}
+diff --git a/crates/flowistry_ide/src/file_focus.rs b/crates/flowistry_ide/src/file_focus.rs
+index 8315c46..8c774e4 100644
+--- a/crates/flowistry_ide/src/file_focus.rs
++++ b/crates/flowistry_ide/src/file_focus.rs
+@@ -1,8 +1,4 @@
+ //! Editor-independent batch analysis: reuse one compiler session for a file.
+-use crate::{
+-  focus::FocusOutput,
+-  plugin::{FlowistryError, FlowistryResult},
+-};
+ use flowistry::extensions::{EVAL_MODE, EvalMode};
+ use fluid_let::fluid_set;
+ use rustc_middle::ty::TyCtxt;
+@@ -17,6 +13,11 @@ use rustc_utils::{
+ };
+ use serde::Serialize;
+ 
++use crate::{
++  focus::FocusOutput,
++  plugin::{FlowistryError, FlowistryResult},
++};
++
+ #[derive(Serialize)]
+ pub struct BodyOutput {
+   range: CharRange,
+@@ -80,6 +81,7 @@ impl rustc_driver::Callbacks for Callbacks {
+       } else {
+         None
+       };
++      let session = flowistry::infoflow::AnalysisSession::new(tcx);
+       let mut bodies = Vec::new();
+       for (span, id) in candidates {
+         if source_map.lookup_source_file(span.lo()).name != file.name {
+@@ -91,7 +93,10 @@ impl rustc_driver::Callbacks for Callbacks {
+         bodies.push(BodyOutput {
+           range,
+           focus: if self.position.is_none() || selected == Some(id) {
+-            Some(crate::focus::focus(tcx, id).map_err(|error| error.to_string()))
++            Some(
++              crate::focus::focus_with_session(tcx, id, session.clone())
++                .map_err(|error| error.to_string()),
++            )
+           } else {
+             None
+           },
+diff --git a/crates/flowistry_ide/src/focus/direct_influence.rs b/crates/flowistry_ide/src/focus/direct_influence.rs
+index 562592d..3c1b518 100644
+--- a/crates/flowistry_ide/src/focus/direct_influence.rs
++++ b/crates/flowistry_ide/src/focus/direct_influence.rs
+@@ -1,9 +1,9 @@
+ use flowistry::{
+-  infoflow::mutation::{ModularMutationVisitor, Mutation},
++  infoflow::{FlowAnalysis, mutation::Mutation},
+   mir::placeinfo::PlaceInfo,
+ };
+ use indexical::bitset::rustc::IndexMatrix;
+-use rustc_middle::mir::{Body, Mutability, Place, visit::Visitor};
++use rustc_middle::mir::{Mutability, Place};
+ use rustc_utils::mir::location_or_arg::LocationOrArg;
+ 
+ pub struct DirectInfluence<'a, 'tcx> {
+@@ -12,10 +12,11 @@ pub struct DirectInfluence<'a, 'tcx> {
+ }
+ 
+ impl<'a, 'tcx> DirectInfluence<'a, 'tcx> {
+-  pub fn build(body: &Body<'tcx>, place_info: &'a PlaceInfo<'a, 'tcx>) -> Self {
++  pub fn build(analysis: &'a FlowAnalysis<'a, 'tcx>) -> Self {
++    let place_info = &analysis.place_info;
+     let mut influence = IndexMatrix::new(place_info.location_domain());
+ 
+-    ModularMutationVisitor::new(place_info, |location, mutations| {
++    analysis.visit_effects(|location, mutations, reads| {
+       let mut add = |place: Place<'tcx>, mutability: Mutability| {
+         for alias in place_info.reachable_values(place, mutability) {
+           influence.insert(*alias, location);
+@@ -27,13 +28,15 @@ impl<'a, 'tcx> DirectInfluence<'a, 'tcx> {
+       } in mutations
+       {
+         for input in inputs {
+-          add(input, Mutability::Not);
++          add(*input, Mutability::Not);
+         }
+ 
+-        add(mutated, Mutability::Mut);
++        add(*mutated, Mutability::Mut);
+       }
+-    })
+-    .visit_body(body);
++      for read in reads {
++        add(*read, Mutability::Not);
++      }
++    });
+ 
+     DirectInfluence {
+       place_info,
+diff --git a/crates/flowistry_ide/src/focus/mod.rs b/crates/flowistry_ide/src/focus/mod.rs
+index 6084b73..1021f67 100644
+--- a/crates/flowistry_ide/src/focus/mod.rs
++++ b/crates/flowistry_ide/src/focus/mod.rs
+@@ -1,3 +1,5 @@
++use std::collections::HashMap;
++
+ use anyhow::Result;
+ use flowistry::infoflow;
+ use itertools::Itertools;
+@@ -13,11 +15,13 @@ use rustc_utils::{
+   },
+ };
+ use serde::Serialize;
+-use std::collections::HashMap;
+ 
+ mod direct_influence;
+ mod simple_args;
+ 
++#[cfg(test)]
++mod tests;
++
+ #[derive(Debug, Serialize)]
+ pub struct PlaceInfo {
+   pub range: CharRange,
+@@ -33,10 +37,19 @@ pub struct FocusOutput {
+ }
+ 
+ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
++  focus_with_session(tcx, body_id, infoflow::AnalysisSession::new(tcx))
++}
++
++pub(crate) fn focus_with_session<'tcx>(
++  tcx: TyCtxt<'tcx>,
++  body_id: BodyId,
++  session: std::rc::Rc<infoflow::AnalysisSession<'tcx>>,
++) -> Result<FocusOutput> {
+   let def_id = tcx.hir_body_owner_def_id(body_id);
+   let body_with_facts = get_body_with_borrowck_facts(tcx, def_id);
+   let body = &body_with_facts.body;
+-  let results = &infoflow::compute_flow(tcx, body_id, body_with_facts);
++  let results =
++    &infoflow::compute_flow_with_session(session, tcx, body_id, body_with_facts);
+ 
+   let source_map = tcx.sess.source_map();
+   let spanner = Spanner::new(tcx, body_id, body);
+@@ -67,8 +80,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
+   let simple_args = simple_args::collect(tcx, body_id);
+   let relevant = infoflow::compute_focus_spans(results, targets, &spanner, &simple_args);
+ 
+-  let direct =
+-    direct_influence::DirectInfluence::build(body, &results.analysis.place_info);
++  let direct = direct_influence::DirectInfluence::build(&results.analysis);
+ 
+   let mut direct_spans = HashMap::new();
+   let mut range_cache = HashMap::new();
+diff --git a/crates/flowistry_ide/src/focus/tests.rs b/crates/flowistry_ide/src/focus/tests.rs
+new file mode 100644
+index 0000000..bb56322
+--- /dev/null
++++ b/crates/flowistry_ide/src/focus/tests.rs
+@@ -0,0 +1,94 @@
++use flowistry::{
++  extensions::{ContextMode, EVAL_MODE, EvalMode},
++  infoflow::AnalysisSession,
++};
++use fluid_let::fluid_set;
++use rustc_utils::{
++  mir::borrowck_facts,
++  source_map::{find_bodies::find_bodies, range::ToSpan},
++  test_utils::CompileBuilder,
++};
++
++#[test]
++fn focus_output_preserves_protocol_and_field_precision() {
++  let source = r#"
++struct State { a: i32, b: i32 }
++impl State { fn update(&mut self, input: i32) { self.b = input; } }
++fn main() {
++ let mut s = State { a: 1, b: 2 };
++ let input = 17;
++ s.update(input);
++ let untouched = s.a;
++ let affected = s.b;
++}
++"#;
++  borrowck_facts::enable_mir_simplification();
++  CompileBuilder::new(source).compile(|result| {
++    let tcx = result.tcx;
++    let mode = EvalMode {
++      context_mode: ContextMode::Recurse,
++      ..EvalMode::default()
++    };
++    fluid_set!(EVAL_MODE, mode);
++    let (_, id) = find_bodies(tcx)
++      .into_iter()
++      .find(|(_, id)| {
++        tcx
++          .item_name(tcx.hir_body_owner_def_id(*id).to_def_id())
++          .as_str()
++          == "main"
++      })
++      .unwrap();
++    let session = AnalysisSession::new(tcx);
++    let output = super::focus_with_session(tcx, id, session.clone()).unwrap();
++    let snippet = |range: &rustc_utils::source_map::range::CharRange| {
++      tcx
++        .sess
++        .source_map()
++        .span_to_snippet(range.to_span(tcx).unwrap())
++        .unwrap()
++    };
++    for (name, expected) in [("untouched", false), ("affected", true)] {
++      let selected = output
++        .place_info
++        .iter()
++        .filter(|place| snippet(&place.range) == name)
++        .collect::<Vec<_>>();
++      assert!(!selected.is_empty(), "missing focus target {name}");
++      for place in selected {
++        let slice = place
++          .slice
++          .iter()
++          .map(&snippet)
++          .collect::<Vec<_>>()
++          .join("\n");
++        assert_eq!(
++          slice.contains("s.update(input)"),
++          expected,
++          "{name}: {slice}"
++        );
++        if !expected {
++          assert!(
++            !place
++              .direct_influence
++              .iter()
++              .map(&snippet)
++              .any(|text| text.contains("update"))
++          );
++        }
++      }
++    }
++    let serialized = serde_json::to_value(&output).unwrap();
++    assert_eq!(serialized.as_object().unwrap().len(), 2);
++    for place in serialized["place_info"].as_array().unwrap() {
++      let fields = place.as_object().unwrap();
++      assert_eq!(fields.len(), 4);
++      for field in ["range", "ranges", "slice", "direct_influence"] {
++        assert!(fields.contains_key(field));
++      }
++    }
++    super::focus_with_session(tcx, id, session.clone()).unwrap();
++    assert_eq!(session.stats().computations, 1);
++    assert!(session.stats().cache_hits > 0);
++  });
++}

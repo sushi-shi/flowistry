@@ -76,7 +76,9 @@ end
 
 function M.request(context, args, config, callback)
   local op = operation()
-  local argv = vim.list_extend(vim.deepcopy(context.command), args)
+  local argv = vim.deepcopy(context.command)
+  if config.context_mode then vim.list_extend(argv, { "--context-mode", config.context_mode }) end
+  vim.list_extend(argv, args)
   op:run(argv, { cwd = context.root, env = context.env, text = true, timeout = config.timeout_ms }, function(result)
     if result.code ~= 0 then callback(table.concat(argv, " ") .. "\n" .. failure(result)); return end
     local encoded = (result.stdout or ""):gsub("%s", "")

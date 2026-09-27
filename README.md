@@ -50,6 +50,16 @@ by either an editor adapter or a command-line client. Inputs and the compiler
 manifest are pinned. Build the source revision, not the older prebuilt release
 that happens to carry the same upstream version number.
 
+See [NixOS and Home Manager setup](doc/nix.md) to install the launcher or add the
+plugin to your existing Neovim configuration. Linux packages are exposed for
+`x86_64-linux` and `aarch64-linux`; the latter is evaluated but not build-tested.
+Private repositories require authenticated Git access; the guide includes an
+SSH URL. The first backend build may take several minutes.
+
+The Nix backend also includes the fork's cached callee summaries. Opt in with
+`context_mode = "Recurse"`; the default remains signature-based analysis.
+See [callee analysis](doc/summaries.md) for scope, caching, and limitations.
+
 Projects with native libraries should launch from their development environment.
 For the local `stalker-mobile` checkout, `./tools/flowistry` handles that setup and
 opens `crates/stalker-engine/src/gameplay.rs`. `FLOWISTRY_WORKSPACE` optionally sets the full
@@ -143,6 +153,7 @@ multiple selections.
 require("flowistry").setup({
   auto_enable = true,            -- enable saved Rust buffers in Cargo projects
   toolchain = "nightly-2026-05-01", -- false uses the ambient compiler
+  context_mode = nil,            -- default SigOnly; "Recurse" enables callee analysis
   command = nil,                 -- e.g. { "/path/to/flowistry-wrapper" }
   root = nil,                    -- explicit Cargo workspace root for a wrapper
   batch = false,                 -- true for the patched backend; Nix launcher sets it
@@ -203,6 +214,11 @@ Neovim uses a foreground color for dimming rather than VS Code's text opacity.
 nvim --headless -u NONE -i NONE -l tests/run.lua
 ```
 
+With Nix, `nix flake check` runs the frontend and real-compiler callee-summary
+checks in isolated build environments. `nix develop` provides Neovim, Make,
+gzip, and the packaged backend; run `make test-summaries` there to verify field
+precision, nested calls, both request protocols, and invalidation after a save.
+
 The headless suite exercises real Neovim extmarks and subprocess transport with a
 synthetic backend fixture. It covers Unicode, range unions, nested bodies, cached
 cursor movement, pins, edits/saves, cancellation, malformed output, and errors.
@@ -242,9 +258,10 @@ For an interactive demo, open `examples/demo/src/main.rs` and focus `names` or
 
 ## Analysis limits
 
-Flowistry computes a conservative, function-local approximation of information
-flow. Highlighted code may be relevant, including effects inferred from function
-signatures. Upstream documents limitations around interior mutability, closures,
+Flowistry computes a conservative approximation of information flow for the
+selected function. By default, call effects come from signatures; the optional
+`Recurse` mode inspects supported local callees through cached field summaries.
+Highlighted code may be relevant. Upstream documents limitations around interior mutability, closures,
 async bodies, and mapping compiler IR back to source. This is a reading aid, not a
 proof that dimmed code can be deleted or ignored in a correctness/security review.
 

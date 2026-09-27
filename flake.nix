@@ -2,7 +2,7 @@
   description = "Flowistry's shared Rust backend and Neovim frontend";
 
   inputs = {
-    # Share the stalker-mobile development environment's package revision.
+    # Pin the compiler's build environment independently of consumers' nixpkgs.
     nixpkgs.url = "github:NixOS/nixpkgs/1559d3daa3ecc813a650b79375ea61b6741b8746";
     fenix.url = "github:nix-community/fenix/5f7e7d793cb2553410f857554de86f277ebe2f71";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
@@ -29,9 +29,13 @@
           compilerLibraries = "${toolchain}/lib:${toolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/lib";
           backend = rustPlatform.buildRustPackage {
             pname = "flowistry-backend";
-            version = "0.5.44-693ceda";
+            version = "0.5.44-693ceda-cached-callees";
             src = flowistry-src;
-            patches = [ ./patches/file-focus.patch ./patches/precise-focus.patch ];
+            patches = [
+              ./patches/file-focus.patch
+              ./patches/precise-focus.patch
+              ./patches/cached-callee-summaries.patch
+            ];
             cargoLock.lockFile = "${flowistry-src}/Cargo.lock";
             cargoBuildFlags = [ "-p" "flowistry_ide" ];
             doCheck = false;
@@ -78,8 +82,41 @@
       apps = eachSystem (system: {
         default = {
           type = "app";
+          meta.description = "Neovim with Flowistry and its matching Rust backend";
           program = "${self.packages.${system}.default}/bin/flowistry-nvim";
         };
       });
+      checks = eachSystem (system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+          packages = self.packages.${system};
+          test = name: script: inputs: pkgs.runCommand name {
+            nativeBuildInputs = [ pkgs.neovim pkgs.gzip ] ++ inputs;
+          } ''
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME"
+            cp -r ${./.} source
+            chmod -R u+w source
+            cd source
+            ${script}
+            touch "$out"
+          '';
+        in {
+          frontend = test "flowistry-frontend-tests"
+            "nvim --headless -u NONE -i NONE -l tests/run.lua" [];
+          summaries = test "flowistry-callee-summary-tests" ''
+            export FLOWISTRY_BACKEND_EXE=${packages.backend}/bin/flowistry-backend
+            nvim --headless -u NONE -i NONE -l tests/summaries.lua
+          '' [ packages.backend ];
+        });
+      devShells = eachSystem (system:
+        let pkgs = import nixpkgs { inherit system; };
+        in {
+          default = pkgs.mkShell {
+            packages = [ pkgs.neovim pkgs.gzip pkgs.gnumake self.packages.${system}.backend ];
+            FLOWISTRY_BACKEND_EXE = "${self.packages.${system}.backend}/bin/flowistry-backend";
+            FLOWISTRY_BATCH = "1";
+          };
+        });
     };
 }
