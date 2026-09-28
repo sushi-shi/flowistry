@@ -77,9 +77,10 @@ impl MutationKind {
       MutationKind::Assign | MutationKind::CallReturn => MutationStatus::Definitely,
       MutationKind::CallArgument { .. } => MutationStatus::Possibly,
       MutationKind::CalleeEffect(effect) => match effect {
-        CalleeEffect::Return(Precision::Exact | Precision::Coarsened) => {
-          MutationStatus::Definitely
-        }
+        CalleeEffect::Return(Precision::Exact) => MutationStatus::Definitely,
+        // Several coarsened return effects can land on the same caller place, each
+        // covering only a part of it: none of them overwrites the whole place.
+        CalleeEffect::Return(Precision::Coarsened) => MutationStatus::Possibly,
         CalleeEffect::ArgPointee(Precision::Exact | Precision::Coarsened) => {
           MutationStatus::Possibly
         }
@@ -434,7 +435,7 @@ fn f(s: m::S) { let t = s; }
       (MutationKind::CallReturn, Definitely),
       (MutationKind::CallArgument { arg: 3 }, Possibly),
       (MutationKind::CalleeEffect(Return(Exact)), Definitely),
-      (MutationKind::CalleeEffect(Return(Coarsened)), Definitely),
+      (MutationKind::CalleeEffect(Return(Coarsened)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Exact)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Coarsened)), Possibly),
     ];
