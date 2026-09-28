@@ -71,16 +71,20 @@ effects. Other edges use summaries, without an arbitrary call-depth limit. This
 also bounds expanding generic recursion and makes results independent of root
 order. Intraprocedural loops still use the existing fixed-point solver.
 
-External implementations, indirect/dynamic calls, compiler shims, and mutable or
-consuming closure captures retain signature-based effects. Bodies containing raw
-pointer dereferences, union access, inline assembly, coroutine suspension, or other
-unmodeled terminators are not refined. Argument layouts exceeding the existing
-alias model's incoming-pointer depth also use signature effects. Opaque generic
-value origins include borrowed contents that become visible in the caller.
-Destructors are opaque effects on their operands and reachable state.
+External implementations, indirect/dynamic calls, compiler shims, and generic
+callees instantiated with mutable or consuming closures retain signature-based
+effects. A local closure called directly is summarized like any other body; its
+upvar fields are translated through the caller's closure type. Bodies containing
+raw pointer dereferences, union access, inline assembly, coroutine suspension, or
+other unmodeled terminators are not refined. Argument layouts exceeding the
+existing alias model's incoming-pointer depth also use signature effects. Opaque
+generic value origins include borrowed contents that become visible in the
+caller. Destructors are opaque effects on their operands and reachable state.
 Private fields and unrepresentable projections widen to a representable ancestor;
-array indices are not transferred as another body's MIR locals. Fallbacks apply
-to the actual arguments, so an opaque call receiving `&mut self.b` need not
+array indices are not transferred as another body's MIR locals. When widening
+drops a dereference, everything mutably reachable from the ancestor is possibly
+written, since writing the ancestor itself would not reach the pointee. Fallbacks
+apply to the actual arguments, so an opaque call receiving `&mut self.b` need not
 include `self.a`.
 
 Possible writes are accumulated at every reachable write, including paths that
@@ -109,7 +113,7 @@ cargo test --locked --workspace --all-targets
 cargo test --locked -p flowistry --doc
 ```
 
-Both pass, including 28 new regression tests. An additional
+Both pass, including 32 new regression tests. An additional
 `cargo check --locked --workspace --all-targets --all-features` fails in the
 optional legacy `decompose` feature. The same 12 compiler errors reproduce on
 `fork-base` (removed source-map/index APIs, `HybridBitSet`, and old visitor
@@ -121,7 +125,8 @@ receiver types and distinct instance keys, constant writes, opaque borrowed
 inputs, privacy widening, panic paths, a 40-callee chain, dynamic/static trait
 dispatch, unsupported memory operations, recursive root-order independence,
 shared diamond graphs, batch roots, cached unsupported summaries, deeply nested
-borrows, opaque generic borrowed contents and new compiler sessions after edits.
+borrows, opaque generic borrowed contents, directly called closures writing
+through upvars, and new compiler sessions after edits.
 The IDE test checks focus/direct-influence ranges and the unchanged serialized
 output shape. Existing slicing fixtures remain unchanged.
 

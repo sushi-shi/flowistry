@@ -187,7 +187,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     let summary = self.session.summary(key)?;
     let child_body = &self.session.body(key.def_id()).body;
     let actuals = utils::arg_places(args);
-    let translate = |child: Place<'tcx>| -> Option<(Place<'tcx>, bool)> {
+    let translate = |child: Place<'tcx>| -> Option<(Place<'tcx>, bool, bool)> {
       let parent = if child.local == RETURN_PLACE {
         *destination
       } else {
@@ -230,6 +230,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
                 .fields[field]
                 .ty(self.tcx, args),
               TyKind::Tuple(fields) => fields[field.as_usize()],
+              TyKind::Closure(_, args) => args.as_closure().upvar_tys()[field.as_usize()],
               _ => break,
             };
             ProjectionElem::Field(field, field_ty)
@@ -239,11 +240,19 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
         ty = ty.projection_ty(self.tcx, elem);
         projection.push(elem);
       }
-      let widened = projection.len() < parent.projection.len() + child.projection.len();
-      Some((Place::make(parent.local, &projection, self.tcx), widened))
+      let kept = projection.len() - parent.projection.len();
+      let widened = kept < child.projection.len();
+      // Whether the dropped suffix went through a pointer, i.e. the effect was on
+      // a pointee that the widened place does not itself cover.
+      let lost_deref = child.projection[kept ..].contains(&ProjectionElem::Deref);
+      Some((
+        Place::make(parent.local, &projection, self.tcx),
+        widened,
+        lost_deref,
+      ))
     };
     let translate_input = |child: Place<'tcx>| -> Vec<Place<'tcx>> {
-      let Some((parent, _)) = translate(child) else {
+      let Some((parent, ..)) = translate(child) else {
         return Vec::new();
       };
       let ty = child.ty(child_body, self.tcx).ty;
@@ -272,20 +281,35 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       .writes
       .iter()
       .filter(|effect| effect.place.local == RETURN_PLACE)
-      .any(|effect| translate(effect.place).is_some_and(|(_, widened)| widened));
+      .any(|effect| translate(effect.place).is_some_and(|(_, widened, _)| widened));
     for effect in &summary.writes {
-      let Some((mutated, _)) = translate(effect.place) else {
+      let Some((mutated, _, lost_deref)) = translate(effect.place) else {
         continue;
       };
+      let inputs = effect
+        .inputs
+        .iter()
+        .flat_map(|p| translate_input(*p))
+        .collect::<Vec<_>>();
+      // Widening stopped above a dereference, e.g. at a closure's upvar or a
+      // private pointer field. Writing the widened value would not reach its
+      // pointee, so conservatively write everything mutably reachable from it.
+      if lost_deref {
+        for pointee in self.place_info.reachable_values(mutated, Mutability::Mut) {
+          if *pointee != mutated {
+            effects.mutations.push(Mutation {
+              mutated: *pointee,
+              inputs: inputs.clone(),
+              status: MutationStatus::Possibly,
+            });
+          }
+        }
+      }
       // A constant actual argument has no caller provenance. Its projections
       // cannot name mutable caller state, either.
       effects.mutations.push(Mutation {
         mutated,
-        inputs: effect
-          .inputs
-          .iter()
-          .flat_map(|p| translate_input(*p))
-          .collect(),
+        inputs,
         // Widened fields can overlap other output fields. A strong update of an
         // ancestor must not erase another effect from this same call.
         status: if effect.place.local == RETURN_PLACE

@@ -690,3 +690,75 @@ fn main() { let mut x = 0; opaque(&mut x); opaque(&mut x); }
     assert_eq!(session.stats().fallbacks["unsupported MIR operation"], 1);
   });
 }
+
+#[test]
+fn closure_upvar_writes_reach_captured_place() {
+  check_slice(
+    r#"
+fn main() {
+  let mut b = 0;
+  let input = 73;
+  let mut g = |y| b = y;
+  g(input);
+  `(b)`;
+}"#,
+    Direction::Backward,
+    &["g(input)", "input = 73"],
+    &[],
+  );
+}
+
+#[test]
+fn closure_capturing_receiver_field_in_method() {
+  check_slice(
+    r#"
+struct State { a: i32, b: i32 }
+impl State { fn poke(&mut self, x: i32) { let mut g = |y| self.b = y; g(x); } }
+fn main() {
+  let mut s = State { a: 0, b: 0 };
+  let input = 73;
+  s.poke(input);
+  `(s.b)`;
+}"#,
+    Direction::Backward,
+    &["s.poke(input)", "input = 73"],
+    &[],
+  );
+}
+
+#[test]
+fn closure_capturing_receiver_calls_local_function() {
+  check_slice(
+    r#"
+struct State { a: i32, b: i32 }
+fn set(s: &mut State, x: i32) { s.b = x; }
+impl State { fn poke(&mut self, x: i32) { let mut g = |y| set(self, y); g(x); } }
+fn main() {
+  let mut s = State { a: 0, b: 0 };
+  let input = 73;
+  s.poke(input);
+  `(s.b)`;
+}"#,
+    Direction::Backward,
+    &["s.poke(input)", "input = 73"],
+    &[],
+  );
+}
+
+#[test]
+fn closure_upvar_write_keeps_sibling_fields_independent() {
+  check_slice(
+    r#"
+struct State { a: i32, b: i32 }
+impl State { fn poke(&mut self, x: i32) { let mut g = |y| self.b = y; g(x); } }
+fn main() {
+  let mut s = State { a: 1, b: 0 };
+  let input = 73;
+  s.poke(input);
+  `(s.a)`;
+}"#,
+    Direction::Backward,
+    &["a: 1"],
+    &["s.poke(input)", "input = 73"],
+  );
+}
