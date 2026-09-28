@@ -12,6 +12,6 @@ fn g<T: Set>(mut t: T) {
 }
 fn main() {
   `[let mut x = 0;]`
-  g(&mut x);
+  `[g(&mut x);]`
   `[x;]`
 }

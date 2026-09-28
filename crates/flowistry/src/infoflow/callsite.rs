@@ -424,7 +424,6 @@ impl<'a, 'tcx> CallSite<'a, 'tcx> {
   /// The caller operands passed to callee parameters whose type is opaque to the
   /// callee (a type parameter, an alias or a trait object, possibly nested): the
   /// callee's analysis cannot see pointers hidden in them.
-  #[allow(dead_code)] // The interprocedural analysis does not use it yet.
   pub fn opaque_operands(&self, callee_body: &Body<'tcx>) -> SmallVec<[usize; 4]> {
     let mut operands = callee_body
       .args_iter()

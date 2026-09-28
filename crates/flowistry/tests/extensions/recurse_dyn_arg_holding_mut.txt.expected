@@ -12,6 +12,6 @@ fn h<'a>(mut b: Box<dyn Set + 'a>) {
 }
 fn main() {
   `[let mut x = 0;]`
-  h(`[Box::new(&mut x)]`)`[;]`
+  `[h(Box::new(&mut x));]`
   `[x;]`
 }

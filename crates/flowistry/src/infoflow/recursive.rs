@@ -10,6 +10,7 @@ use rustc_middle::{
   ty::{ClosureKind, GenericArgKind, TyKind},
 };
 use rustc_mir_dataflow::JoinSemiLattice;
+use rustc_span::Spanned;
 use rustc_utils::mir::{
   borrowck_facts::get_body_with_borrowck_facts, location_or_arg::index::LocationOrArgSet,
 };
@@ -28,7 +29,7 @@ use crate::{
     FlowDomain,
     mutation::{CalleeEffect, Mutation, MutationKind, Precision},
   },
-  mir::utils::{self, ErasedTy},
+  mir::utils::{self, AsyncHack, ErasedTy},
 };
 
 /// The state of a callee at its exits (the join of its states at every `return`).
@@ -264,11 +265,54 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       })
       .collect::<Vec<_>>();
 
+    let opaque_mutations = self.opaque_operand_mutations(&site, args, body);
+
     Ok(
       std::iter::once(whole_return)
         .chain(effect_mutations)
+        .chain(opaque_mutations)
         .collect(),
     )
+  }
+
+  /// The modular approximation of the writes through operands passed to opaque callee
+  /// parameters (e.g. of a generic or trait-object type): the callee's analysis
+  /// cannot see the pointers hidden in them, so its rows miss those writes.
+  fn opaque_operand_mutations(
+    &self,
+    site: &CallSite<'_, 'tcx>,
+    args: &[Spanned<Operand<'tcx>>],
+    callee_body: &Body<'tcx>,
+  ) -> Vec<Mutation<'tcx>> {
+    let async_hack = AsyncHack::new(self.tcx, self.body, self.def_id);
+    let arg_places = utils::arg_places(args)
+      .into_iter()
+      .filter(|(_, place)| !async_hack.ignore_place(*place))
+      .collect::<Vec<_>>();
+    let inputs = arg_places
+      .iter()
+      .map(|(_, place)| *place)
+      .collect::<Vec<_>>();
+    let opaque = site.opaque_operands(callee_body);
+    arg_places
+      .iter()
+      .filter(|(i, _)| opaque.contains(i))
+      .flat_map(|(i, arg)| {
+        let mut reachable = self
+          .place_info
+          .reachable_values(*arg, Mutability::Mut)
+          .iter()
+          .copied()
+          .collect::<Vec<_>>();
+        // Deterministic order.
+        reachable.sort_by_cached_key(|place| format!("{place:?}"));
+        reachable.into_iter().map(|mutated| Mutation {
+          mutated,
+          inputs: inputs.clone(),
+          kind: MutationKind::CallArgument { arg: *i },
+        })
+      })
+      .collect()
   }
 
   /// The caller places written by a callee effect on `target`.
