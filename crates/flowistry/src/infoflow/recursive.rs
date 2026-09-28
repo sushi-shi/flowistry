@@ -210,7 +210,12 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
         RowExport::Hidden | RowExport::Source(_) => None,
       })
       .collect::<Vec<_>>();
-    effects.sort_by(|(p1, ..), (p2, ..)| (p1.elems.len(), p1).cmp(&(p2.elems.len(), p2)));
+    // Ties (rows with the same path) are broken structurally, so the order is total.
+    effects.sort_by(|(p1, _, r1), (p2, _, r2)| {
+      (p1.elems.len(), p1)
+        .cmp(&(p2.elems.len(), p2))
+        .then_with(|| r1.cmp_structural(*r2))
+    });
 
     let mutations = effects
       .into_iter()

@@ -8,6 +8,8 @@
 //! private field), it degrades to a coarser caller place ([`Target::Coarsened`]) and
 //! says what was lost, instead of silently dropping the effect.
 
+use std::cmp::Ordering;
+
 use rustc_abi::{FieldIdx, VariantIdx};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
@@ -223,7 +225,17 @@ impl CalleeAbi {
         untupled: fields.len(),
       })
     } else {
-      if ops.args.len() != arg_count {
+      // A C-variadic callee receives its variadic operands through a trailing `VaList`
+      // parameter. As before, parameters map positionally to the leading operands
+      // (the `VaList` to the first variadic operand, if any), and the remaining
+      // operands are ignored.
+      let c_variadic = tcx.fn_sig(callee).skip_binder().skip_binder().c_variadic();
+      let fits = if c_variadic {
+        ops.args.len() + 1 >= arg_count
+      } else {
+        ops.args.len() == arg_count
+      };
+      if !fits {
         return Err(FallbackReason::AbiMismatch);
       }
       Ok(CalleeAbi::Direct { arg_count })
@@ -270,6 +282,17 @@ impl<'tcx> CalleeRow<'tcx> {
   /// The (region-erased) type of the row in the callee body.
   pub fn ty(self, callee_body: &Body<'tcx>, tcx: TyCtxt<'tcx>) -> ErasedTy<'tcx> {
     self.0.ty(callee_body, tcx)
+  }
+
+  /// A total order on rows that depends only on their structure, not on interning
+  /// addresses (see [`cmp_places_structurally`]).
+  pub fn cmp_structural(self, other: Self) -> Ordering {
+    cmp_places_structurally(
+      self.0.local(),
+      self.0.projection(),
+      other.0.local(),
+      other.0.projection(),
+    )
   }
 }
 
@@ -555,6 +578,37 @@ impl<'a, 'tcx> CallSite<'a, 'tcx> {
   }
 }
 
+/// A total order on places that depends only on their structure: the local, then the
+/// projection elements (kind, then indices). Types in projections are ignored.
+///
+/// Unlike orders derived from hashing interned places, it is the same in every run.
+pub(crate) fn cmp_places_structurally(
+  local1: Local,
+  projection1: &[PlaceElem<'_>],
+  local2: Local,
+  projection2: &[PlaceElem<'_>],
+) -> Ordering {
+  fn key(elem: &PlaceElem<'_>) -> (u8, u64, u64, bool) {
+    match *elem {
+      ProjectionElem::Deref => (0, 0, 0, false),
+      ProjectionElem::Field(field, _) => (1, field.as_u32().into(), 0, false),
+      ProjectionElem::Index(local) => (2, local.as_u32().into(), 0, false),
+      ProjectionElem::ConstantIndex {
+        offset,
+        min_length,
+        from_end,
+      } => (3, offset, min_length, from_end),
+      ProjectionElem::Subslice { from, to, from_end } => (4, from, to, from_end),
+      ProjectionElem::Downcast(_, variant) => (5, variant.as_u32().into(), 0, false),
+      ProjectionElem::OpaqueCast(_) => (6, 0, 0, false),
+      ProjectionElem::UnwrapUnsafeBinder(_) => (7, 0, 0, false),
+    }
+  }
+  local1
+    .cmp(&local2)
+    .then_with(|| projection1.iter().map(key).cmp(projection2.iter().map(key)))
+}
+
 /// What is lost by stopping the translation of `path` before its element `i`.
 fn coarsening(path: &EffectPath, i: usize) -> Coarsening {
   let dropped_deref = path.elems[i ..].contains(&PathElem::Deref)
@@ -800,6 +854,77 @@ fn caller() {
         .kind(),
       TyKind::Ref(..)
     )
+  }
+
+  const C_VARIADIC: &str = r#"
+#![feature(c_variadic)]
+unsafe extern "C" fn v(x: i32, mut args: ...) -> i32 { x }
+fn caller(a: i32) {
+  unsafe { v(a, 2, 3); v(a); }
+}
+"#;
+
+  #[test]
+  fn c_variadic_callee() {
+    test_utils::compile_crate(C_VARIADIC, &[], check_c_variadic);
+  }
+
+  fn check_c_variadic<'tcx>(tcx: TyCtxt<'tcx>) {
+    let (caller_id, caller) = test_utils::body_named(tcx, "caller");
+    let caller_body = &caller.body;
+    let (v_id, v) = test_utils::body_named(tcx, "v");
+    let calls = calls(caller_body);
+    assert_eq!(calls.len(), 2, "{calls:?}");
+    for (_, call, _, _) in calls {
+      // The variadic operands are not parameters of the body: they are ignored.
+      let site = CallSite::parse(
+        tcx,
+        caller_id.to_def_id(),
+        caller_body,
+        call,
+        v_id.to_def_id(),
+        &v.body,
+      )
+      .unwrap();
+      assert_eq!(site.abi(), CalleeAbi::Direct {
+        arg_count: v.body.arg_count
+      });
+      let x = exact(site.translate(&path(EffectRoot::Arg(ArgPos::Plain(0)), &[])));
+      assert_eq!(x.ty(caller_body.local_decls(), tcx).ty, tcx.types.i32);
+    }
+  }
+
+  #[test]
+  fn structural_place_order() {
+    test_utils::compile_crate("fn f() {}", &[], check_structural_order);
+  }
+
+  fn check_structural_order<'tcx>(tcx: TyCtxt<'tcx>) {
+    let field = |i, ty| ProjectionElem::Field(FieldIdx::from_usize(i), ty);
+    let (i32_ty, u8_ty) = (tcx.types.i32, tcx.types.u8);
+    let cmp = |l1: usize, p1: &[PlaceElem<'tcx>], l2: usize, p2: &[PlaceElem<'tcx>]| {
+      cmp_places_structurally(Local::from_usize(l1), p1, Local::from_usize(l2), p2)
+    };
+    assert_eq!(cmp(1, &[], 2, &[]), Ordering::Less);
+    assert_eq!(cmp(2, &[], 1, &[field(0, i32_ty)]), Ordering::Greater);
+    // Prefixes first.
+    assert_eq!(cmp(1, &[], 1, &[ProjectionElem::Deref]), Ordering::Less);
+    assert_eq!(
+      cmp(1, &[field(1, i32_ty)], 1, &[
+        field(0, i32_ty),
+        field(0, i32_ty)
+      ]),
+      Ordering::Greater
+    );
+    // Field types do not matter.
+    assert_eq!(
+      cmp(1, &[field(0, i32_ty)], 1, &[field(0, u8_ty)]),
+      Ordering::Equal
+    );
+    assert_eq!(
+      cmp(1, &[ProjectionElem::Deref], 1, &[field(0, i32_ty)]),
+      Ordering::Less
+    );
   }
 
   const OPERANDS: &str = r#"
