@@ -226,7 +226,16 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
         .then_with(|| r1.cmp_structural(*r2))
     });
 
-    let mutations = effects
+    // The callee always writes its whole return place, even when no row records it
+    // (e.g. a return value without data dependencies, or with only unit fields). This
+    // write comes first, without inputs: the field effects below then refine it.
+    let whole_return = Mutation {
+      mutated: site.destination(),
+      inputs: Vec::new(),
+      kind: MutationKind::CalleeEffect(CalleeEffect::Return(Precision::Exact)),
+    };
+
+    let effect_mutations = effects
       .into_iter()
       .flat_map(|(_, effect, row, target)| {
         let row_deps = exit.deps(row);
@@ -255,7 +264,11 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       })
       .collect::<Vec<_>>();
 
-    Ok(mutations)
+    Ok(
+      std::iter::once(whole_return)
+        .chain(effect_mutations)
+        .collect(),
+    )
   }
 
   /// The caller places written by a callee effect on `target`.

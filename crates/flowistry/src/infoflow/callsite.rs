@@ -383,6 +383,11 @@ impl<'a, 'tcx> CallSite<'a, 'tcx> {
     })
   }
 
+  /// The destination of the call.
+  pub fn destination(&self) -> Place<'tcx> {
+    self.ops.destination
+  }
+
   #[cfg(test)]
   pub fn abi(&self) -> CalleeAbi {
     self.abi
