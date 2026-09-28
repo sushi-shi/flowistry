@@ -12,7 +12,7 @@ mod m {
 }
 fn main() {
   `[let mut x = 1;]`
-  let mut w = m::new(&mut x);
-  m::set(&mut w);
+  `[let mut w = m::new(&mut x);]`
+  `[m::set(&mut w);]`
   `[x;]`
 }

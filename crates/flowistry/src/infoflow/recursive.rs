@@ -19,7 +19,8 @@ use super::{
   BODY_STACK, FlowResults,
   analysis::FlowAnalysis,
   callsite::{
-    CallSite, CalleeRow, EffectPath, FallbackReason, Resolved, RowRole, Target,
+    CallSite, CalleeRow, Coarsening, EffectPath, FallbackReason, Resolved, RowRole,
+    Target,
   },
 };
 use crate::{
@@ -261,9 +262,28 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
   fn write_targets(&self, target: Target<'tcx>) -> SmallVec<[Place<'tcx>; 4]> {
     match target {
       Target::Exact(place) => smallvec![place],
-      // FIXME: an effect coarsened through a pointer may write data reachable from
-      // `place`, which is not written here.
-      Target::Coarsened { place, lost: _ } => smallvec![place],
+      Target::Coarsened {
+        place,
+        lost: Coarsening::Interior,
+      } => smallvec![place],
+      // The effect is behind a pointer stored somewhere in `place` that the caller
+      // cannot name: it may write anything mutably reachable from `place`.
+      Target::Coarsened {
+        place,
+        lost: Coarsening::ThroughPointer,
+      } => {
+        let mut targets: SmallVec<[Place<'tcx>; 4]> = smallvec![place];
+        let reachable = self.place_info.reachable_values(place, Mutability::Mut);
+        let mut reachable = reachable
+          .iter()
+          .copied()
+          .filter(|reachable| *reachable != place)
+          .collect::<SmallVec<[_; 4]>>();
+        // Deterministic order.
+        reachable.sort_by_cached_key(|reachable| format!("{reachable:?}"));
+        targets.extend(reachable);
+        targets
+      }
     }
   }
 }
