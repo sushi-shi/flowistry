@@ -15,13 +15,77 @@ use crate::mir::{
 
 /// Indicator of certainty about whether a place is being mutated.
 /// Used to determine whether an update should be strong or weak.
-#[derive(Debug)]
+///
+/// The status is derived from the [`MutationKind`] of a mutation, see
+/// [`MutationKind::status`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MutationStatus {
   /// A place is definitely mutated, e.g. `x = y` definitely mutates `x`.
   Definitely,
 
   /// A place is possibly mutated, e.g. `f(&mut x)` possibly mutates `x`.
   Possibly,
+}
+
+/// What kind of write a [`Mutation`] is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum MutationKind {
+  /// `p = rvalue`, or the write of one field of a destructured aggregate or struct copy.
+  Assign,
+
+  /// The destination of a call is written with the call's return value.
+  CallReturn,
+
+  /// Modular approximation of a call: the place is mutably reachable from the
+  /// operand at index `arg` of the call, so the callee may write it.
+  CallArgument {
+    /// Index of the call operand through which the place is reachable.
+    arg: usize,
+  },
+
+  /// An effect of a callee, translated from an analysis of the callee's body
+  /// (see [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse)).
+  CalleeEffect(CalleeEffect),
+}
+
+/// An effect of a callee on its caller, translated from the callee's analysis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CalleeEffect {
+  /// A write to (a part of) the call destination by the callee's return value.
+  Return(Precision),
+
+  /// A write through a pointer passed as an argument.
+  ArgPointee(Precision),
+}
+
+/// How precisely a callee effect is translated into a caller place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Precision {
+  /// The caller place is exactly the place the callee wrote.
+  Exact,
+
+  /// The callee wrote a part of the caller place that the caller cannot name
+  /// (e.g. a private field), so the caller place is a coarser prefix of it.
+  Coarsened,
+}
+
+impl MutationKind {
+  /// Whether this kind of write definitely or only possibly mutates its place.
+  pub fn status(self) -> MutationStatus {
+    match self {
+      MutationKind::Assign | MutationKind::CallReturn => MutationStatus::Definitely,
+      MutationKind::CallArgument { .. } => MutationStatus::Possibly,
+      MutationKind::CalleeEffect(effect) => match effect {
+        CalleeEffect::Return(Precision::Exact | Precision::Coarsened) => {
+          MutationStatus::Definitely
+        }
+        CalleeEffect::ArgPointee(Precision::Exact | Precision::Coarsened) => {
+          MutationStatus::Possibly
+        }
+      },
+    }
+  }
 }
 
 /// Information about a particular mutation.
@@ -33,8 +97,15 @@ pub struct Mutation<'tcx> {
   /// The set of inputs to the mutating operation.
   pub inputs: Vec<Place<'tcx>>,
 
-  /// The certainty of whether the mutation is happening.
-  pub status: MutationStatus,
+  /// What kind of write this is.
+  pub kind: MutationKind,
+}
+
+impl Mutation<'_> {
+  /// The certainty of whether the mutation is happening, see [`MutationKind::status`].
+  pub fn status(&self) -> MutationStatus {
+    self.kind.status()
+  }
 }
 
 /// MIR visitor that invokes a callback for every [`Mutation`] in the visited object.
@@ -120,7 +191,7 @@ where
             .map(|(mutated, input)| Mutation {
               mutated,
               inputs: input.into_iter().collect::<Vec<_>>(),
-              status: MutationStatus::Definitely,
+              kind: MutationKind::Assign,
             })
             .collect::<Vec<_>>();
           (self.f)(location, mutations);
@@ -149,7 +220,7 @@ where
               Mutation {
                 mutated: mutated_field,
                 inputs: vec![input_field],
-                status: MutationStatus::Definitely,
+                kind: MutationKind::Assign,
               }
             })
             .collect::<Vec<_>>();
@@ -158,7 +229,7 @@ where
             mutations.push(Mutation {
               mutated: *mutated,
               inputs: vec![*place],
-              status: MutationStatus::Definitely,
+              kind: MutationKind::Assign,
             });
           }
           (self.f)(location, mutations);
@@ -174,7 +245,7 @@ where
     (self.f)(location, vec![Mutation {
       mutated: *mutated,
       inputs: collector.0,
-      status: MutationStatus::Definitely,
+      kind: MutationKind::Assign,
     }]);
   }
 
@@ -196,10 +267,12 @@ where
         );
         let arg_places = utils::arg_places(args)
           .into_iter()
-          .map(|(_, place)| place)
-          .filter(|place| !async_hack.ignore_place(*place))
+          .filter(|(_, place)| !async_hack.ignore_place(*place))
           .collect::<Vec<_>>();
-        let arg_inputs = arg_places.clone();
+        let arg_inputs = arg_places
+          .iter()
+          .map(|(_, place)| *place)
+          .collect::<Vec<_>>();
 
         let ret_is_unit = destination
           .ty(self.place_info.body.local_decls(), tcx)
@@ -220,15 +293,15 @@ where
         let mut mutations = vec![Mutation {
           mutated: *destination,
           inputs,
-          status: MutationStatus::Definitely,
+          kind: MutationKind::CallReturn,
         }];
 
-        for arg in arg_places {
+        for (arg_index, arg) in arg_places {
           for arg_mut in self.place_info.reachable_values(arg, Mutability::Mut) {
             mutations.push(Mutation {
               mutated: *arg_mut,
               inputs: arg_inputs.clone(),
-              status: MutationStatus::Possibly,
+              kind: MutationKind::CallArgument { arg: arg_index },
             });
           }
         }
@@ -237,6 +310,102 @@ where
       }
 
       _ => {}
+    }
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use rustc_middle::ty::TyCtxt;
+  use rustc_utils::{BodyExt, test_utils::Placer};
+
+  use super::*;
+  use crate::test_utils;
+
+  #[test]
+  fn test_mutation_kinds() {
+    let input = r#"
+struct S { a: i32, b: i32 }
+fn f(g: fn(&mut i32, i32) -> i32, s: S) {
+  let t = (1, 2);
+  let u = S { a: 1, b: 2 };
+  let v = s;
+  let w = t.0 + 1;
+  let mut x = 0;
+  let r = g(&mut x, w);
+}
+"#;
+    test_utils::compile_body(input, check_mutation_kinds);
+  }
+
+  fn check_mutation_kinds<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    body_id: rustc_hir::BodyId,
+    body_with_facts: &rustc_borrowck::consumers::BodyWithBorrowckFacts<'tcx>,
+  ) {
+    let body = &body_with_facts.body;
+    let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+    let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+    let p = Placer::new(tcx, body);
+
+    let mut mutations = Vec::new();
+    let mut visitor = ModularMutationVisitor::new(&place_info, |_, mts| {
+      mutations.extend(mts.into_iter().map(|mt| (mt.mutated, mt.kind)));
+    });
+    for location in body.all_locations() {
+      visitor.visit_location(body, location);
+    }
+
+    let kinds_of = |place: Place<'tcx>| {
+      mutations
+        .iter()
+        .filter(|(mutated, _)| *mutated == place)
+        .map(|(_, kind)| *kind)
+        .collect::<Vec<_>>()
+    };
+
+    // Tuple and struct aggregates and struct copies: one Assign per field.
+    for local in ["t", "u", "v"] {
+      for field in 0 .. 2 {
+        let place = p.local(local).field(field).mk();
+        assert_eq!(kinds_of(place), vec![MutationKind::Assign], "{place:?}");
+      }
+    }
+    // Generic assignment.
+    assert_eq!(kinds_of(p.local("w").mk()), vec![MutationKind::Assign]);
+    // Call destination.
+    assert_eq!(kinds_of(p.local("r").mk()), vec![MutationKind::CallReturn]);
+    // `x` is mutably reachable from the first operand of the call.
+    assert_eq!(kinds_of(p.local("x").mk()), vec![
+      MutationKind::Assign,
+      MutationKind::CallArgument { arg: 0 }
+    ]);
+    // The second operand (a copy of `w`) is reachable from itself only.
+    assert_eq!(
+      mutations
+        .iter()
+        .filter(|(_, kind)| *kind == MutationKind::CallArgument { arg: 1 })
+        .count(),
+      1
+    );
+  }
+
+  #[test]
+  fn test_mutation_kind_status() {
+    use CalleeEffect::*;
+    use MutationStatus::*;
+    use Precision::*;
+    let cases = [
+      (MutationKind::Assign, Definitely),
+      (MutationKind::CallReturn, Definitely),
+      (MutationKind::CallArgument { arg: 3 }, Possibly),
+      (MutationKind::CalleeEffect(Return(Exact)), Definitely),
+      (MutationKind::CalleeEffect(Return(Coarsened)), Definitely),
+      (MutationKind::CalleeEffect(ArgPointee(Exact)), Possibly),
+      (MutationKind::CalleeEffect(ArgPointee(Coarsened)), Possibly),
+    ];
+    for (kind, status) in cases {
+      assert_eq!(kind.status(), status, "{kind:?}");
     }
   }
 }

@@ -13,7 +13,7 @@ use crate::{
   extensions::REACHED_LIBRARY,
   infoflow::{
     FlowDomain,
-    mutation::{Mutation, MutationStatus},
+    mutation::{CalleeEffect, Mutation, MutationKind, Precision},
   },
   mir::utils,
 };
@@ -142,7 +142,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
 
     let translate_child_to_parent = |child: Place<'tcx>,
                                      mutated: bool|
-     -> Option<Place<'tcx>> {
+     -> Option<(Place<'tcx>, Precision)> {
       let child_ty = child.ty(body.local_decls(), tcx).ty;
       if child_ty.is_unit() {
         return None;
@@ -172,6 +172,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       let mut projection = parent_toplevel_arg.projection.to_vec();
       let mut ty = parent_toplevel_arg.ty(self.body.local_decls(), tcx);
       log::debug!("Adding child {child:?} to parent {parent_toplevel_arg:?}");
+      let mut precision = Precision::Exact;
       for elem in child.projection.iter() {
         // Don't continue if we reach a private field
         if let ProjectionElem::Field(field, _) = elem
@@ -179,6 +180,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
           && let field = adt_def.all_fields().nth(field.as_usize()).unwrap()
           && !field.vis.is_accessible_from(self.def_id, self.tcx)
         {
+          precision = Precision::Coarsened;
           break;
         }
 
@@ -198,11 +200,11 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       }
 
       let parent_arg_projected = Place::make(parent_toplevel_arg.local, &projection, tcx);
-      Some(parent_arg_projected)
+      Some((parent_arg_projected, precision))
     };
 
     let mutations = return_state.rows().filter_map(|(child, _)| {
-      let parent = translate_child_to_parent(child.as_place_unchecked(), true)?;
+      let (parent, precision) = translate_child_to_parent(child.as_place_unchecked(), true)?;
 
       let was_return: bool = child.local() == RETURN_PLACE;
       // > 1 because arguments will always have their synthetic location in their dep set
@@ -215,7 +217,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       let parent_deps = return_state
         .rows()
         .filter(|(_, deps)| child_deps.is_superset(deps))
-        .filter_map(|(row, _)| translate_child_to_parent(row.as_place_unchecked(), false))
+        .filter_map(|(row, _)| translate_child_to_parent(row.as_place_unchecked(), false).map(|(place, _)| place))
         .collect::<Vec<_>>();
 
       debug!(
@@ -225,11 +227,11 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       Some(Mutation {
         mutated: parent,
         inputs: parent_deps.clone(),
-        status: if was_return {
-          MutationStatus::Definitely
+        kind: MutationKind::CalleeEffect(if was_return {
+          CalleeEffect::Return(precision)
         } else {
-          MutationStatus::Possibly
-        },
+          CalleeEffect::ArgPointee(precision)
+        }),
       })
     }).collect::<Vec<_>>();
 

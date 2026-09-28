@@ -205,7 +205,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     };
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
       // Clear sub-places of mutated place (if sound to do so)
-      if matches!(mt.status, MutationStatus::Definitely)
+      if mt.status() == MutationStatus::Definitely
         && self.place_info.aliases(mt.mutated).len() == 1
       {
         for sub in self.place_info.children(mt.mutated).iter() {
