@@ -6,7 +6,7 @@ use rustc_middle::{
   mir::{visit::Visitor, *},
   ty::{AdtKind, TyKind},
 };
-use rustc_utils::{AdtDefExt, OperandExt, mir::place::PlaceCollector};
+use rustc_utils::{OperandExt, mir::place::PlaceCollector};
 
 use crate::mir::{
   placeinfo::PlaceInfo,
@@ -207,12 +207,8 @@ where
         if let TyKind::Adt(adt_def, substs) = place_ty.kind()
           && adt_def.is_struct()
         {
-          let fields = adt_def
-            .all_visible_fields(self.place_info.def_id, self.place_info.tcx)
-            .enumerate()
-            .map(|(i, field_def)| {
-              PlaceElem::Field(FieldIdx::from_usize(i), field_def.ty(tcx, substs))
-            });
+          let fields = utils::visible_fields(*adt_def, self.place_info.def_id, tcx)
+            .map(|(field, field_def)| PlaceElem::Field(field, field_def.ty(tcx, substs)));
           let mut mutations = fields
             .map(|field| {
               let mutated_field = mutated.project_deeper(&[field], tcx);
@@ -388,6 +384,44 @@ fn f(g: fn(&mut i32, i32) -> i32, s: S) {
         .count(),
       1
     );
+  }
+
+  #[test]
+  fn test_struct_copy_uses_real_field_indices() {
+    let input = r#"
+mod m { pub struct S { a: u8, pub b: i32 } }
+fn f(s: m::S) { let t = s; }
+"#;
+    test_utils::compile_body(input, check_struct_copy);
+  }
+
+  fn check_struct_copy<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    body_id: rustc_hir::BodyId,
+    body_with_facts: &rustc_borrowck::consumers::BodyWithBorrowckFacts<'tcx>,
+  ) {
+    let body = &body_with_facts.body;
+    let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+    let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+    let p = Placer::new(tcx, body);
+    let t = p.local("t").mk();
+
+    let mut writes = Vec::new();
+    let mut visitor = ModularMutationVisitor::new(&place_info, |_, mts| {
+      writes.extend(mts.into_iter().map(|mt| (mt.mutated, mt.inputs)));
+    });
+    for location in body.all_locations() {
+      visitor.visit_location(body, location);
+    }
+    let t_writes = writes
+      .into_iter()
+      .filter(|(mutated, _)| mutated.local == t.local)
+      .collect::<Vec<_>>();
+
+    // Only `b`, the field at index 1, is visible, and it is copied from `s.b`.
+    assert_eq!(t_writes, vec![(p.local("t").field(1).mk(), vec![
+      p.local("s").field(1).mk()
+    ])]);
   }
 
   #[test]
