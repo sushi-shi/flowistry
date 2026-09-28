@@ -7,7 +7,7 @@
 use log::{debug, info};
 use rustc_middle::{
   mir::*,
-  ty::{ClosureKind, GenericArgKind, TyKind},
+  ty::{ClosureKind, GenericArgKind, Instance, TyKind, TypingEnv},
 };
 use rustc_mir_dataflow::JoinSemiLattice;
 use rustc_span::Spanned;
@@ -133,7 +133,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     debug!("Checking whether can recurse into {func:?}");
 
     let func = func.constant().ok_or(FallbackReason::FuncNotConstant)?;
-    let TyKind::FnDef(def_id, _) = func.const_.ty().kind() else {
+    let TyKind::FnDef(def_id, fn_args) = func.const_.ty().kind() else {
       return Err(FallbackReason::NotFnDef);
     };
     let def_id = *def_id;
@@ -149,6 +149,18 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       .hir_get_if_local(def_id)
       .ok_or(FallbackReason::NotLocal)?;
     let body_id = node.body_id().ok_or(FallbackReason::NoBody)?;
+
+    // A call to a trait method names the trait's item, whose body is the default
+    // implementation. Only recurse into it if the call really resolves to it, and not
+    // to an impl that overrides it (or to an impl that cannot be known here).
+    if tcx.trait_of_assoc(def_id).is_some() {
+      let typing_env = TypingEnv::post_analysis(tcx, self.def_id);
+      let fn_args = tcx.erase_and_anonymize_regions(*fn_args);
+      match Instance::try_resolve(tcx, typing_env, def_id, fn_args) {
+        Ok(Some(instance)) if instance.def_id() == def_id => {}
+        _ => return Err(FallbackReason::ResolvesElsewhere),
+      }
+    }
 
     // TODO(wcrichto, 2024-12-02): mir_unsafety_check_result got removed, need to find a replacement
     // let unsafety = tcx.mir_unsafety_check_result(def_id.expect_local());

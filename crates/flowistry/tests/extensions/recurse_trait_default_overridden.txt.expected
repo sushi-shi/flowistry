@@ -10,7 +10,7 @@ impl Tr for S {
 }
 fn main() {
   `[let mut x = 0;]`
-  let s = S;
-  s.f(&mut x);
+  `[let s = S;]`
+  `[s.f(&mut x);]`
   `[x;]`
 }

@@ -48,7 +48,6 @@ pub(crate) enum FallbackReason {
   /// The call operands do not match the callee's parameters.
   AbiMismatch,
   /// The callee resolves to a different body than the one named by the call.
-  #[allow(dead_code)] // Instance resolution is not implemented yet.
   ResolvesElsewhere,
 }
 
