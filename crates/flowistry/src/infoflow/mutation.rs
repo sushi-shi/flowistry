@@ -2,9 +2,10 @@
 
 use log::debug;
 use rustc_abi::FieldIdx;
+use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{visit::Visitor, *},
-  ty::{AdtKind, TyKind},
+  ty::{AdtKind, TyCtxt, TyKind},
 };
 use rustc_utils::{AdtDefExt, OperandExt, mir::place::PlaceCollector};
 
@@ -237,6 +238,9 @@ where
           // A shared reference to an UnsafeCell (Cell, RefCell, Mutex, atomics)
           // permits mutation, e.g. Cell::set(&self). Treat the innermost
           // interior-mutable places behind shared pointers like `&mut` ones.
+          if leaves_interior_state_unchanged(tcx, func) {
+            continue;
+          }
           for shared in self.place_info.reachable_values(arg, Mutability::Not) {
             if *shared == arg
               || mutable.contains(shared)
@@ -267,5 +271,65 @@ where
 
       _ => {}
     }
+  }
+}
+
+/// Standard library calls that receive shared references to interior-mutable
+/// state without changing it. Guard constructors are included because writes
+/// through their guards are already connected to the owner by lifetimes.
+fn leaves_interior_state_unchanged(tcx: TyCtxt<'_>, func: &Operand<'_>) -> bool {
+  let Some((def_id, _)) = func.const_fn_def() else {
+    return false;
+  };
+  let from_std = |def_id: DefId| {
+    matches!(
+      tcx.crate_name(def_id.krate).as_str(),
+      "core" | "alloc" | "std"
+    )
+  };
+  let method = tcx.item_name(def_id);
+  let method = method.as_str();
+  if let Some(trait_id) = tcx.trait_of_assoc(def_id) {
+    return from_std(trait_id)
+      && matches!(
+        tcx.item_name(trait_id).as_str(),
+        "Deref"
+          | "Clone"
+          | "AsRef"
+          | "Borrow"
+          | "PartialEq"
+          | "PartialOrd"
+          | "Ord"
+          | "Hash"
+          | "Debug"
+          | "Display"
+      );
+  }
+  let Some(adt) = tcx
+    .inherent_impl_of_assoc(def_id)
+    .and_then(|imp| tcx.type_of(imp).skip_binder().ty_adt_def())
+  else {
+    return false;
+  };
+  if !from_std(adt.did()) {
+    return false;
+  }
+  match tcx.item_name(adt.did()).as_str() {
+    "Cell" | "OnceCell" | "OnceLock" => method == "get",
+    "RefCell" => {
+      matches!(
+        method,
+        "borrow" | "try_borrow" | "borrow_mut" | "try_borrow_mut"
+      )
+    }
+    "Mutex" => matches!(method, "lock" | "try_lock" | "is_poisoned"),
+    "RwLock" => {
+      matches!(
+        method,
+        "read" | "write" | "try_read" | "try_write" | "is_poisoned"
+      )
+    }
+    "Rc" | "Arc" => matches!(method, "strong_count" | "weak_count" | "ptr_eq"),
+    name => name.starts_with("Atomic") && method == "load",
   }
 }

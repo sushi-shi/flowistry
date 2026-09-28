@@ -82,7 +82,12 @@ generic value origins include borrowed contents that become visible in the
 caller. Destructors are opaque effects on their operands and reachable state.
 Opaque calls receiving shared references to interior-mutable state (`Cell`,
 `RefCell`, `Mutex`, atomics) may write its innermost `UnsafeCell`-containing
-places, in both modes; frozen sibling fields stay independent.
+places, in both modes; frozen sibling fields stay independent. Known read-only
+standard library calls (`Cell::get`, atomic `load`, `RefCell::borrow*`,
+`Mutex::lock`, `RwLock` guards, and `Deref`/`Clone`/comparison/formatting traits)
+are exempt; writes through guards are already connected to their owner by
+lifetimes. Writes to interior-mutable aliases behind shared references keep the
+written value as a dependency.
 Private fields and unrepresentable projections widen to a representable ancestor;
 array indices are not transferred as another body's MIR locals. When widening
 drops a dereference, everything mutably reachable from the ancestor is possibly
@@ -116,7 +121,7 @@ cargo test --locked --workspace --all-targets
 cargo test --locked -p flowistry --doc
 ```
 
-Both pass, including 36 new regression tests. An additional
+Both pass, including 38 new regression tests. An additional
 `cargo check --locked --workspace --all-targets --all-features` fails in the
 optional legacy `decompose` feature. The same 12 compiler errors reproduce on
 `fork-base` (removed source-map/index APIs, `HybridBitSet`, and old visitor

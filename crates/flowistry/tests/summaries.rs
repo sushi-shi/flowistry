@@ -860,3 +860,54 @@ fn main() {{
     );
   }
 }
+
+#[test]
+fn interior_reads_are_not_writes() {
+  for (ty, init, read) in [
+    ("Cell<i32>", "Cell::new(0)", "c.get()"),
+    ("RefCell<i32>", "RefCell::new(0)", "*c.borrow()"),
+    ("AtomicI32", "AtomicI32::new(0)", "c.load(SeqCst)"),
+  ] {
+    check_slice(
+      &format!(
+        r#"
+use std::{{cell::{{Cell, RefCell}}, sync::atomic::{{AtomicI32, Ordering::SeqCst}}}};
+fn main() {{
+  let c: {ty} = {init};
+  let first = {read};
+  let second = `({read})`;
+}}"#
+      ),
+      Direction::Backward,
+      &[init],
+      &["first"],
+    );
+  }
+}
+
+#[test]
+fn interior_write_through_shared_reference_keeps_written_value() {
+  for callee in [
+    "impl State { fn poke(&self, x: i32) { *self.c.borrow_mut() = x; } }",
+    "impl State { fn poke(&self, x: i32) { set(&self.c, x); } }",
+  ] {
+    check_slice(
+      &format!(
+        r#"
+use std::cell::RefCell;
+struct State {{ a: i32, c: RefCell<i32> }}
+fn set(c: &RefCell<i32>, x: i32) {{ *c.borrow_mut() = x; }}
+{callee}
+fn main() {{
+  let s = State {{ a: 0, c: RefCell::new(0) }};
+  let input = 73;
+  s.poke(input);
+  let v = `(*s.c.borrow())`;
+}}"#
+      ),
+      Direction::Backward,
+      &["s.poke(input)", "input = 73"],
+      &[],
+    );
+  }
+}

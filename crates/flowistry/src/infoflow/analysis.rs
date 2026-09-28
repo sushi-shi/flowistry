@@ -224,6 +224,9 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
 
     let ignore_mut =
       is_extension_active(|mode| mode.mutability_mode == MutabilityMode::IgnoreMut);
+    let typing_env = self
+      .tcx
+      .typing_env_normalized_for_post_analysis(self.def_id);
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
       // Clear sub-places of mutated place (if sound to do so)
       if matches!(mt.status, MutationStatus::Definitely)
@@ -248,7 +251,15 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
             let ty = sub_place.ty(body.local_decls(), self.tcx).ty;
             matches!(ty.ref_mutability(), Some(Mutability::Not))
           });
-          !has_immut || ignore_mut
+          // An UnsafeCell behind a shared reference is still mutable, e.g. a
+          // RefCell field written through a guard from `&self`.
+          let interior_mutable = || {
+            !alias
+              .ty(body.local_decls(), self.tcx)
+              .ty
+              .is_freeze(self.tcx, typing_env)
+          };
+          !has_immut || ignore_mut || interior_mutable()
         })
         .collect::<SmallVec<[_; 8]>>();
 
