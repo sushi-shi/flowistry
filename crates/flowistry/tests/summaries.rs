@@ -762,3 +762,101 @@ fn main() {
     &["s.poke(input)", "input = 73"],
   );
 }
+
+#[test]
+fn interior_mutability_through_shared_receiver_field() {
+  for (field, init, call, read) in [
+    ("Cell<i32>", "Cell::new(0)", "self.c.set(x)", "s.c.get()"),
+    (
+      "RefCell<i32>",
+      "RefCell::new(0)",
+      "self.c.replace(x)",
+      "*s.c.borrow()",
+    ),
+    (
+      "AtomicI32",
+      "AtomicI32::new(0)",
+      "self.c.store(x, SeqCst)",
+      "s.c.load(SeqCst)",
+    ),
+  ] {
+    check_slice(
+      &format!(
+        r#"
+use std::{{cell::{{Cell, RefCell}}, sync::atomic::{{AtomicI32, Ordering::SeqCst}}}};
+struct State {{ a: i32, c: {field} }}
+impl State {{ fn poke(&mut self, x: i32) {{ {call}; }} }}
+fn main() {{
+  let mut s = State {{ a: 0, c: {init} }};
+  let input = 73;
+  s.poke(input);
+  let v = `({read})`;
+}}"#
+      ),
+      Direction::Backward,
+      &["s.poke(input)", "input = 73"],
+      &[],
+    );
+  }
+}
+
+#[test]
+fn interior_mutation_leaves_frozen_siblings_independent() {
+  check_slice(
+    r#"
+use std::cell::Cell;
+struct State { a: i32, c: Cell<i32> }
+impl State { fn poke(&mut self, x: i32) { self.c.set(x); } }
+fn main() {
+  let mut s = State { a: 1, c: Cell::new(0) };
+  let input = 73;
+  s.poke(input);
+  `(s.a)`;
+}"#,
+    Direction::Backward,
+    &["a: 1"],
+    &["s.poke(input)", "input = 73"],
+  );
+}
+
+#[test]
+fn cell_set_in_same_body() {
+  check_slice(
+    r#"
+use std::cell::Cell;
+fn main() {
+  let c = Cell::new(0);
+  let input = 73;
+  c.set(input);
+  `(c.get())`;
+}"#,
+    Direction::Backward,
+    &["c.set(input)", "input = 73"],
+    &[],
+  );
+}
+
+#[test]
+fn raw_pointer_passed_to_opaque_call_falls_back() {
+  for write in [
+    "std::ptr::write(&raw mut self.b, x)",
+    "std::ptr::write(&mut self.b as *mut i32, x)",
+  ] {
+    check_slice(
+      &format!(
+        r#"
+struct State {{ a: i32, b: i32 }}
+impl State {{ fn poke(&mut self, x: i32) {{ unsafe {{ {write}; }} }} }}
+fn main() {{
+  let mut s = State {{ a: 0, b: 0 }};
+  let input = 73;
+  s.poke(input);
+  `(s.b)`;
+}}"#
+      ),
+      Direction::Backward,
+      &["s.poke(input)", "input = 73"],
+      &[],
+    );
+  }
+}

@@ -223,13 +223,42 @@ where
           status: MutationStatus::Definitely,
         }];
 
+        let typing_env =
+          tcx.typing_env_normalized_for_post_analysis(self.place_info.def_id);
         for arg in arg_places {
-          for arg_mut in self.place_info.reachable_values(arg, Mutability::Mut) {
+          let mutable = self.place_info.reachable_values(arg, Mutability::Mut);
+          for arg_mut in mutable {
             mutations.push(Mutation {
               mutated: *arg_mut,
               inputs: arg_inputs.clone(),
               status: MutationStatus::Possibly,
             });
+          }
+          // A shared reference to an UnsafeCell (Cell, RefCell, Mutex, atomics)
+          // permits mutation, e.g. Cell::set(&self). Treat the innermost
+          // interior-mutable places behind shared pointers like `&mut` ones.
+          for shared in self.place_info.reachable_values(arg, Mutability::Not) {
+            if *shared == arg
+              || mutable.contains(shared)
+              || shared
+                .ty(self.place_info.body, tcx)
+                .ty
+                .is_freeze(tcx, typing_env)
+            {
+              continue;
+            }
+            for child in self.place_info.children(*shared) {
+              let ty = child.ty(self.place_info.body, tcx).ty;
+              if !ty.is_freeze(tcx, typing_env)
+                && self.place_info.children(child).len() == 1
+              {
+                mutations.push(Mutation {
+                  mutated: child,
+                  inputs: arg_inputs.clone(),
+                  status: MutationStatus::Possibly,
+                });
+              }
+            }
           }
         }
 

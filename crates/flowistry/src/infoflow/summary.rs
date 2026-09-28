@@ -177,7 +177,15 @@ pub(crate) fn compute<'tcx>(
     found: false,
   };
   unsupported.visit_body(body);
-  if unsupported.found {
+  // Raw pointers carry no loans, so a write through one handed to an opaque
+  // callee (ptr::write(&raw mut self.b, ..)) would not reach any argument.
+  let holds_raw_pointer = body.local_decls.iter().any(|decl| {
+    decl
+      .ty
+      .walk()
+      .any(|arg| arg.as_type().is_some_and(|ty| ty.is_raw_ptr()))
+  });
+  if unsupported.found || holds_raw_pointer {
     session.fallback("unsupported MIR operation");
     return None;
   }

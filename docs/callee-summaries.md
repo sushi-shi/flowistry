@@ -74,12 +74,15 @@ order. Intraprocedural loops still use the existing fixed-point solver.
 External implementations, indirect/dynamic calls, compiler shims, and generic
 callees instantiated with mutable or consuming closures retain signature-based
 effects. A local closure called directly is summarized like any other body; its
-upvar fields are translated through the caller's closure type. Bodies containing
-raw pointer dereferences, union access, inline assembly, coroutine suspension, or
-other unmodeled terminators are not refined. Argument layouts exceeding the
+upvar fields are translated through the caller's closure type. Bodies holding or
+dereferencing raw pointers, union access, inline assembly, coroutine suspension,
+or other unmodeled terminators are not refined. Argument layouts exceeding the
 existing alias model's incoming-pointer depth also use signature effects. Opaque
 generic value origins include borrowed contents that become visible in the
 caller. Destructors are opaque effects on their operands and reachable state.
+Opaque calls receiving shared references to interior-mutable state (`Cell`,
+`RefCell`, `Mutex`, atomics) may write its innermost `UnsafeCell`-containing
+places, in both modes; frozen sibling fields stay independent.
 Private fields and unrepresentable projections widen to a representable ancestor;
 array indices are not transferred as another body's MIR locals. When widening
 drops a dereference, everything mutably reachable from the ancestor is possibly
@@ -113,7 +116,7 @@ cargo test --locked --workspace --all-targets
 cargo test --locked -p flowistry --doc
 ```
 
-Both pass, including 32 new regression tests. An additional
+Both pass, including 36 new regression tests. An additional
 `cargo check --locked --workspace --all-targets --all-features` fails in the
 optional legacy `decompose` feature. The same 12 compiler errors reproduce on
 `fork-base` (removed source-map/index APIs, `HybridBitSet`, and old visitor
@@ -126,7 +129,8 @@ inputs, privacy widening, panic paths, a 40-callee chain, dynamic/static trait
 dispatch, unsupported memory operations, recursive root-order independence,
 shared diamond graphs, batch roots, cached unsupported summaries, deeply nested
 borrows, opaque generic borrowed contents, directly called closures writing
-through upvars, and new compiler sessions after edits.
+through upvars, interior mutation through shared references, raw pointers passed
+to opaque calls, and new compiler sessions after edits.
 The IDE test checks focus/direct-influence ranges and the unchanged serialized
 output shape. Existing slicing fixtures remain unchanged.
 
