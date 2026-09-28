@@ -1,0 +1,9 @@
+fn apply<F: FnMut()>(mut f: F) {
+  f();
+}
+fn main() {
+  let mut x = 0;
+  let y = 1;
+  apply(|| x += y);
+  `(x)`;
+}

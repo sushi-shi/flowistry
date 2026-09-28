@@ -1,0 +1,17 @@
+/* recurse: Box<dyn Trait> parameter holding a &mut */
+trait Set {
+  fn set(&mut self);
+}
+impl Set for &mut i32 {
+  fn set(&mut self) {
+    **self = 1;
+  }
+}
+fn h<'a>(mut b: Box<dyn Set + 'a>) {
+  b.set();
+}
+fn main() {
+  `[let mut x = 0;]`
+  h(`[Box::new(&mut x)]`)`[;]`
+  `[x;]`
+}

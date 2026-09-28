@@ -1,0 +1,10 @@
+/* recurse: callee writes through a &mut stored in a tuple field */
+fn set(p: &mut (&mut i32, i32)) {
+  *p.0 = 5;
+}
+fn main() {
+  `[let mut x = 1;]`
+  let mut t = (&mut x, 0);
+  set(&mut t);
+  `[x;]`
+}

@@ -1,0 +1,7 @@
+fn main() {
+  let s = String::new();
+  let t = String::new();
+  let f = move || s;
+  let r = f();
+  `(r)`;
+}

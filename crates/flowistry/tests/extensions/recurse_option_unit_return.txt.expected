@@ -1,0 +1,9 @@
+/* recurse: callee returns Some(()) without data dependencies */
+fn f(x: i32) -> Option<()> {
+  Some(())
+}
+fn main() {
+  let x = 1;
+  let r = f(x);
+  `[r;]`
+}
