@@ -4,7 +4,7 @@ use rustc_data_structures::fx::FxHashSet as HashSet;
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::*,
-  ty::{GenericArgKind, RegionKind, RegionVid, Ty, TyCtxt},
+  ty::{GenericArgKind, RegionKind, RegionVid, Ty, TyCtxt, TypingEnv},
 };
 use rustc_span::Spanned;
 use rustc_utils::{BodyExt, OperandExt, PlaceExt};
@@ -17,6 +17,18 @@ use crate::extensions::{MutabilityMode, is_extension_active};
 /// but in practice it was very hard to determine up-front a fixed domain of
 /// [`Place`]s that was not "every possible place in the body".
 pub type PlaceSet<'tcx> = HashSet<Place<'tcx>>;
+
+/// [`Ty::is_freeze`] for types from borrow-checked MIR. Their region variables
+/// cannot be hashed into the query key under incremental compilation.
+pub fn is_freeze<'tcx>(
+  tcx: TyCtxt<'tcx>,
+  typing_env: TypingEnv<'tcx>,
+  ty: Ty<'tcx>,
+) -> bool {
+  tcx
+    .erase_and_anonymize_regions(ty)
+    .is_freeze(tcx, typing_env)
+}
 
 /// Given the arguments to a function, returns all projections of the arguments that are mutable pointers.
 pub fn arg_mut_ptrs<'tcx>(

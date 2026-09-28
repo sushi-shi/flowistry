@@ -244,16 +244,17 @@ where
           for shared in self.place_info.reachable_values(arg, Mutability::Not) {
             if *shared == arg
               || mutable.contains(shared)
-              || shared
-                .ty(self.place_info.body, tcx)
-                .ty
-                .is_freeze(tcx, typing_env)
+              || utils::is_freeze(
+                tcx,
+                typing_env,
+                shared.ty(self.place_info.body, tcx).ty,
+              )
             {
               continue;
             }
             for child in self.place_info.children(*shared) {
               let ty = child.ty(self.place_info.body, tcx).ty;
-              if !ty.is_freeze(tcx, typing_env)
+              if !utils::is_freeze(tcx, typing_env, ty)
                 && self.place_info.children(child).len() == 1
               {
                 mutations.push(Mutation {

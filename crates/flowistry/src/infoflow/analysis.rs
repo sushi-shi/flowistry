@@ -254,10 +254,8 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
           // An UnsafeCell behind a shared reference is still mutable, e.g. a
           // RefCell field written through a guard from `&self`.
           let interior_mutable = || {
-            !alias
-              .ty(body.local_decls(), self.tcx)
-              .ty
-              .is_freeze(self.tcx, typing_env)
+            let ty = alias.ty(body.local_decls(), self.tcx).ty;
+            !crate::mir::utils::is_freeze(self.tcx, typing_env, ty)
           };
           !has_immut || ignore_mut || interior_mutable()
         })

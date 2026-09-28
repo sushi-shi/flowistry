@@ -911,3 +911,49 @@ fn main() {{
     );
   }
 }
+
+// Incremental compilation hashes query keys, and types in borrow-checked MIR
+// still carry region variables, which cannot be hashed. Freeze checks must
+// erase them first; the other tests compile without incremental.
+#[test]
+fn freeze_checks_work_under_incremental_compilation() {
+  let incremental = std::env::temp_dir().join(format!(
+    "flowistry-incremental-{}-{:?}",
+    std::process::id(),
+    std::thread::current().id()
+  ));
+  CompileBuilder::new(
+    r#"
+use std::{cell::{Cell, RefCell}, rc::Rc};
+struct Random { seed: u64 }
+struct App { rng: Rc<RefCell<Random>>, hits: Cell<u32> }
+impl App {
+  fn reseed(&mut self, x: u64) { self.rng.borrow_mut().seed = x; self.hits.set(1); }
+  fn peek(&self) -> u64 { self.rng.borrow().seed }
+}
+fn main() {
+  let mut app = App { rng: Rc::new(RefCell::new(Random { seed: 0 })), hits: Cell::new(0) };
+  app.reseed(5);
+  let seen = app.peek();
+  println!("{seen}");
+}
+"#,
+  )
+  .with_args([format!("-Cincremental={}", incremental.display())])
+  .compile(|result| {
+    let tcx = result.tcx;
+    for context_mode in [ContextMode::SigOnly, ContextMode::Recurse] {
+      fluid_set!(EVAL_MODE, EvalMode {
+        context_mode,
+        ..EvalMode::default()
+      });
+      let session = AnalysisSession::new(tcx);
+      for (_, id) in find_bodies(tcx) {
+        let facts =
+          borrowck_facts::get_body_with_borrowck_facts(tcx, tcx.hir_body_owner_def_id(id));
+        infoflow::compute_flow_with_session(session.clone(), tcx, id, facts);
+      }
+    }
+  });
+  let _ = std::fs::remove_dir_all(incremental);
+}
