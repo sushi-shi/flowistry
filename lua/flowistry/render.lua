@@ -11,6 +11,14 @@ function M.highlights()
   })
   vim.api.nvim_set_hl(0, "FlowistryFocus", { default = true, link = "Visual" })
   vim.api.nvim_set_hl(0, "FlowistryInfluence", { default = true, link = "CursorLine" })
+  -- Code that matters only if two shared handles (e.g. Rc<RefCell<T>> clones)
+  -- point to the same object: kept readable, but tinted apart from the slice.
+  vim.api.nvim_set_hl(0, "FlowistryMaybe", {
+    default = true,
+    fg = vim.o.background == "light" and "#9a6f1e" or "#c49a55",
+    ctermfg = vim.o.background == "light" and 136 or 179,
+    italic = true,
+  })
 end
 
 function M.clear(buf)
@@ -26,14 +34,17 @@ local function highlight(buf, items, group, priority)
   end
 end
 
-function M.show(buf, focus, pos, priority, show_influence)
+function M.show(buf, focus, pos, priority, show_influence, show_maybe)
   M.clear(buf)
   local token = ranges.token(buf, pos)
   if not token then return nil end
   local place = ranges.smallest(focus.places, pos, function(item) return item.range end)
   if not place or #place.ranges == 0 then return nil end
   local slice = vim.list_extend(vim.deepcopy(place.slice), place.ranges)
-  highlight(buf, ranges.complement(focus.containers, slice), "FlowistryDim", priority)
+  local maybe = show_maybe ~= false and place.maybe_slice or {}
+  local shown = vim.list_extend(vim.deepcopy(slice), maybe)
+  highlight(buf, ranges.complement(focus.containers, shown), "FlowistryDim", priority)
+  highlight(buf, maybe, "FlowistryMaybe", priority)
   if show_influence then
     highlight(buf, place.direct_influence, "FlowistryInfluence", priority + 1)
   end

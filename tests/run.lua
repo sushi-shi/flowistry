@@ -137,6 +137,40 @@ local function run()
   equal(render.show(call_buf, call_focus, { 1, 2 }, 200), nil, "whitespace does not select its enclosing expression")
   vim.api.nvim_buf_delete(call_buf, { force = true })
 
+  local maybe_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(maybe_buf, 0, -1, false, {
+    "*a.borrow_mut() = input;", "let unrelated = 1;", "let seen = *b.borrow();",
+  })
+  local body = { start = { 0, 0 }, finish = { 2, 23 } }
+  local written = { start = { 0, 0 }, finish = { 0, 24 } }
+  local seen = { start = { 2, 4 }, finish = { 2, 8 } }
+  local maybe_focus = { containers = { body }, places = { {
+    range = seen, ranges = { seen }, slice = { { start = { 2, 0 }, finish = { 2, 23 } } },
+    direct_influence = {}, maybe_slice = { written },
+  } } }
+  local function groups_at(row, col)
+    local found = {}
+    for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(maybe_buf, render.namespace, 0, -1, { details = true })) do
+      local after_start = mark[2] < row or (mark[2] == row and mark[3] <= col)
+      local before_end = mark[4].end_row > row or (mark[4].end_row == row and mark[4].end_col > col)
+      if after_start and before_end then found[mark[4].hl_group] = true end
+    end
+    return found
+  end
+  local maybe_hl = vim.api.nvim_get_hl(0, { name = "FlowistryMaybe", link = true })
+  local dim_hl = vim.api.nvim_get_hl(0, { name = "FlowistryDim", link = true })
+  check(not maybe_hl.link and maybe_hl.fg ~= nil and maybe_hl.fg ~= dim_hl.fg, "possible writes have their own color")
+  check(render.show(maybe_buf, maybe_focus, { 2, 5 }, 200) ~= nil, "maybe focus selects the reader")
+  equal(groups_at(0, 3), { FlowistryMaybe = true }, "possible shared-handle write is tinted, not dimmed")
+  equal(groups_at(1, 5), { FlowistryDim = true }, "unrelated code stays dimmed")
+  render.show(maybe_buf, maybe_focus, { 2, 5 }, 200, false, false)
+  equal(groups_at(0, 3), { FlowistryDim = true }, "show_maybe = false dims possible writes like unrelated code")
+  render.show(maybe_buf, { containers = maybe_focus.containers, places = { {
+    range = seen, ranges = { seen }, slice = maybe_focus.places[1].slice, direct_influence = {},
+  } } }, { 2, 5 }, 200)
+  equal(groups_at(0, 3), { FlowistryDim = true }, "responses without maybe_slice render as before")
+  vim.api.nvim_buf_delete(maybe_buf, { force = true })
+
   setup()
   equal(flow.indicator(), "Flowistry: OFF", "indicator clearly shows disabled mode")
   local dim = vim.api.nvim_get_hl(0, { name = "FlowistryDim", link = true })

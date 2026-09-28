@@ -85,6 +85,9 @@ HIGHLIGHTS                                                 *flowistry-highlights
 FlowistryDim             Unrelated code (muted blue-gray, separate from comments).
 FlowistryFocus           Word under the cursor (default: Visual).
 FlowistryInfluence       Direct influence (CursorLine; opt in: show_influence).
+FlowistryMaybe           Code relevant only if two shared handles to the same
+                         interior-mutable type (e.g. Rc<RefCell<T>> clones) are
+                         one object (amber italic; opt out: show_maybe = false).
 
 Set these with nvim_set_hl() in your colorscheme. The `priority` setting defaults
 to 200. Highlighting is buffer-wide, so windows sharing a buffer share its focus.

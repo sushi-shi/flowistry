@@ -130,7 +130,8 @@ Ok: {
     range: Range,
     ranges: Range[],
     slice: Range[],
-    direct_influence: Range[]
+    direct_influence: Range[],
+    maybe_slice?: Range[]
   }]
 }
 ```
@@ -141,6 +142,10 @@ Ok: {
 - `ranges`: selected place's display spans.
 - `slice`: code related to that place through information flow.
 - `direct_influence`: additional spans to emphasize.
+- `maybe_slice` (optional, omitted when empty): code that is relevant only if
+  separately held shared handles to the same interior-mutable type, such as two
+  `Rc<RefCell<T>>` values, point to one object. Disjoint from `slice`. Older
+  backends never send it.
 
 The pinned dependency serializes `filename` as an **opaque numeric file ID**, not
 a path. IDs are local to one compiler invocation and must never be compared

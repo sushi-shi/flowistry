@@ -177,6 +177,7 @@ require("flowistry").setup({
   timeout_ms = 180000,            -- per subprocess, including initial compilation
   priority = 200,                -- above normal syntax/semantic highlights
   show_influence = false,        -- optional extra direct-influence backgrounds
+  show_maybe = true,             -- tint code that matters only if shared handles alias
   progress = false,              -- analysis popups; enabled by the Nix launcher
 })
 ```
@@ -203,6 +204,7 @@ Customize these highlight groups through your colorscheme:
 vim.api.nvim_set_hl(0, "FlowistryDim", { fg = "#606470" })
 vim.api.nvim_set_hl(0, "FlowistryFocus", { bg = "#394457" })
 vim.api.nvim_set_hl(0, "FlowistryInfluence", { bg = "#252b35" })
+vim.api.nvim_set_hl(0, "FlowistryMaybe", { fg = "#c49a55", italic = true })
 ```
 
 Dimmed code uses a dedicated muted blue-gray foreground, distinct from comments,

@@ -26,6 +26,7 @@ local defaults = {
   timeout_ms = 180000,
   priority = 200,
   show_influence = false,
+  show_maybe = true,
   progress = false, -- Session launcher enables analysis progress popups.
 }
 local config = vim.deepcopy(defaults)
@@ -179,6 +180,7 @@ local function prepare_focus(state, value)
         ranges = ranges.convert_list(place.ranges, convert),
         slice = ranges.convert_list(place.slice, convert),
         direct_influence = ranges.convert_list(place.direct_influence, convert),
+        maybe_slice = ranges.convert_list(place.maybe_slice or {}, convert),
       }
     end
   end
@@ -294,7 +296,9 @@ update = function(state)
     end, "Analyzing function"))
     return
   end
-  state.slice = render.show(state.buf, body.focus, pos, config.priority, config.show_influence)
+  state.slice = render.show(
+    state.buf, body.focus, pos, config.priority, config.show_influence, config.show_maybe
+  )
   state.cached = body.cached == true
   state.stale = false
   state.status = state.slice and (state.mark and "pinned" or "active") or "no place"
