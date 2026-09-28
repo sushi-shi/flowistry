@@ -14,7 +14,7 @@ use fluid_let::fluid_set;
 use log::info;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
 use rustc_data_structures::fx::FxHashSet as HashSet;
-use rustc_hir::BodyId;
+use rustc_hir::{BodyId, def_id::LocalDefId};
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 pub use rustc_utils::test_utils::{compare_ranges, fmt_ranges, parse_ranges};
@@ -115,6 +115,38 @@ pub fn compile_body(
 ) {
   borrowck_facts::enable_mir_simplification();
   test_utils::compile_body(input, callback)
+}
+
+/// Compiles a crate and gives access to its type context, e.g. to inspect several
+/// bodies with [`body_named`].
+pub fn compile_crate(
+  input: impl Into<String>,
+  args: &[String],
+  callback: impl for<'tcx> FnOnce(TyCtxt<'tcx>) + Send,
+) {
+  borrowck_facts::enable_mir_simplification();
+  CompileBuilder::new(input)
+    .with_args(args.iter().cloned())
+    .compile(|result| callback(result.tcx))
+}
+
+/// The body (with borrowck facts) of the item named `name`.
+pub fn body_named<'tcx>(
+  tcx: TyCtxt<'tcx>,
+  name: &str,
+) -> (LocalDefId, &'tcx BodyWithBorrowckFacts<'tcx>) {
+  let def_id = tcx
+    .hir_body_owners()
+    .find(|def_id| {
+      tcx
+        .opt_item_name(def_id.to_def_id())
+        .is_some_and(|item| item.as_str() == name)
+    })
+    .unwrap_or_else(|| panic!("no body named {name}"));
+  (
+    def_id,
+    borrowck_facts::get_body_with_borrowck_facts(tcx, def_id),
+  )
 }
 
 /// Like [`compile_body`], with extra rustc arguments (see [`IncrementalDir`]).
