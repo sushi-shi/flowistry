@@ -17,7 +17,7 @@ pub use self::{
 };
 use crate::{
   extensions::EvalMode,
-  mir::{engine, placeinfo::PlaceInfo},
+  mir::{engine, placeinfo::PlaceInfo, utils::MAX_ARG_POINTER_DEPTH},
 };
 
 mod analysis;
@@ -107,6 +107,11 @@ pub fn compute_flow_with_mode<'a, 'tcx>(
 
     let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
     let place_info = PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, mode);
+    if log::log_enabled!(log::Level::Debug) && place_info.arg_pointers_truncated() {
+      debug!(
+        "Arguments hold pointers nested deeper than {MAX_ARG_POINTER_DEPTH} projections; the loans behind them are ignored"
+      );
+    }
     let location_domain = place_info.location_domain().clone();
 
     let body = &body_with_facts.body;

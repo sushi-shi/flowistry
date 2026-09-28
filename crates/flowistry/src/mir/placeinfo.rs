@@ -23,7 +23,10 @@ use rustc_utils::{
   },
 };
 
-use super::{aliases::Aliases, utils::PlaceSet};
+use super::{
+  aliases::Aliases,
+  utils::{ErasedTy, MAX_ARG_POINTER_DEPTH, PlaceSet},
+};
 use crate::extensions::{EvalMode, MutabilityMode};
 
 /// A place in normal form, used as the row key of a
@@ -49,6 +52,12 @@ impl<'tcx> NormPlace<'tcx> {
   /// The (normalized) projection of the place.
   pub fn projection(self) -> &'tcx [PlaceElem<'tcx>] {
     self.0.projection
+  }
+
+  /// The type of the place in `body`, with all regions erased (including those of
+  /// the base local's type, which normalization does not touch).
+  pub fn ty(self, body: &Body<'tcx>, tcx: TyCtxt<'tcx>) -> ErasedTy<'tcx> {
+    ErasedTy::new(tcx, self.0.ty(body.local_decls(), tcx).ty)
   }
 
   /// Escape hatch for the interprocedural analysis, which still reads callee rows
@@ -255,13 +264,26 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
         .flat_map(|ptrs| {
           ptrs
             .into_iter()
-            .filter(|(ptr, _)| ptr.projection.len() <= 2)
+            .filter(|(ptr, _)| ptr.projection.len() <= MAX_ARG_POINTER_DEPTH)
             .map(|(ptr, _)| self.tcx.mk_place_deref(ptr))
         });
       ptrs
         .chain([place])
         .flat_map(|place| place.interior_places(self.tcx, self.body, self.def_id))
         .map(move |place| (place, location))
+    })
+  }
+
+  /// Whether some argument holds a pointer nested more deeply than
+  /// [`MAX_ARG_POINTER_DEPTH`], i.e. whether the analysis ignores loans that the
+  /// arguments of this body may hold.
+  pub(crate) fn arg_pointers_truncated(&self) -> bool {
+    self.body.args_iter().any(|local| {
+      Place::from_local(local, self.tcx)
+        .interior_pointers(self.tcx, self.body, self.def_id)
+        .into_values()
+        .flatten()
+        .any(|(ptr, _)| ptr.projection.len() > MAX_ARG_POINTER_DEPTH)
     })
   }
 
@@ -341,6 +363,7 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for LoanCollector<'_, 'tcx> {
 
 #[cfg(test)]
 mod test {
+  use rustc_middle::ty::TypeVisitableExt;
   use rustc_utils::{
     hashset,
     test_utils::{Placer, compare_sets},
@@ -428,7 +451,8 @@ fn main() {
   fn test_normalize_collapses_indices() {
     let input = r#"
 fn main() {
-  let x = [0, 1];
+  let n = 0;
+  let x = [&n, &n];
   let i = 0;
   let j = 1;
   let a = x[i];
@@ -449,6 +473,27 @@ fn main() {
         Local::from_usize(0)
       )]);
       assert_ne!(xi, place_info.normalize(x.mk()));
+
+      // The element type comes from the local's type, whose regions normalization
+      // does not erase: `ty` must erase them.
+      let raw_ty = x.index(i).mk().ty(body.local_decls(), tcx).ty;
+      assert!(raw_ty.has_infer_regions());
+      let ty = xi.ty(body, tcx).ty();
+      assert!(!ty.has_infer_regions());
+      assert_eq!(ty, tcx.erase_and_anonymize_regions(raw_ty));
+    });
+  }
+
+  #[test]
+  fn test_arg_pointers_truncated() {
+    let shallow = "fn f(x: &&&i32, y: (&i32, &mut &i32)) {}";
+    placeinfo_harness(shallow, |_, _, place_info| {
+      assert!(!place_info.arg_pointers_truncated());
+    });
+
+    let deep = "fn f(x: &&&&i32) {}";
+    placeinfo_harness(deep, |_, _, place_info| {
+      assert!(place_info.arg_pointers_truncated());
     });
   }
 }

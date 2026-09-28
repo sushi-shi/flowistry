@@ -22,7 +22,7 @@ use rustc_utils::{PlaceExt, mir::place::UNKNOWN_REGION, timer::elapsed};
 
 use crate::{
   extensions::{EvalMode, PointerMode},
-  mir::utils::{AsyncHack, PlaceSet},
+  mir::utils::{AsyncHack, MAX_ARG_POINTER_DEPTH, PlaceSet},
 };
 
 type BorrowckLocationIndex =
@@ -235,7 +235,7 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
           // Need a way to limit the number of possible pointers for functions with
           // many pointers in the input. This is almost certainly not sound, but hopefully
           // it works for most cases.
-          if place.projection.len() <= 2 {
+          if place.projection.len() <= MAX_ARG_POINTER_DEPTH {
             region_contains.insert((tcx.mk_place_deref(place), mutability));
           }
         }
