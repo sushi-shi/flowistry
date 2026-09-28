@@ -27,6 +27,7 @@ use super::{
   effects::CallEffects,
   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
   session::AnalysisSession,
+  shared_handles::SharedHandles,
 };
 use crate::{
   extensions::{ContextMode, MutabilityMode, is_extension_active},
@@ -78,6 +79,7 @@ pub struct FlowAnalysis<'a, 'tcx> {
   pub(crate) session: Rc<AnalysisSession<'tcx>>,
   pub(crate) call_effects: RefCell<HashMap<Location, Rc<CallEffects<'tcx>>>>,
   pub(crate) call_reads: RefCell<HashMap<Location, LocationOrArgSet>>,
+  pub(crate) shared_handles: Option<Rc<SharedHandles<'tcx>>>,
 }
 
 impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
@@ -109,6 +111,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       session,
       call_effects: RefCell::new(HashMap::default()),
       call_reads: RefCell::new(HashMap::default()),
+      shared_handles: None,
     }
   }
 
@@ -264,8 +267,26 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       debug!("  Mutated places: {mutable_aliases:?}");
       debug!("    with deps {deps:?}");
 
-      for alias in mutable_aliases {
-        state.union_into_row(self.place_info.normalize(*alias), deps);
+      for alias in &mutable_aliases {
+        state.union_into_row(self.place_info.normalize(**alias), deps);
+      }
+
+      // Pessimistic pass only: other handles to the same interior-mutable
+      // type may point to the object that was just written.
+      // A direct, definite assignment (`b = a.clone()`) rebinds a handle
+      // rather than writing the state behind it.
+      if let Some(handles) = &self.shared_handles {
+        let rebinds = |alias: Place<'tcx>| {
+          matches!(mt.status, MutationStatus::Definitely) && alias == mt.mutated
+        };
+        let shared = mutable_aliases
+          .iter()
+          .filter(|alias| !rebinds(***alias))
+          .flat_map(|alias| handles.possibly_shared(self.place_info.normalize(**alias)))
+          .collect::<SmallVec<[_; 8]>>();
+        for place in shared {
+          state.union_into_row(place, deps);
+        }
       }
     }
   }

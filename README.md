@@ -151,6 +151,8 @@ Flowistry *can* determine that `*x.lock().unwrap() = 1` is a mutation to `x`, bu
 
 We are researching methods to overcome this limitation, but for now just be aware that this is the main case where Flowistry is known to provide an incorrect answer.
 
+This fork reports such code separately: focus responses include a `maybe_slice` of code that is relevant only if handles to the same interior-mutable type point to one object, so an editor can show it in a different color. See [docs/shared-handles.md](docs/shared-handles.md).
+
 ### A focus region may include more code than you expect
 
 Flowistry's analysis tries to include all code that *could* have an influence on a focal point. This analysis makes a number of assumptions for both practical and fundamental reasons. For example, in this snippet:

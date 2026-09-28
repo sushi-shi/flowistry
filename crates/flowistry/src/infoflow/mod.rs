@@ -12,6 +12,7 @@ use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_utils::{BodyExt, block_timer};
 
+use self::shared_handles::SharedHandles;
 pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
   dependencies::{
@@ -29,6 +30,7 @@ mod dependencies;
 mod effects;
 pub mod mutation;
 mod session;
+pub mod shared_handles;
 mod summary;
 
 /// The output of the information flow analysis.
@@ -98,6 +100,32 @@ pub fn compute_flow_with_session<'a, 'tcx>(
   body_id: BodyId,
   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
 ) -> FlowResults<'a, 'tcx> {
+  compute(session, tcx, body_id, body_with_facts, false)
+    .expect("exact flow is always computed")
+}
+
+/// Computes flow again, assuming separately held shared handles to the same
+/// interior-mutable type (e.g. two `Rc<RefCell<T>>`) may point to one object.
+///
+/// Dependencies present here but not in [`compute_flow_with_session`] are
+/// possible, not certain. Returns `None` when no two handles in the body share
+/// a pointee type, as the result would then equal the exact flow.
+pub fn compute_flow_with_shared_handles<'a, 'tcx>(
+  session: Rc<AnalysisSession<'tcx>>,
+  tcx: TyCtxt<'tcx>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+) -> Option<FlowResults<'a, 'tcx>> {
+  compute(session, tcx, body_id, body_with_facts, true)
+}
+
+fn compute<'a, 'tcx>(
+  session: Rc<AnalysisSession<'tcx>>,
+  tcx: TyCtxt<'tcx>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+  share_handles: bool,
+) -> Option<FlowResults<'a, 'tcx>> {
   fluid_set!(EVAL_MODE, session.mode());
   debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
 
@@ -107,13 +135,19 @@ pub fn compute_flow_with_session<'a, 'tcx>(
   }
   let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
   let location_domain = place_info.location_domain().clone();
+  let shared_handles = if share_handles {
+    Some(Rc::new(SharedHandles::build(&place_info)?))
+  } else {
+    None
+  };
 
   let body = &body_with_facts.body;
 
   let results = {
     block_timer!("Flow");
 
-    let analysis = FlowAnalysis::with_session(tcx, def_id, body, place_info, session);
+    let mut analysis = FlowAnalysis::with_session(tcx, def_id, body, place_info, session);
+    analysis.shared_handles = shared_handles;
     engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
     // analysis.into_engine(tcx, body).iterate_to_fixpoint()
   };
@@ -140,5 +174,5 @@ pub fn compute_flow_with_session<'a, 'tcx>(
     );
   }
 
-  results
+  Some(results)
 }

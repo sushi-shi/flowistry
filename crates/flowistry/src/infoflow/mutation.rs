@@ -9,6 +9,7 @@ use rustc_middle::{
 };
 use rustc_utils::{AdtDefExt, OperandExt, mir::place::PlaceCollector};
 
+use super::shared_handles::interior_pointee;
 use crate::mir::{
   placeinfo::PlaceInfo,
   utils::{self, AsyncHack},
@@ -242,14 +243,22 @@ where
             continue;
           }
           for shared in self.place_info.reachable_values(arg, Mutability::Not) {
-            if *shared == arg
-              || mutable.contains(shared)
-              || utils::is_freeze(
-                tcx,
-                typing_env,
-                shared.ty(self.place_info.body, tcx).ty,
-              )
-            {
+            if *shared == arg || mutable.contains(shared) {
+              continue;
+            }
+            let shared_ty = shared.ty(self.place_info.body, tcx).ty;
+            if utils::is_freeze(tcx, typing_env, shared_ty) {
+              // An Rc/Arc is Freeze, but its pointee has no place of its own.
+              // The handle stands for it, as it does for guard writes.
+              if !shared_ty.is_ref()
+                && interior_pointee(tcx, typing_env, shared_ty).is_some()
+              {
+                mutations.push(Mutation {
+                  mutated: *shared,
+                  inputs: arg_inputs.clone(),
+                  status: MutationStatus::Possibly,
+                });
+              }
               continue;
             }
             for child in self.place_info.children(*shared) {
