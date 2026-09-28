@@ -1,0 +1,16 @@
+/* recurse: callee returns a struct with private fields */
+mod m {
+  pub struct P {
+    a: i32,
+    b: i32,
+  }
+  pub fn mk(x: i32, y: i32) -> P {
+    P { a: x, b: y }
+  }
+}
+fn main() {
+  let x = 1;
+  `[let y = 2;]`
+  `[let p = m::mk(x, y);]`
+  `[p;]`
+}

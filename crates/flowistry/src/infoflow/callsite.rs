@@ -8,9 +8,6 @@
 //! private field), it degrades to a coarser caller place ([`Target::Coarsened`]) and
 //! says what was lost, instead of silently dropping the effect.
 
-// Wired into the interprocedural analysis in the next commit.
-#![allow(dead_code)]
-
 use rustc_abi::{FieldIdx, VariantIdx};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
@@ -49,6 +46,7 @@ pub(crate) enum FallbackReason {
   /// The call operands do not match the callee's parameters.
   AbiMismatch,
   /// The callee resolves to a different body than the one named by the call.
+  #[allow(dead_code)] // Instance resolution is not implemented yet.
   ResolvesElsewhere,
 }
 
@@ -185,14 +183,6 @@ impl EffectPath {
     }
     EffectPath { root, elems, tail }
   }
-
-  /// Whether the path goes through a pointer.
-  pub fn has_deref(&self) -> bool {
-    self.elems.contains(&PathElem::Deref)
-      || matches!(self.tail, PathTail::Truncated {
-        dropped_deref: true
-      })
-  }
 }
 
 /// How the callee's parameters correspond to the caller's operands.
@@ -317,6 +307,15 @@ pub(crate) enum Target<'tcx> {
   },
 }
 
+impl<'tcx> Target<'tcx> {
+  /// The caller place, exact or coarsened.
+  pub fn place(self) -> Place<'tcx> {
+    match self {
+      Target::Exact(place) | Target::Coarsened { place, .. } => place,
+    }
+  }
+}
+
 /// The result of translating an [`EffectPath`] into the caller.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Resolved<'tcx> {
@@ -361,10 +360,12 @@ impl<'a, 'tcx> CallSite<'a, 'tcx> {
     })
   }
 
+  #[cfg(test)]
   pub fn abi(&self) -> CalleeAbi {
     self.abi
   }
 
+  #[cfg(test)]
   pub fn operands(&self) -> &CallOperands<'tcx> {
     &self.ops
   }
@@ -395,6 +396,7 @@ impl<'a, 'tcx> CallSite<'a, 'tcx> {
   /// The caller operands passed to callee parameters whose type is opaque to the
   /// callee (a type parameter, an alias or a trait object, possibly nested): the
   /// callee's analysis cannot see pointers hidden in them.
+  #[allow(dead_code)] // The interprocedural analysis does not use it yet.
   pub fn opaque_operands(&self, callee_body: &Body<'tcx>) -> SmallVec<[usize; 4]> {
     let mut operands = callee_body
       .args_iter()
@@ -946,6 +948,5 @@ fn caller(x: &mut dyn Tr, p: &mut m::P, w: &mut m::W<'_>, y: &mut i32) {
       elems: smallvec![PathElem::Deref, PathElem::AnyIndex],
       tail: PathTail::Complete,
     });
-    assert!(parsed.has_deref());
   }
 }

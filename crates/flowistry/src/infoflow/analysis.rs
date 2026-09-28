@@ -24,10 +24,11 @@ use smallvec::SmallVec;
 
 use super::{
   FlowResults,
+  callsite::FallbackReason,
   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
 };
 use crate::{
-  extensions::{ContextMode, MutabilityMode},
+  extensions::{ContextMode, MutabilityMode, REACHED_LIBRARY},
   mir::placeinfo::{NormPlace, PlaceInfo},
 };
 
@@ -269,6 +270,7 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     location: Location,
   ) {
     ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+      debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
       self.transfer_function(state, mutations, location)
     })
     .visit_statement(statement, location);
@@ -282,12 +284,27 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
   ) -> TerminatorEdges<'mir, 'tcx> {
     if matches!(terminator.kind, TerminatorKind::Call { .. })
       && self.place_info.mode().context_mode == ContextMode::Recurse
-      && self.recurse_into_call(state, &terminator.kind, location)
     {
-      return terminator.edges();
+      match self.recurse_into_call(&terminator.kind) {
+        Ok(mutations) => {
+          self.transfer_function(state, mutations, location);
+          return terminator.edges();
+        }
+        Err(reason) => {
+          debug!("  Not recursing into call: {reason:?}");
+          if reason == FallbackReason::NotLocal {
+            REACHED_LIBRARY.get(|reached_library| {
+              if let Some(reached_library) = reached_library {
+                *reached_library.borrow_mut() = true;
+              }
+            });
+          }
+        }
+      }
     }
 
     ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+      debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
       self.transfer_function(state, mutations, location)
     })
     .visit_terminator(terminator, location);
@@ -302,4 +319,25 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     _return_places: CallReturnPlaces<'_, 'tcx>,
   ) {
   }
+}
+
+/// Whether no two definite writes of a batch overlap.
+///
+/// `transfer_function` applies a batch sequentially, and a definite write clears the
+/// place it writes, so overlapping definite writes would depend on their order. The
+/// modular approximation never produces them (callee effects are ordered instead).
+fn definite_writes_disjoint<'tcx>(mutations: &[Mutation<'tcx>]) -> bool {
+  let definite = mutations
+    .iter()
+    .filter(|mt| mt.status() == MutationStatus::Definitely)
+    .map(|mt| mt.mutated)
+    .collect::<SmallVec<[_; 8]>>();
+  let is_prefix = |a: &Place<'tcx>, b: &Place<'tcx>| {
+    a.local == b.local && b.projection.starts_with(a.projection)
+  };
+  definite.iter().enumerate().all(|(i, a)| {
+    definite[i + 1 ..]
+      .iter()
+      .all(|b| !is_prefix(a, b) && !is_prefix(b, a))
+  })
 }

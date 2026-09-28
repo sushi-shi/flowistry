@@ -1,4 +1,8 @@
-#![allow(unused)]
+//! Interprocedural analysis: in
+//! [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse), a call to a
+//! local function is analyzed by computing the flow of the callee's body and
+//! translating its effects on the return place and on pointed-to arguments into
+//! mutations of the caller.
 
 use log::{debug, info};
 use rustc_middle::{
@@ -6,81 +10,148 @@ use rustc_middle::{
   ty::{ClosureKind, GenericArgKind, TyKind},
 };
 use rustc_mir_dataflow::JoinSemiLattice;
-use rustc_utils::{PlaceExt, mir::borrowck_facts::get_body_with_borrowck_facts};
+use rustc_utils::mir::{
+  borrowck_facts::get_body_with_borrowck_facts, location_or_arg::index::LocationOrArgSet,
+};
+use smallvec::{SmallVec, smallvec};
 
-use super::{BODY_STACK, analysis::FlowAnalysis};
+use super::{
+  BODY_STACK, FlowResults,
+  analysis::FlowAnalysis,
+  callsite::{
+    CallSite, CalleeRow, EffectPath, FallbackReason, Resolved, RowRole, Target,
+  },
+};
 use crate::{
-  extensions::REACHED_LIBRARY,
   infoflow::{
     FlowDomain,
     mutation::{CalleeEffect, Mutation, MutationKind, Precision},
   },
-  mir::utils,
+  mir::utils::{self, ErasedTy},
 };
 
+/// The state of a callee at its exits (the join of its states at every `return`).
+///
+/// Its rows are places of the callee body, readable only as [`CalleeRow`]s, so they
+/// cannot be confused with rows of the caller's state.
+struct CalleeExitState<'tcx> {
+  state: FlowDomain<'tcx>,
+}
+
+impl<'tcx> CalleeExitState<'tcx> {
+  fn new(flow: &FlowResults<'_, 'tcx>, body: &Body<'tcx>) -> Self {
+    let mut state = FlowDomain::new(flow.analysis.location_domain());
+    let return_locs = body
+      .basic_blocks
+      .iter_enumerated()
+      .filter_map(|(bb, data)| match data.terminator().kind {
+        TerminatorKind::Return => Some(body.terminator_loc(bb)),
+        _ => None,
+      });
+    for loc in return_locs {
+      state.join(flow.state_at(loc));
+    }
+    CalleeExitState { state }
+  }
+
+  fn rows(&self) -> impl Iterator<Item = (CalleeRow<'tcx>, &LocationOrArgSet)> + '_ {
+    self
+      .state
+      .rows()
+      .map(|(row, deps)| (CalleeRow::new(*row), deps))
+  }
+
+  fn deps(&self, row: CalleeRow<'tcx>) -> &LocationOrArgSet {
+    self.state.row_set(&row.key())
+  }
+
+  /// Whether the callee may have written the row.
+  ///
+  /// Arguments always depend on their own synthetic location, so a row with more than
+  /// one dependency was written. FIXME: a row written with only its own argument as
+  /// a dependency is considered unwritten.
+  fn written_in_callee(&self, row: CalleeRow<'tcx>) -> bool {
+    self.deps(row).len() > 1
+  }
+}
+
+/// What the caller learns from one row of the callee's exit state.
+///
+/// This is the export policy of the interprocedural analysis, decided by [`export`].
+enum RowExport {
+  /// The row is not observable by the caller.
+  Hidden,
+  /// The caller place of the row can be an input of callee effects, but the callee
+  /// did not write it (or its writes are invisible to the caller).
+  Source(EffectPath),
+  /// The callee wrote the row, which the caller observes.
+  Effect(EffectPath, EffectKind),
+}
+
+#[derive(Clone, Copy, Debug)]
+enum EffectKind {
+  Return,
+  ArgPointee,
+}
+
+impl RowExport {
+  fn source(&self) -> Option<&EffectPath> {
+    match self {
+      RowExport::Hidden => None,
+      RowExport::Source(path) | RowExport::Effect(path, _) => Some(path),
+    }
+  }
+}
+
+/// The export policy: which callee rows become caller effects or inputs.
+fn export(role: RowRole, row_ty: ErasedTy<'_>, written: bool) -> RowExport {
+  // Unit rows carry no data.
+  if row_ty.is_unit() {
+    return RowExport::Hidden;
+  }
+  match role {
+    RowRole::Internal => RowExport::Hidden,
+    // The return place is always written by the time the callee returns.
+    RowRole::Return(path) => RowExport::Effect(path, EffectKind::Return),
+    RowRole::ArgPointee(path) if written => {
+      RowExport::Effect(path, EffectKind::ArgPointee)
+    }
+    RowRole::ArgPointee(path) => RowExport::Source(path),
+    // Writes to a parameter itself are local to the callee.
+    RowRole::ArgDirect(path) => RowExport::Source(path),
+  }
+}
+
 impl<'tcx> FlowAnalysis<'_, 'tcx> {
+  /// Computes the mutations of a call by analyzing the callee, or says why the call
+  /// must be analyzed with the modular approximation instead.
   pub(crate) fn recurse_into_call(
     &self,
-    state: &mut FlowDomain<'tcx>,
     call: &TerminatorKind<'tcx>,
-    location: Location,
-  ) -> bool {
+  ) -> Result<Vec<Mutation<'tcx>>, FallbackReason> {
     let tcx = self.tcx;
-    let (func, parent_args, destination) = match call {
-      TerminatorKind::Call {
-        func,
-        args,
-        destination,
-        ..
-      } => (func, args, destination),
-      _ => unreachable!(),
+    let TerminatorKind::Call { func, args, .. } = call else {
+      return Err(FallbackReason::NotACall);
     };
     debug!("Checking whether can recurse into {func:?}");
 
-    let func = match func.constant() {
-      Some(func) => func,
-      None => {
-        debug!("  Func is not constant");
-        return false;
-      }
+    let func = func.constant().ok_or(FallbackReason::FuncNotConstant)?;
+    let TyKind::FnDef(def_id, _) = func.const_.ty().kind() else {
+      return Err(FallbackReason::NotFnDef);
     };
-
-    let def_id = match func.const_.ty().kind() {
-      TyKind::FnDef(def_id, _) => def_id,
-      _ => {
-        debug!("  Func is not a FnDef");
-        return false;
-      }
-    };
+    let def_id = *def_id;
 
     // If a function returns never (fn () -> !) then there are no exit points,
     // so we can't analyze effects on exit
-    let fn_sig = tcx.fn_sig(*def_id);
+    let fn_sig = tcx.fn_sig(def_id);
     if fn_sig.skip_binder().output().skip_binder().is_never() {
-      debug!("  Func returns never");
-      return false;
+      return Err(FallbackReason::ReturnsNever);
     }
 
-    let node = match tcx.hir_get_if_local(*def_id) {
-      Some(node) => node,
-      None => {
-        debug!("  Func is not in local crate");
-        REACHED_LIBRARY.get(|reached_library| {
-          if let Some(reached_library) = reached_library {
-            *reached_library.borrow_mut() = true;
-          }
-        });
-        return false;
-      }
-    };
-
-    let body_id = match node.body_id() {
-      Some(body_id) => body_id,
-      None => {
-        debug!("  Func does not have a BodyId");
-        return false;
-      }
-    };
+    let node = tcx
+      .hir_get_if_local(def_id)
+      .ok_or(FallbackReason::NotLocal)?;
+    let body_id = node.body_id().ok_or(FallbackReason::NoBody)?;
 
     // TODO(wcrichto, 2024-12-02): mir_unsafety_check_result got removed, need to find a replacement
     // let unsafety = tcx.mir_unsafety_check_result(def_id.expect_local());
@@ -89,8 +160,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     //   return false;
     // }
 
-    let parent_arg_places = utils::arg_places(parent_args);
-    let any_closure_inputs = parent_arg_places.iter().any(|(_, place)| {
+    let any_closure_inputs = utils::arg_places(args).iter().any(|(_, place)| {
       let ty = place.ty(self.body.local_decls(), tcx).ty;
       ty.walk().any(|arg| match arg.kind() {
         GenericArgKind::Type(ty) => match ty.kind() {
@@ -104,139 +174,94 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       })
     });
     if any_closure_inputs {
-      debug!("  Func has closure inputs");
-      return false;
+      return Err(FallbackReason::FnMutOrOnceClosureArg);
     }
 
-    let recursive = BODY_STACK.with(|body_stack| {
-      let body_stack = body_stack.borrow();
-      body_stack.contains(&body_id)
-    });
+    let recursive = BODY_STACK.with(|body_stack| body_stack.borrow().contains(&body_id));
     if recursive {
-      debug!("  Func is a recursive call");
-      return false;
+      return Err(FallbackReason::RecursiveCall);
     }
 
     let body_with_facts = get_body_with_borrowck_facts(tcx, def_id.expect_local());
+    let body = &body_with_facts.body;
+    let site = CallSite::parse(tcx, self.def_id, self.body, call, def_id, body)?;
+
     let mut recurse_cache = self.recurse_cache.borrow_mut();
     let flow = recurse_cache.entry(body_id).or_insert_with(|| {
-      info!("Recursing into {}", tcx.def_path_debug_str(*def_id));
+      info!("Recursing into {}", tcx.def_path_debug_str(def_id));
       super::compute_flow_with_mode(tcx, body_id, body_with_facts, self.place_info.mode())
     });
-    let body = &body_with_facts.body;
+    let exit = CalleeExitState::new(flow, body);
 
-    let mut return_state = FlowDomain::new(flow.analysis.location_domain());
-    {
-      let return_locs = body
-        .basic_blocks
-        .iter_enumerated()
-        .filter_map(|(bb, data)| match data.terminator().kind {
-          TerminatorKind::Return => Some(body.terminator_loc(bb)),
-          _ => None,
-        });
-
-      for loc in return_locs {
-        return_state.join(flow.state_at(loc));
-      }
-    };
-
-    let translate_child_to_parent = |child: Place<'tcx>,
-                                     mutated: bool|
-     -> Option<(Place<'tcx>, Precision)> {
-      let child_ty = child.ty(body.local_decls(), tcx).ty;
-      if child_ty.is_unit() {
-        return None;
-      }
-
-      let can_translate = child.local == RETURN_PLACE
-        || (child.is_arg(body) && (!mutated || child.is_indirect()));
-      if !can_translate {
-        return None;
-      }
-
-      // For example, say we're calling f(_5.0) and child = (*_1).1 where
-      // .1 is private to parent. Then:
-      //    parent_toplevel_arg = _5.0
-      //    child.projection = (*□).1
-      //    parent_arg_projected = (*_5.0)
-
-      let parent_toplevel_arg = if child.local == RETURN_PLACE {
-        *destination
-      } else {
-        parent_arg_places
-          .iter()
-          .find(|(j, _)| child.local.as_usize() - 1 == *j)
-          .map(|(_, place)| *place)?
-      };
-
-      let mut projection = parent_toplevel_arg.projection.to_vec();
-      let mut ty = parent_toplevel_arg.ty(self.body.local_decls(), tcx);
-      log::debug!("Adding child {child:?} to parent {parent_toplevel_arg:?}");
-      let mut precision = Precision::Exact;
-      for elem in child.projection.iter() {
-        // Don't continue if we reach a private field
-        if let ProjectionElem::Field(field, _) = elem
-          && let Some(adt_def) = ty.ty.ty_adt_def()
-          && let field = adt_def.all_fields().nth(field.as_usize()).unwrap()
-          && !field.vis.is_accessible_from(self.def_id, self.tcx)
-        {
-          precision = Precision::Coarsened;
-          break;
-        }
-
-        // ty = ty.projection_ty_core(tcx, elem, structurally_normalize, handle_field, handle_opaque_cast_and_subtype)
-        ty = ty.projection_ty(tcx, elem);
-        // ty = ty.projection_ty_core(
-        //   tcx,
-        //   &elem,
-        //   |_, field, _| ty.field_ty(tcx, field),
-        //   |_, ty| ty,
-        // );
-        let elem = match elem {
-          ProjectionElem::Field(field, _) => ProjectionElem::Field(field, ty.ty),
-          elem => elem,
-        };
-        projection.push(elem);
-      }
-
-      let parent_arg_projected = Place::make(parent_toplevel_arg.local, &projection, tcx);
-      Some((parent_arg_projected, precision))
-    };
-
-    let mutations = return_state.rows().filter_map(|(child, _)| {
-      let (parent, precision) = translate_child_to_parent(child.as_place_unchecked(), true)?;
-
-      let was_return: bool = child.local() == RETURN_PLACE;
-      // > 1 because arguments will always have their synthetic location in their dep set
-      let was_mutated = return_state.row_set(child).len() > 1;
-      if !was_mutated && !was_return {
-        return None;
-      }
-
-      let child_deps = return_state.row_set(child);
-      let parent_deps = return_state
-        .rows()
-        .filter(|(_, deps)| child_deps.is_superset(deps))
-        .filter_map(|(row, _)| translate_child_to_parent(row.as_place_unchecked(), false).map(|(place, _)| place))
-        .collect::<Vec<_>>();
-
-      debug!(
-        "child {child:?} \n  / child_deps {child_deps:?}\n-->\nparent {parent:?}\n   / parent_deps {parent_deps:?}"
-      );
-
-      Some(Mutation {
-        mutated: parent,
-        inputs: parent_deps.clone(),
-        kind: MutationKind::CalleeEffect(if was_return {
-          CalleeEffect::Return(precision)
-        } else {
-          CalleeEffect::ArgPointee(precision)
-        }),
+    let rows = exit
+      .rows()
+      .map(|(row, _)| {
+        let role = site.classify(row);
+        let export = export(role, row.ty(body, tcx), exit.written_in_callee(row));
+        (row, export)
       })
-    }).collect::<Vec<_>>();
+      .collect::<Vec<_>>();
 
-    self.transfer_function(state, mutations, location);
+    // Emit parents before their children, in a deterministic order.
+    let mut effects = rows
+      .iter()
+      .filter_map(|(row, export)| match export {
+        RowExport::Effect(path, kind) => Some((path, *kind, *row)),
+        RowExport::Hidden | RowExport::Source(_) => None,
+      })
+      .collect::<Vec<_>>();
+    effects.sort_by(|(p1, ..), (p2, ..)| (p1.elems.len(), p1).cmp(&(p2.elems.len(), p2)));
 
-    true
+    let mutations = effects
+      .into_iter()
+      .flat_map(|(path, kind, row)| {
+        let Resolved::Target(target) = site.translate(path) else {
+          return SmallVec::<[Mutation<'tcx>; 4]>::new();
+        };
+
+        let row_deps = exit.deps(row);
+        let inputs = rows
+          .iter()
+          .filter(|(source, _)| row_deps.is_superset(exit.deps(*source)))
+          .filter_map(|(_, export)| export.source())
+          .filter_map(|source| match site.translate(source) {
+            Resolved::Target(target) => Some(target.place()),
+            Resolved::NoCallerState => None,
+          })
+          .collect::<Vec<_>>();
+
+        let precision = match target {
+          Target::Exact(_) => Precision::Exact,
+          Target::Coarsened { .. } => Precision::Coarsened,
+        };
+        let effect = match kind {
+          EffectKind::Return => CalleeEffect::Return(precision),
+          EffectKind::ArgPointee => CalleeEffect::ArgPointee(precision),
+        };
+        debug!("callee row {row:?} -> {target:?}, inputs {inputs:?}");
+
+        self
+          .write_targets(target)
+          .into_iter()
+          .map(|mutated| Mutation {
+            mutated,
+            inputs: inputs.clone(),
+            kind: MutationKind::CalleeEffect(effect),
+          })
+          .collect()
+      })
+      .collect::<Vec<_>>();
+
+    Ok(mutations)
+  }
+
+  /// The caller places written by a callee effect on `target`.
+  fn write_targets(&self, target: Target<'tcx>) -> SmallVec<[Place<'tcx>; 4]> {
+    match target {
+      Target::Exact(place) => smallvec![place],
+      // FIXME: an effect coarsened through a pointer may write data reachable from
+      // `place`, which is not written here.
+      Target::Coarsened { place, lost: _ } => smallvec![place],
+    }
   }
 }

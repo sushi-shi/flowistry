@@ -59,12 +59,6 @@ impl<'tcx> NormPlace<'tcx> {
   pub fn ty(self, body: &Body<'tcx>, tcx: TyCtxt<'tcx>) -> ErasedTy<'tcx> {
     ErasedTy::new(tcx, self.0.ty(body.local_decls(), tcx).ty)
   }
-
-  /// Escape hatch for the interprocedural analysis, which still reads callee rows
-  /// as places of the callee body.
-  pub(crate) fn as_place_unchecked(self) -> Place<'tcx> {
-    self.0
-  }
 }
 
 /// Utilities for analyzing places: children, aliases, etc.
