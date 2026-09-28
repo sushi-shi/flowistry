@@ -24,7 +24,7 @@ use rustc_utils::{
 };
 
 use super::{aliases::Aliases, utils::PlaceSet};
-use crate::extensions::{MutabilityMode, is_extension_active};
+use crate::extensions::{EvalMode, MutabilityMode};
 
 /// A place in normal form, used as the row key of a
 /// [`FlowDomain`](crate::infoflow::FlowDomain).
@@ -64,6 +64,7 @@ pub struct PlaceInfo<'a, 'tcx> {
   pub(crate) body: &'a Body<'tcx>,
   pub(crate) def_id: DefId,
   location_domain: Rc<LocationOrArgDomain>,
+  mode: EvalMode,
 
   // Core computed data structure
   aliases: Aliases<'a, 'tcx>,
@@ -83,16 +84,31 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
     Rc::new(LocationOrArgDomain::from_iter(domain))
   }
 
-  /// Computes all the metadata about places used within the infoflow analysis.
+  /// Computes all the metadata about places used within the infoflow analysis,
+  /// with the ambient [`EvalMode`] (see [`EvalMode::from_ambient`]).
+  ///
+  /// The mode is read once, here, and not when the returned value is queried.
   pub fn build(
     tcx: TyCtxt<'tcx>,
     def_id: DefId,
     body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
   ) -> Self {
+    Self::build_with_mode(tcx, def_id, body_with_facts, EvalMode::from_ambient())
+  }
+
+  /// Computes all the metadata about places used within the infoflow analysis,
+  /// with an explicit [`EvalMode`].
+  pub fn build_with_mode(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+    mode: EvalMode,
+  ) -> Self {
     block_timer!("aliases");
     let body = &body_with_facts.body;
     let location_domain = Self::build_location_arg_domain(body);
-    let aliases = Aliases::build(tcx, def_id, body_with_facts);
+    let aliases =
+      Aliases::build_with_mode(tcx, def_id, body_with_facts, mode.pointer_mode);
 
     PlaceInfo {
       aliases,
@@ -100,11 +116,17 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
       body,
       def_id,
       location_domain,
+      mode,
       aliases_cache: Cache::default(),
       normalized_cache: CopyCache::default(),
       conflicts_cache: Cache::default(),
       reachable_cache: Cache::default(),
     }
+  }
+
+  /// The [`EvalMode`] this analysis was built with.
+  pub fn mode(&self) -> EvalMode {
+    self.mode
   }
 
   /// Normalizes a place via [`PlaceExt::normalize`] (cached).
@@ -211,6 +233,7 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
       aliases: &self.aliases,
       unknown_region: Region::new_var(self.tcx, UNKNOWN_REGION),
       target_mutability: mutability,
+      mutability_mode: self.mode.mutability_mode,
       stack: vec![],
       loans: PlaceSet::default(),
     };
@@ -254,6 +277,7 @@ struct LoanCollector<'a, 'tcx> {
   aliases: &'a Aliases<'a, 'tcx>,
   unknown_region: Region<'tcx>,
   target_mutability: Mutability,
+  mutability_mode: MutabilityMode,
   stack: Vec<Mutability>,
   loans: PlaceSet<'tcx>,
 }
@@ -291,24 +315,24 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for LoanCollector<'_, 'tcx> {
     };
     if let Some(loans) = self.aliases.loans.get(&region) {
       let under_immut_ref = self.stack.contains(&Mutability::Not);
-      let ignore_mut =
-        is_extension_active(|mode| mode.mutability_mode == MutabilityMode::IgnoreMut);
       self
         .loans
-        .extend(loans.iter().filter_map(|(place, mutability)| {
-          if ignore_mut {
-            return Some(place);
-          }
-          let loan_mutability = if under_immut_ref {
-            Mutability::Not
-          } else {
-            *mutability
-          };
-          self
-            .target_mutability
-            .is_permissive_as(loan_mutability)
-            .then_some(place)
-        }))
+        .extend(loans.iter().filter_map(
+          |(place, mutability)| match self.mutability_mode {
+            MutabilityMode::IgnoreMut => Some(place),
+            MutabilityMode::DistinguishMut => {
+              let loan_mutability = if under_immut_ref {
+                Mutability::Not
+              } else {
+                *mutability
+              };
+              self
+                .target_mutability
+                .is_permissive_as(loan_mutability)
+                .then_some(place)
+            }
+          },
+        ))
     }
 
     ControlFlow::Continue(())

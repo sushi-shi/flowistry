@@ -27,7 +27,7 @@ use super::{
   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
 };
 use crate::{
-  extensions::{ContextMode, MutabilityMode, is_extension_active},
+  extensions::{ContextMode, MutabilityMode},
   mir::placeinfo::{NormPlace, PlaceInfo},
 };
 
@@ -199,8 +199,10 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       }
     }
 
-    let ignore_mut =
-      is_extension_active(|mode| mode.mutability_mode == MutabilityMode::IgnoreMut);
+    let ignore_mut = match self.place_info.mode().mutability_mode {
+      MutabilityMode::IgnoreMut => true,
+      MutabilityMode::DistinguishMut => false,
+    };
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
       // Clear sub-places of mutated place (if sound to do so)
       if matches!(mt.status, MutationStatus::Definitely)
@@ -279,7 +281,7 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     location: Location,
   ) -> TerminatorEdges<'mir, 'tcx> {
     if matches!(terminator.kind, TerminatorKind::Call { .. })
-      && is_extension_active(|mode| mode.context_mode == ContextMode::Recurse)
+      && self.place_info.mode().context_mode == ContextMode::Recurse
       && self.recurse_into_call(state, &terminator.kind, location)
     {
       return terminator.edges();

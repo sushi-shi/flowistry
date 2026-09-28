@@ -84,9 +84,26 @@ impl Default for EvalMode {
   }
 }
 
+impl EvalMode {
+  /// Reads the ambient mode set through [`EVAL_MODE`], or the default mode if unset.
+  ///
+  /// This is the single place where the analysis reads the ambient configuration:
+  /// [`compute_flow`](crate::infoflow::compute_flow) and the `build` constructors of
+  /// [`PlaceInfo`](crate::mir::placeinfo::PlaceInfo) and
+  /// [`Aliases`](crate::mir::aliases::Aliases) call it once and then pass the mode down
+  /// explicitly. An unset [`EVAL_MODE`] behaves exactly like [`EvalMode::default`].
+  pub fn from_ambient() -> Self {
+    EVAL_MODE.copied().unwrap_or_default()
+  }
+}
+
 fluid_let!(pub static EVAL_MODE: EvalMode);
 fluid_let!(pub static REACHED_LIBRARY: RefCell<bool>);
 
+/// Returns whether the ambient [`EVAL_MODE`] is set and satisfies `f`.
+///
+/// The analysis itself no longer reads the ambient mode through this function; see
+/// [`EvalMode::from_ambient`].
 pub fn is_extension_active(f: impl Fn(EvalMode) -> bool) -> bool {
   EVAL_MODE.copied().map(f).unwrap_or(false)
 }

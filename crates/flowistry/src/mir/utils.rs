@@ -9,7 +9,7 @@ use rustc_middle::{
 use rustc_span::Spanned;
 use rustc_utils::{BodyExt, OperandExt, PlaceExt};
 
-use crate::extensions::{MutabilityMode, is_extension_active};
+use crate::extensions::{EvalMode, MutabilityMode};
 
 /// An unordered collections of MIR [`Place`]s.
 ///
@@ -19,14 +19,18 @@ use crate::extensions::{MutabilityMode, is_extension_active};
 pub type PlaceSet<'tcx> = HashSet<Place<'tcx>>;
 
 /// Given the arguments to a function, returns all projections of the arguments that are mutable pointers.
+///
+/// Reads the ambient [`MutabilityMode`] (see [`EvalMode::from_ambient`]).
 pub fn arg_mut_ptrs<'tcx>(
   args: &[(usize, Place<'tcx>)],
   tcx: TyCtxt<'tcx>,
   body: &Body<'tcx>,
   def_id: DefId,
 ) -> Vec<(usize, Place<'tcx>)> {
-  let ignore_mut =
-    is_extension_active(|mode| mode.mutability_mode == MutabilityMode::IgnoreMut);
+  let ignore_mut = match EvalMode::from_ambient().mutability_mode {
+    MutabilityMode::IgnoreMut => true,
+    MutabilityMode::DistinguishMut => false,
+  };
   args
     .iter()
     .flat_map(|(i, place)| {

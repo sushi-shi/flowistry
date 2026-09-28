@@ -121,7 +121,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     let mut recurse_cache = self.recurse_cache.borrow_mut();
     let flow = recurse_cache.entry(body_id).or_insert_with(|| {
       info!("Recursing into {}", tcx.def_path_debug_str(*def_id));
-      super::compute_flow(tcx, body_id, body_with_facts)
+      super::compute_flow_with_mode(tcx, body_id, body_with_facts, self.place_info.mode())
     });
     let body = &body_with_facts.body;
 

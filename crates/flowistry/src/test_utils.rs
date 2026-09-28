@@ -14,6 +14,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 pub use rustc_utils::test_utils::{compare_ranges, fmt_ranges, parse_ranges};
 use rustc_utils::{
+  SpanExt,
   mir::borrowck_facts,
   source_map::{
     range::{ByteRange, CharPos, ToSpan},
@@ -24,7 +25,7 @@ use rustc_utils::{
 
 use crate::{
   extensions::{ContextMode, EVAL_MODE, EvalMode, MutabilityMode, PointerMode},
-  infoflow,
+  infoflow::{self, Direction},
 };
 
 pub fn compile_body_with_range(
@@ -37,13 +38,33 @@ pub fn compile_body_with_range(
     ByteRange,
   ) + Send,
 ) {
+  compile_body_with_range_and_args(input, compute_target, &[], callback)
+}
+
+/// Like [`compile_body_with_range`], with extra rustc arguments.
+///
+/// For example, pass `-Cincremental=<dir>` to compile with incremental compilation
+/// enabled, as the IDE does.
+pub fn compile_body_with_range_and_args(
+  input: impl Into<String>,
+  compute_target: impl FnOnce() -> ByteRange + Send,
+  args: &[String],
+  callback: impl for<'tcx> FnOnce(
+    TyCtxt<'tcx>,
+    BodyId,
+    &'tcx BodyWithBorrowckFacts<'tcx>,
+    ByteRange,
+  ) + Send,
+) {
   borrowck_facts::enable_mir_simplification();
-  CompileBuilder::new(input).compile(|result| {
-    let target = compute_target();
-    let tcx = result.tcx;
-    let (body_id, body_with_facts) = result.as_body_with_range(target);
-    callback(tcx, body_id, body_with_facts, target)
-  })
+  CompileBuilder::new(input)
+    .with_args(args.iter().cloned())
+    .compile(|result| {
+      let target = compute_target();
+      let tcx = result.tcx;
+      let (body_id, body_with_facts) = result.as_body_with_range(target);
+      callback(tcx, body_id, body_with_facts, target)
+    })
 }
 
 pub fn compile_body(
@@ -98,6 +119,105 @@ pub fn bless(
   Ok(())
 }
 
+/// Reads the [`EvalMode`] of a test fixture from its first line, e.g. `/* recurse */`.
+pub fn eval_mode_from_header(input: &str) -> EvalMode {
+  let header = input.lines().next().unwrap_or_default();
+  let mut mode = EvalMode::default();
+  if header.starts_with("/*") {
+    if header.contains("recurse") {
+      mode.context_mode = ContextMode::Recurse;
+    }
+    if header.contains("ignoremut") {
+      mode.mutability_mode = MutabilityMode::IgnoreMut;
+    }
+    if header.contains("conservative") {
+      mode.pointer_mode = PointerMode::Conservative;
+    }
+  }
+  mode
+}
+
+/// Slices the places in `target` in the given direction, as the slicing fixtures do.
+pub fn slice_spans<'tcx>(
+  results: &infoflow::FlowResults<'_, 'tcx>,
+  spanner: &Spanner<'tcx>,
+  target: Span,
+  direction: Direction,
+) -> Vec<Span> {
+  let places = spanner.span_to_places(target);
+  let targets = places
+    .iter()
+    .map(|mir_span| {
+      mir_span
+        .locations
+        .iter()
+        .map(|location| (mir_span.place, *location))
+        .collect::<Vec<_>>()
+    })
+    .collect();
+  log::debug!("targets={targets:#?}");
+
+  let deps = infoflow::compute_dependency_spans(results, targets, direction, spanner);
+
+  Span::merge_overlaps(deps.into_iter().flatten().collect())
+}
+
+/// How a test chooses the [`EvalMode`] of an analysis.
+#[derive(Clone, Copy, Debug)]
+pub enum ModeSource {
+  /// Pass the mode to [`infoflow::compute_flow_with_mode`], with [`EVAL_MODE`] unset.
+  Explicit(EvalMode),
+  /// Call [`infoflow::compute_flow`] with [`EVAL_MODE`] set to the given mode (or unset).
+  Ambient(Option<EvalMode>),
+}
+
+/// Backward-slices the `` `(target)` `` of a fixture and returns the sorted byte offsets
+/// of the slice, computing the flow as chosen by `source`.
+pub fn backward_slice_offsets(
+  input: &str,
+  source: ModeSource,
+  args: &[String],
+) -> Vec<(usize, usize)> {
+  let (input_clean, _) = parse_ranges(input, vec![("`(", ")`")]).unwrap();
+  let output = std::sync::Mutex::new(Vec::new());
+  compile_body_with_range_and_args(
+    input_clean,
+    || {
+      let (_, input_ranges) = parse_ranges(input, vec![("`(", ")`")]).unwrap();
+      input_ranges["`("][0]
+    },
+    args,
+    |tcx, body_id, body_with_facts, target| {
+      let target = target.to_span(tcx).unwrap();
+      let results = match source {
+        ModeSource::Explicit(mode) => {
+          assert!(EVAL_MODE.copied().is_none());
+          infoflow::compute_flow_with_mode(tcx, body_id, body_with_facts, mode)
+        }
+        ModeSource::Ambient(Some(mode)) => {
+          fluid_set!(EVAL_MODE, mode);
+          infoflow::compute_flow(tcx, body_id, body_with_facts)
+        }
+        ModeSource::Ambient(None) => {
+          assert!(EVAL_MODE.copied().is_none());
+          infoflow::compute_flow(tcx, body_id, body_with_facts)
+        }
+      };
+      let spanner = Spanner::new(tcx, body_id, &body_with_facts.body);
+      let mut offsets = slice_spans(&results, &spanner, target, Direction::Backward)
+        .into_iter()
+        .map(|span| {
+          let range = ByteRange::from_span(span, tcx.sess.source_map()).unwrap();
+          (range.start.0, range.end.0)
+        })
+        .collect::<Vec<_>>();
+      offsets.sort();
+      *output.lock().unwrap() = offsets;
+    },
+  );
+  output.into_inner().unwrap()
+}
+
 pub fn test_command_output(
   path: &Path,
   expected: Option<&Path>,
@@ -125,24 +245,15 @@ pub fn test_command_output(
         input_ranges["`("][0]
       },
       |tcx, body_id, body_with_facts, target: ByteRange| {
-        let header = input.lines().next().unwrap();
-        let mut mode = EvalMode::default();
-        if header.starts_with("/*") {
-          if header.contains("recurse") {
-            mode.context_mode = ContextMode::Recurse;
-          }
-          if header.contains("ignoremut") {
-            mode.mutability_mode = MutabilityMode::IgnoreMut;
-          }
-          if header.contains("conservative") {
-            mode.pointer_mode = PointerMode::Conservative;
-          }
-        }
+        let mode = eval_mode_from_header(&input);
 
+        // The analysis receives the mode explicitly; the ambient mode is still set so
+        // that code reading it (e.g. `utils::arg_mut_ptrs`) sees the same mode.
         fluid_set!(EVAL_MODE, &mode);
 
         let target = target.to_span(tcx).unwrap();
-        let results = infoflow::compute_flow(tcx, body_id, body_with_facts);
+        let results =
+          infoflow::compute_flow_with_mode(tcx, body_id, body_with_facts, mode);
         let spanner = Spanner::new(tcx, body_id, &body_with_facts.body);
 
         let actual = output_fn(results, spanner, target)

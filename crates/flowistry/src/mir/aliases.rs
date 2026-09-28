@@ -21,7 +21,7 @@ use rustc_middle::{
 use rustc_utils::{PlaceExt, mir::place::UNKNOWN_REGION, timer::elapsed};
 
 use crate::{
-  extensions::{PointerMode, is_extension_active},
+  extensions::{EvalMode, PointerMode},
   mir::utils::{AsyncHack, PlaceSet},
 };
 
@@ -69,13 +69,27 @@ rustc_index::newtype_index! {
 }
 
 impl<'a, 'tcx> Aliases<'a, 'tcx> {
-  /// Runs the alias analysis on a given `body_with_facts`.
+  /// Runs the alias analysis on a given `body_with_facts`, with the ambient
+  /// [`PointerMode`] (see [`EvalMode::from_ambient`]).
   pub fn build(
     tcx: TyCtxt<'tcx>,
     def_id: DefId,
     body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
   ) -> Self {
-    let loans = Self::compute_loans(tcx, def_id, body_with_facts, |_, _, _| true);
+    let pointer_mode = EvalMode::from_ambient().pointer_mode;
+    Self::build_with_mode(tcx, def_id, body_with_facts, pointer_mode)
+  }
+
+  /// Runs the alias analysis on a given `body_with_facts` with an explicit
+  /// [`PointerMode`].
+  pub fn build_with_mode(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+    pointer_mode: PointerMode,
+  ) -> Self {
+    let loans =
+      Self::compute_loans(tcx, def_id, body_with_facts, pointer_mode, |_, _, _| true);
     Aliases {
       tcx,
       body: &body_with_facts.body,
@@ -86,13 +100,15 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
   /// Alternative constructor if you need to filter out certain borrowck facts.
   ///
   /// Just use [`Aliases::build`] unless you know what you're doing.
+  /// Uses the ambient [`PointerMode`] (see [`EvalMode::from_ambient`]).
   pub fn build_with_fact_selection(
     tcx: TyCtxt<'tcx>,
     def_id: DefId,
     body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
     selector: impl Fn(RegionVid, RegionVid, BorrowckLocationIndex) -> bool,
   ) -> Self {
-    let loans = Self::compute_loans(tcx, def_id, body_with_facts, selector);
+    let pointer_mode = EvalMode::from_ambient().pointer_mode;
+    let loans = Self::compute_loans(tcx, def_id, body_with_facts, pointer_mode, selector);
     Aliases {
       tcx,
       body: &body_with_facts.body,
@@ -104,6 +120,7 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
     def_id: DefId,
     body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+    pointer_mode: PointerMode,
     constraint_selector: impl Fn(RegionVid, RegionVid, BorrowckLocationIndex) -> bool,
   ) -> LoanMap<'tcx> {
     let start = Instant::now();
@@ -153,7 +170,7 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
       subset.insert(static_region, a);
     }
 
-    if is_extension_active(|mode| mode.pointer_mode == PointerMode::Conservative) {
+    if pointer_mode == PointerMode::Conservative {
       // for all p1 : &'a T, p2: &'b T: subset('a, 'b).
       let mut region_to_pointers: HashMap<_, Vec<_>> = HashMap::default();
       for (region, places) in &all_pointers {
