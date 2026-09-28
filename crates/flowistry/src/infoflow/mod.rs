@@ -27,6 +27,7 @@ mod recursive;
 /// Using the metavariables in [the paper](https://arxiv.org/abs/2111.13662): for each
 /// [`LocationOrArg`](rustc_utils::mir::location_or_arg::LocationOrArg) $\ell$ in a [`Body`](rustc_middle::mir::Body) $f$,
 /// this type contains a [`FlowDomain`] $\Theta_\ell$ that maps from a [`Place`](rustc_middle::mir::Place) $p$
+/// (stored in normal form as a [`NormPlace`](crate::mir::placeinfo::NormPlace))
 /// to a [`LocationOrArgSet`](rustc_utils::mir::location_or_arg::index::LocationOrArgSet) $\kappa$. The domain of $\Theta_\ell$
 /// is all places that have been defined up to $\ell$. For each place, $\Theta_\ell(p)$ contains the set of locations
 /// (or arguments) that could influence the value of that place, i.e. the place's dependencies.

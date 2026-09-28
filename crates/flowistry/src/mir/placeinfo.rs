@@ -26,6 +26,38 @@ use rustc_utils::{
 use super::{aliases::Aliases, utils::PlaceSet};
 use crate::extensions::{MutabilityMode, is_extension_active};
 
+/// A place in normal form, used as the row key of a
+/// [`FlowDomain`](crate::infoflow::FlowDomain).
+///
+/// A `NormPlace` is produced only by [`PlaceInfo::normalize`], which erases regions,
+/// normalizes associated types, collapses every index projection to `[_0]` and drops
+/// subslices (see [`PlaceExt::normalize`]).
+///
+/// A `NormPlace` is *not* a valid place of the body: its types have no region
+/// variables, so alias and loan queries on it would silently find nothing. For that
+/// reason no API that takes a [`Place`] accepts a `NormPlace`, and there is no public
+/// conversion back to [`Place`].
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct NormPlace<'tcx>(Place<'tcx>);
+
+impl<'tcx> NormPlace<'tcx> {
+  /// The base local of the place.
+  pub fn local(self) -> Local {
+    self.0.local
+  }
+
+  /// The (normalized) projection of the place.
+  pub fn projection(self) -> &'tcx [PlaceElem<'tcx>] {
+    self.0.projection
+  }
+
+  /// Escape hatch for the interprocedural analysis, which still reads callee rows
+  /// as places of the callee body.
+  pub(crate) fn as_place_unchecked(self) -> Place<'tcx> {
+    self.0
+  }
+}
+
 /// Utilities for analyzing places: children, aliases, etc.
 pub struct PlaceInfo<'a, 'tcx> {
   pub(crate) tcx: TyCtxt<'tcx>,
@@ -37,8 +69,8 @@ pub struct PlaceInfo<'a, 'tcx> {
   aliases: Aliases<'a, 'tcx>,
 
   // Caching for derived analysis
-  normalized_cache: CopyCache<Place<'tcx>, Place<'tcx>>,
-  aliases_cache: Cache<Place<'tcx>, PlaceSet<'tcx>>,
+  normalized_cache: CopyCache<Place<'tcx>, NormPlace<'tcx>>,
+  aliases_cache: Cache<NormPlace<'tcx>, PlaceSet<'tcx>>,
   conflicts_cache: Cache<Place<'tcx>, PlaceSet<'tcx>>,
   reachable_cache: Cache<(Place<'tcx>, Mutability), PlaceSet<'tcx>>,
 }
@@ -77,11 +109,23 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
 
   /// Normalizes a place via [`PlaceExt::normalize`] (cached).
   ///
+  /// This is the only way to construct a [`NormPlace`], the row key of a
+  /// [`FlowDomain`](crate::infoflow::FlowDomain).
   /// See the `PlaceExt` documentation for details on how normalization works.
-  pub fn normalize(&self, place: Place<'tcx>) -> Place<'tcx> {
-    self
-      .normalized_cache
-      .get(&place, |place| place.normalize(self.tcx, self.def_id))
+  pub fn normalize(&self, place: Place<'tcx>) -> NormPlace<'tcx> {
+    self.normalized_cache.get(&place, |place| {
+      NormPlace(place.normalize(self.tcx, self.def_id))
+    })
+  }
+
+  /// Returns the [children](Self::children) of a normalized place, as row keys.
+  ///
+  /// The children are computed from the normalized place and are not renormalized.
+  pub(crate) fn norm_children(
+    &self,
+    place: NormPlace<'tcx>,
+  ) -> impl Iterator<Item = NormPlace<'tcx>> + use<'tcx> {
+    self.children(place.0).into_iter().map(NormPlace)
   }
 
   /// Computes the aliases of a place (cached).
@@ -353,6 +397,34 @@ fn main() {
           p.local("d").mk()
         },
       )
+    });
+  }
+
+  #[test]
+  fn test_normalize_collapses_indices() {
+    let input = r#"
+fn main() {
+  let x = [0, 1];
+  let i = 0;
+  let j = 1;
+  let a = x[i];
+  let b = x[j];
+}
+    "#;
+    placeinfo_harness(input, |tcx, body, place_info| {
+      let p = Placer::new(tcx, body);
+      let x = p.local("x");
+      let i = p.local("i").mk().local.as_usize();
+      let j = p.local("j").mk().local.as_usize();
+
+      let xi = place_info.normalize(x.index(i).mk());
+      let xj = place_info.normalize(x.index(j).mk());
+      assert_eq!(xi, xj);
+      assert_eq!(xi.local(), x.mk().local);
+      assert_eq!(xi.projection(), &[ProjectionElem::Index(
+        Local::from_usize(0)
+      )]);
+      assert_ne!(xi, place_info.normalize(x.mk()));
     });
   }
 }

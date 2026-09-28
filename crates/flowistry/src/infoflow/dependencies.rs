@@ -58,8 +58,7 @@ impl TargetDeps {
 
         let mut forward = LocationOrArgSet::new(location_domain);
         forward.insert_all();
-        for conflict in place_info.children(place_info.normalize(place)) {
-          // conflict should already be normalized because the input to aliases.children is normalized
+        for conflict in place_info.norm_children(place_info.normalize(place)) {
           let deps = state.row_set(&conflict);
           trace!("place={place:?}, conflict={conflict:?}, deps={deps:?}");
           forward.intersect(deps);

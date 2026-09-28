@@ -28,7 +28,7 @@ use super::{
 };
 use crate::{
   extensions::{ContextMode, MutabilityMode, is_extension_active},
-  mir::placeinfo::PlaceInfo,
+  mir::placeinfo::{NormPlace, PlaceInfo},
 };
 
 /// Represents the information flows at a given instruction. See [`FlowResults`] for a high-level explanation of this datatype.
@@ -37,7 +37,9 @@ use crate::{
 /// we use the bit-set data structures in [`rustc_index::bit_set`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_index/bit_set/index.html).
 /// However instead of using a bit-set directly, we use the [`indexical`] crate to map between raw indices and the objects they represent.
 ///
-/// The [`IndexMatrix`] maps from a [`Place`] to a [`LocationOrArgSet`] via the [`IndexMatrix::row_set`] method. The [`LocationOrArgSet`] is an
+/// The [`IndexMatrix`] maps from a [`NormPlace`] to a [`LocationOrArgSet`] via the [`IndexMatrix::row_set`] method. Rows are keyed by
+/// normalized places (see [`PlaceInfo::normalize`]), never by raw [`Place`]s: use [`PlaceInfo::normalize`] to compute the key of a place.
+/// The [`LocationOrArgSet`] is an
 /// [`IndexSet`](indexical::IndexSet) of locations (or arguments, see note below), which wraps a
 /// [`rustc_index::bit_set::HybridBitSet`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_index/bit_set/enum.HybridBitSet.html) and
 /// has roughly the same API. The [`indexical`] crate has a concept of an [`IndexedDomain`](indexical::IndexedDomain) to represent the mapping from
@@ -56,7 +58,7 @@ use crate::{
 /// information flow analysis: an instruction `bb[0]: _2 = _1` (where `_1` is an argument) would set $\Theta(\verb|_2|) = \Theta(\verb|_1|) \cup \\{\verb|bb0\[0\]|\\}\$.
 /// However, $\Theta(\verb|_1|)$ would be empty, so it would be imposible to determine that `_2` depends on `_1`. To solve this issue, we
 /// enrich the domain of locations with arguments, using the [`LocationOrArg`] type. Any dependency can be on *either* a location or an argument.
-pub type FlowDomain<'tcx> = IndexMatrix<Place<'tcx>, LocationOrArg>;
+pub type FlowDomain<'tcx> = IndexMatrix<NormPlace<'tcx>, LocationOrArg>;
 
 /// Data structure that holds context for performing the information flow analysis.
 pub struct FlowAnalysis<'a, 'tcx> {
