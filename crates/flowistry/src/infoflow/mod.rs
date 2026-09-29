@@ -27,6 +27,7 @@ mod callsite;
 mod dependencies;
 pub mod mutation;
 mod recursive;
+mod simple_args;
 
 /// The output of the information flow analysis.
 ///

@@ -1,5 +1,7 @@
+//! Call arguments whose source text [`super::compute_focus_spans`] may trim.
 use rustc_hir::{
   self as hir,
+  def_id::LocalDefId,
   intravisit::{self, Visitor},
 };
 use rustc_middle::ty::{self, TyCtxt, TypeckResults};
@@ -45,11 +47,15 @@ impl<'tcx> Visitor<'tcx> for Arguments<'tcx> {
   }
 }
 
-pub fn collect(tcx: TyCtxt<'_>, body: hir::BodyId) -> Vec<Span> {
+/// Spans of the function-call arguments in `def_id`'s body that are plain reads:
+/// paths, literals, and field or array/slice index projections of them. Arguments
+/// with adjustments (such as the reborrow of a reference argument) or from macro
+/// expansions are excluded, as are all method-call arguments.
+pub(super) fn collect(tcx: TyCtxt<'_>, def_id: LocalDefId) -> Vec<Span> {
   let mut visitor = Arguments {
-    typeck: tcx.typeck(tcx.hir_body_owner_def_id(body)),
+    typeck: tcx.typeck(def_id),
     spans: Vec::new(),
   };
-  visitor.visit_body(tcx.hir_body(body));
+  visitor.visit_body(tcx.hir_body_owned_by(def_id));
   visitor.spans
 }

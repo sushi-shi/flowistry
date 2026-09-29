@@ -17,7 +17,6 @@ use rustc_utils::{
 use serde::Serialize;
 
 mod direct_influence;
-mod simple_args;
 
 #[derive(Debug, Serialize)]
 pub struct PlaceInfo {
@@ -68,10 +67,9 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     .map(|(_, target)| target.clone())
     .collect();
 
-  let simple_args = simple_args::collect(tcx, body_id);
   let relevant = {
     block_timer!("focus: dependency spans");
-    infoflow::compute_focus_spans(results, targets, &spanner, &simple_args)
+    infoflow::compute_focus_spans(results, targets, &spanner)
   };
 
   let direct = {
