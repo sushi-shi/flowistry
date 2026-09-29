@@ -227,10 +227,16 @@ fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
     },
   };
 
-  let mut encoder =
-    flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
-  serde_json::to_writer(&mut encoder, &result).unwrap();
-  let buffer = encoder.finish().unwrap();
+  // serde_json writes token by token. Without a buffer every tiny write goes through
+  // the compressor, which dominated the run time for large focus outputs.
+  let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+  let mut writer = std::io::BufWriter::with_capacity(1 << 16, encoder);
+  serde_json::to_writer(&mut writer, &result).unwrap();
+  let buffer = writer
+    .into_inner()
+    .unwrap_or_else(|e| panic!("{}", e.error()))
+    .finish()
+    .unwrap();
   print!(
     "{}",
     base64::engine::general_purpose::STANDARD.encode(buffer)
