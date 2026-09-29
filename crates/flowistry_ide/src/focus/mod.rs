@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
 use anyhow::Result;
 use flowistry::infoflow::{self, Direction};
@@ -8,7 +8,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 use rustc_utils::{
   SpanExt, block_timer,
-  mir::borrowck_facts::get_body_with_borrowck_facts,
+  mir::{borrowck_facts::get_body_with_borrowck_facts, location_or_arg::LocationOrArg},
   source_map::{
     range::CharRange,
     spanner::{EnclosingHirSpans, Spanner},
@@ -78,41 +78,53 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
   };
 
   let slices_timer = Instant::now();
-  let slices = grouped_spans
-    .iter()
-    .zip(relevant)
-    .filter_map(|((mir_span, targets), relevant)| {
-      log::debug!("Slice for {mir_span:?} is {relevant:#?}");
-
-      let direct_influence = targets
-        .iter()
-        .flat_map(|(target, _)| direct.lookup(*target))
-        .flat_map(|location| {
-          spanner.location_to_spans(location, body, EnclosingHirSpans::None)
-        })
-        .filter(|span| relevant.iter().any(|slice_span| slice_span.contains(*span)))
-        .collect::<Vec<_>>();
-
-      let slice = relevant;
-
-      let to_ranges = |v: Vec<Span>| {
-        v.into_iter()
-          .filter_map(|span| span.trim_leading_whitespace(source_map))
+  // The same spans (and direct-influence locations) recur across the places of a body,
+  // so convert each once instead of once per place.
+  let mut range_cache: HashMap<Span, Vec<CharRange>> = HashMap::new();
+  let mut location_spans: HashMap<LocationOrArg, Vec<Span>> = HashMap::new();
+  let mut to_ranges = |spans: &[Span]| -> Vec<CharRange> {
+    let mut ranges = Vec::new();
+    for span in spans {
+      ranges.extend_from_slice(range_cache.entry(*span).or_insert_with(|| {
+        span
+          .trim_leading_whitespace(source_map)
+          .into_iter()
           .flatten()
           .filter_map(|span| CharRange::from_span(span, source_map).ok())
-          .collect::<Vec<_>>()
-      };
+          .collect()
+      }));
+    }
+    ranges
+  };
+  let mut slices = Vec::with_capacity(grouped_spans.len());
+  for ((mir_span, targets), slice) in grouped_spans.iter().zip(relevant) {
+    log::debug!("Slice for {mir_span:?} is {slice:#?}");
 
-      log::debug!("{:#?}", to_ranges(slice.clone()));
+    let mut direct_influence = Vec::new();
+    for location in targets
+      .iter()
+      .flat_map(|(target, _)| direct.lookup(*target))
+    {
+      let spans = location_spans.entry(location).or_insert_with(|| {
+        spanner.location_to_spans(location, body, EnclosingHirSpans::None)
+      });
+      direct_influence.extend(
+        spans
+          .iter()
+          .filter(|span| slice.iter().any(|slice_span| slice_span.contains(**span))),
+      );
+    }
 
-      Some(PlaceInfo {
-        range: CharRange::from_span(mir_span.span(), source_map).ok()?,
-        ranges: to_ranges(vec![mir_span.span()]),
-        slice: to_ranges(slice),
-        direct_influence: to_ranges(direct_influence),
-      })
-    })
-    .collect::<Vec<_>>();
+    let Ok(range) = CharRange::from_span(mir_span.span(), source_map) else {
+      continue;
+    };
+    slices.push(PlaceInfo {
+      range,
+      ranges: to_ranges(&[mir_span.span()]),
+      slice: to_ranges(&slice),
+      direct_influence: to_ranges(&direct_influence),
+    });
+  }
   log::info!(
     "focus: slice ranges took {:.4}s",
     slices_timer.elapsed().as_secs_f64()
