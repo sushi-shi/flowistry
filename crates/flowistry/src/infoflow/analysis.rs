@@ -28,6 +28,7 @@ use super::{
   AnalysisSession,
   effects::CallEffects,
   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
+  shared_handles::SharedHandles,
 };
 use crate::{
   extensions::{ContextMode, MutabilityMode},
@@ -92,6 +93,11 @@ pub struct FlowAnalysis<'a, 'tcx> {
   /// The dependencies of what each terminator reads (see [`CallEffects::reads`]),
   /// before its mutations, in `Recurse` mode.
   pub(crate) call_reads: RefCell<HashMap<Location, LocationOrArgSet>>,
+
+  /// In the pessimistic analysis of
+  /// [`compute_flow_with_shared_handles`](super::compute_flow_with_shared_handles),
+  /// the handles that may share state.
+  pub(crate) shared_handles: Option<SharedHandles<'tcx>>,
 }
 
 impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
@@ -128,6 +134,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       session,
       call_effects: RefCell::default(),
       call_reads: RefCell::default(),
+      shared_handles: None,
     }
   }
 
@@ -314,8 +321,20 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       debug!("  Mutated places: {mutable_aliases:?}");
       debug!("    with deps {deps:?}");
 
-      for alias in mutable_aliases {
-        state.union_into_row(self.place_info.normalize(alias), deps);
+      for alias in &mutable_aliases {
+        state.union_into_row(self.place_info.normalize(*alias), deps);
+      }
+
+      // Pessimistic analysis only: other handles to the same interior-mutable
+      // state may point to the object that was just written.
+      if let Some(handles) = &self.shared_handles {
+        let shared = mutable_aliases
+          .iter()
+          .flat_map(|alias| handles.possibly_shared(mt, *alias, &self.place_info))
+          .collect::<SmallVec<[_; 8]>>();
+        for row in shared {
+          state.union_into_row(row, deps);
+        }
       }
     }
   }

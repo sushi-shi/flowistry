@@ -102,3 +102,102 @@ fn main() {
     assert!(stats.cache_hits > 0, "{stats:?}");
   });
 }
+
+#[test]
+fn focus_output_marks_shared_handle_writes_as_maybe() {
+  let source = r#"
+use std::{cell::RefCell, rc::Rc};
+fn main() {
+ let a = Rc::new(RefCell::new(0));
+ let b = a.clone();
+ let input = 17;
+ *a.borrow_mut() = input;
+ let seen = *b.borrow();
+}
+"#;
+  borrowck_facts::enable_mir_simplification();
+  CompileBuilder::new(source).compile(|result| {
+    let tcx = result.tcx;
+    for context_mode in [ContextMode::SigOnly, ContextMode::Recurse] {
+      let mode = EvalMode {
+        context_mode,
+        ..EvalMode::default()
+      };
+      let session = AnalysisSession::new(tcx, mode);
+      let output = super::focus_with_session(&session, body_named(tcx, "main")).unwrap();
+      let join = |ranges: &[CharRange]| {
+        ranges
+          .iter()
+          .map(|range| snippet(tcx, range))
+          .collect::<Vec<_>>()
+          .join("\n")
+      };
+      let seen = output
+        .place_info
+        .iter()
+        .find(|place| snippet(tcx, &place.range) == "seen")
+        .expect("missing focus target seen");
+      let (slice, maybe) = (join(&seen.slice), join(&seen.maybe_slice));
+      assert!(!slice.contains("*a.borrow_mut() = input"), "slice: {slice}");
+      assert!(maybe.contains("*a.borrow_mut() = input"), "maybe: {maybe}");
+      assert!(maybe.contains("input = 17"), "maybe: {maybe}");
+
+      // R6: the maybe slice is disjoint from the slice.
+      for place in &output.place_info {
+        for maybe in &place.maybe_slice {
+          let maybe = maybe.to_span(tcx).unwrap();
+          for exact in &place.slice {
+            let exact = exact.to_span(tcx).unwrap();
+            assert!(
+              !maybe.overlaps(exact),
+              "{context_mode:?}: {maybe:?} overlaps {exact:?}"
+            );
+          }
+        }
+      }
+
+      // `maybe_slice` is only serialized when there is one.
+      let serialized = serde_json::to_value(&output).unwrap();
+      let places = serialized["place_info"].as_array().unwrap();
+      assert!(
+        places
+          .iter()
+          .any(|place| place.get("maybe_slice").is_some())
+      );
+      assert!(
+        places
+          .iter()
+          .any(|place| place.get("maybe_slice").is_none())
+      );
+    }
+  });
+}
+
+/// R6: the parts of the maybe slice that the exact slice covers are removed, also
+/// when a maybe span contains or partially overlaps an exact span.
+#[test]
+fn maybe_spans_are_subtracted_from_exact_spans() {
+  use rustc_span::{BytePos, Span};
+  let span = |lo: u32, hi: u32| Span::with_root_ctxt(BytePos(lo), BytePos(hi));
+  rustc_span::create_default_session_globals_then(|| {
+    // Contained: the maybe span keeps what surrounds the exact span.
+    assert_eq!(super::subtract_spans(&[span(0, 20)], &[span(5, 10)]), vec![
+      span(0, 5),
+      span(10, 20)
+    ]);
+    // Partially overlapping, on either side.
+    assert_eq!(super::subtract_spans(&[span(0, 10)], &[span(5, 15)]), vec![
+      span(0, 5)
+    ]);
+    assert_eq!(super::subtract_spans(&[span(5, 15)], &[span(0, 10)]), vec![
+      span(10, 15)
+    ]);
+    // Covered.
+    assert!(super::subtract_spans(&[span(5, 8)], &[span(0, 10)]).is_empty());
+    // Disjoint.
+    assert_eq!(
+      super::subtract_spans(&[span(20, 30)], &[span(0, 10)]),
+      vec![span(20, 30)]
+    );
+  });
+}

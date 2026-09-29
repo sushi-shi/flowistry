@@ -20,7 +20,7 @@ use indexical::{
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{
   mir::{visit::Visitor, *},
-  ty::{TyCtxt, TyKind},
+  ty::{TyCtxt, TyKind, TypingEnv},
 };
 use rustc_mir_dataflow::Analysis;
 use smallvec::SmallVec;
@@ -31,6 +31,7 @@ use super::{
     CalleeAbi, EffectPath, FallbackReason, RowRole, UnsupportedOp,
     cmp_places_structurally,
   },
+  interior::Handle,
   mutation::{CalleeEffect, Mutation, Precision},
   session::AnalysisSession,
 };
@@ -74,6 +75,9 @@ pub(crate) enum EffectKind {
   Return,
   /// A place behind a pointer passed as an argument.
   ArgPointee,
+  /// A shared handle passed by value (e.g. an `Rc<RefCell<T>>`), whose state was
+  /// written through it (see [`Handle::Owning`]).
+  SharedState,
 }
 
 impl EffectKind {
@@ -82,6 +86,7 @@ impl EffectKind {
     match self {
       EffectKind::Return => CalleeEffect::Return(precision),
       EffectKind::ArgPointee => CalleeEffect::ArgPointee(precision),
+      EffectKind::SharedState => CalleeEffect::SharedState(precision),
     }
   }
 }
@@ -223,27 +228,27 @@ pub(crate) fn compute<'tcx>(
   }
 
   let writes = analysis.writes.borrow();
-  let mut effects = returns
+  let returns = returns
     .rows()
-    .map(|(row, deps)| (EffectKind::Return, *row, deps))
-    .chain(
-      writes
-        .rows()
-        .map(|(row, deps)| (EffectKind::ArgPointee, *row, deps)),
-    )
-    .filter_map(|(kind, row, deps)| {
-      let path = match (kind, abi.classify(row)) {
-        (EffectKind::Return, RowRole::Return(path))
-        | (EffectKind::ArgPointee, RowRole::ArgPointee(path)) => path,
-        // Only the return place and the places behind pointer parameters are
-        // recorded (see `SummaryAnalysis::apply`).
-        _ => return None,
-      };
-      Some(SummaryEffect {
-        kind,
-        path,
-        inputs: origin_indices(deps),
-      })
+    .filter_map(|(row, deps)| match abi.classify(*row) {
+      RowRole::Return(path) => Some((EffectKind::Return, path, deps)),
+      RowRole::ArgDirect(_) | RowRole::ArgPointee(_) | RowRole::Internal => None,
+    });
+  // Only the places behind pointer parameters and the shared handles passed by
+  // value are recorded (see `SummaryAnalysis::apply`).
+  let writes = writes
+    .rows()
+    .filter_map(|(row, deps)| match abi.classify(*row) {
+      RowRole::ArgPointee(path) => Some((EffectKind::ArgPointee, path, deps)),
+      RowRole::ArgDirect(path) => Some((EffectKind::SharedState, path, deps)),
+      RowRole::Return(_) | RowRole::Internal => None,
+    });
+  let mut effects = returns
+    .chain(writes)
+    .map(|(kind, path, deps)| SummaryEffect {
+      kind,
+      path,
+      inputs: origin_indices(deps),
     })
     .collect::<Vec<_>>();
   // Parents before their children, in a deterministic order.
@@ -321,11 +326,24 @@ impl<'tcx> SummaryAnalysis<'_, 'tcx> {
     // Locations are not origins: nothing seeds the dependencies of an instruction.
     self.flow.transfer(state, mutations, location, |_, _| {});
     let place_info = &self.flow.place_info;
+    let tcx = self.flow.tcx;
+    let typing_env = TypingEnv::post_analysis(tcx, self.flow.def_id);
     let mut writes = self.writes.borrow_mut();
     for mutation in mutations {
       for alias in self.flow.written_aliases(mutation.mutated) {
         let row = place_info.normalize(alias);
-        if matches!(self.abi.classify(row), RowRole::ArgPointee(_)) {
+        let observable = match self.abi.classify(row) {
+          RowRole::ArgPointee(_) => true,
+          // A parameter itself is private to the callee, unless it is a shared
+          // handle (e.g. an `Rc<RefCell<T>>`) passed by value: it stands for the
+          // state its caller shares through it.
+          RowRole::ArgDirect(_) => matches!(
+            Handle::parse(tcx, typing_env, row.ty(self.flow.body, tcx)),
+            Some(Handle::Owning { .. })
+          ),
+          RowRole::Return(_) | RowRole::Internal => false,
+        };
+        if observable {
           let deps = self.flow.deps_of_inputs(state, &[alias]);
           writes.union_into_row(row, &deps);
         }

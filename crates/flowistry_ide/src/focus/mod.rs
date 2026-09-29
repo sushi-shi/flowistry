@@ -30,6 +30,11 @@ pub struct PlaceInfo {
   pub ranges: Vec<CharRange>,
   pub slice: Vec<CharRange>,
   pub direct_influence: Vec<CharRange>,
+  /// Code that may be relevant only if separately held shared handles to state of
+  /// the same interior-mutable type (e.g. two `Rc<RefCell<T>>`) are one object.
+  /// Disjoint from `slice`, and omitted when empty.
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub maybe_slice: Vec<CharRange>,
 }
 
 #[derive(Debug, Serialize)]
@@ -53,6 +58,8 @@ pub(crate) fn focus_with_session<'tcx>(
   let body_with_facts = get_body_with_borrowck_facts(tcx, def_id);
   let body = &body_with_facts.body;
   let results = &infoflow::compute_flow_with_session(session, body_id, body_with_facts);
+  let shared_results =
+    infoflow::compute_flow_with_shared_handles(session, body_id, body_with_facts);
 
   let source_map = tcx.sess.source_map();
   let spanner = {
@@ -81,9 +88,20 @@ pub(crate) fn focus_with_session<'tcx>(
   let targets = grouped_spans
     .iter()
     .map(|(_, target)| target.clone())
-    .collect();
+    .collect::<Vec<_>>();
 
   let simple_args = simple_args::collect(tcx, body_id);
+  let maybe_relevant = {
+    block_timer!("focus: maybe spans");
+    shared_results.as_ref().map(|shared_results| {
+      infoflow::compute_focus_spans(
+        shared_results,
+        targets.clone(),
+        &spanner,
+        &simple_args,
+      )
+    })
+  };
   let relevant = {
     block_timer!("focus: dependency spans");
     infoflow::compute_focus_spans(results, targets, &spanner, &simple_args)
@@ -114,7 +132,8 @@ pub(crate) fn focus_with_session<'tcx>(
     ranges
   };
   let mut slices = Vec::with_capacity(grouped_spans.len());
-  for ((mir_span, targets), slice) in grouped_spans.iter().zip(relevant) {
+  for (i, ((mir_span, targets), slice)) in grouped_spans.iter().zip(relevant).enumerate()
+  {
     log::debug!("Slice for {mir_span:?} is {slice:#?}");
 
     let mut direct_influence = Vec::new();
@@ -132,6 +151,11 @@ pub(crate) fn focus_with_session<'tcx>(
       );
     }
 
+    let maybe_slice = maybe_relevant
+      .as_ref()
+      .map(|maybe| subtract_spans(&maybe[i], &slice))
+      .unwrap_or_default();
+
     let Ok(range) = CharRange::from_span(mir_span.span(), source_map) else {
       continue;
     };
@@ -140,6 +164,7 @@ pub(crate) fn focus_with_session<'tcx>(
       ranges: to_ranges(&[mir_span.span()]),
       slice: to_ranges(&slice),
       direct_influence: to_ranges(&direct_influence),
+      maybe_slice: to_ranges(&maybe_slice),
     });
   }
   log::info!(
@@ -165,4 +190,14 @@ pub(crate) fn focus_with_session<'tcx>(
     place_info: slices,
     containers,
   })
+}
+
+/// The parts of the `maybe` spans that no `exact` span covers. A maybe span that
+/// contains or overlaps an exact span keeps only its uncovered parts.
+fn subtract_spans(maybe: &[Span], exact: &[Span]) -> Vec<Span> {
+  Span::merge_overlaps(maybe.to_vec())
+    .into_iter()
+    .flat_map(|span| span.subtract(exact.to_vec()))
+    .filter(|span| !span.is_empty())
+    .collect()
 }
