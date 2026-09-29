@@ -77,11 +77,42 @@ Useful options (see `--help` for all of them):
 | `--fetch` | download corpus sources and dependencies not available offline |
 | `--prepare-only` | prepare crates (and positions) without running the analysis |
 | `--bump` | with `--update-corpus`, move git entries to the current head of their ref |
-| `--phases` | record the backend's per-phase timers; adds a timing section (per-phase totals, and with `--compare` the ratio of totals and the geometric mean of per-run ratios). Use release builds. |
+| `--phases` | record the backend's per-phase timers and counters (`stat <name> = <n>` lines of the `flowistry::stats` log target); adds a timing section (per-phase totals, and with `--compare` the ratio of totals and the geometric mean of per-run ratios). Use release builds. |
 | `--repeat N` | run every position N times and keep the fastest, to reduce timing noise |
+| `--memory-limit SIZE` | run every focus request in a systemd user scope capped at `SIZE` (e.g. `6G`) without swap; a run killed at the cap is reported as `oom` |
+| `--budgets` | run only the stress positions of `scripts/smoke-corpus/budgets.tsv`, one crate at a time, and check each against its budget (see below) |
+| `--skip NAME` | leave a corpus entry out, repeatable |
 
-The exit status is 1 if any run crashed or timed out, or if the two backends
-disagree under `--compare`.
+The exit status is 1 if any run crashed, ran out of memory or timed out, if the two
+backends disagree under `--compare`, or if a run exceeds its budget under `--budgets`.
+
+### Memory
+
+Every run records its peak resident memory: the largest RSS among cargo and the
+compiler processes it waited for (`ru_maxrss` from `wait4`). A small wrapper process
+forks the run and measures it: a process forked by the harness itself would start with
+the harness's own peak RSS, which grows with the outputs it decodes. The report shows the
+largest per crate (`maxMB`), and the timing section the largest over all runs, with
+the geometric mean of per-run ratios under `--compare`.
+
+Some positions need a lot of memory (e.g. in `just`, see the budgets), so never run
+the full corpus without `--memory-limit`: the cap keeps a runaway analysis from
+exhausting the machine's memory. It needs `systemd-run` and a user session; the
+kernel kills the compiler when the scope reaches the cap.
+
+### Budgets
+
+`scripts/smoke-corpus/budgets.tsv` lists stress positions of the corpus, one per
+line: the entry name, the context mode, the file, the 0-based line and the column
+(as passed to `focus`), the maximum peak RSS in MiB and the maximum wall time in
+seconds. `--budgets` runs only these positions, one at a time, and a position is
+within its budget if it answers `{"Ok": ...}` within both limits. Budgets are
+measured values plus 30%; run them on an otherwise idle machine, with a release
+build and a memory cap:
+
+```sh
+python3 scripts/smoke-real-crates.py target/release --budgets --memory-limit 6G
+```
 
 ### Comparing two builds
 
@@ -137,6 +168,8 @@ Each run is classified as:
   is no decodable response. The report groups crashes by panic location and
   message and prints a reproduction command (run it in the dev shell with the
   backend's bin dir on `PATH`; `--json` keeps the tail of stderr).
+- **oom**: the run was killed at the `--memory-limit` cap (the compiler was killed
+  by SIGKILL inside the capped scope).
 - **timeout**: the run exceeded `--timeout` seconds.
 
 Each run is a full compiler invocation of the crate plus the analysis of one
