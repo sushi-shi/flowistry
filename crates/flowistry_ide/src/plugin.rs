@@ -76,6 +76,22 @@ enum FlowistryCommand {
   RustcVersion,
 }
 
+/// The plugin arguments of this `cargo flowistry` invocation, serialized as
+/// `rustc_plugin` passes them to the driver, and the file they are about. `None` for
+/// commands that do not run the driver on a crate.
+pub fn replay_request() -> Option<(String, PathBuf)> {
+  let args = FlowistryPluginArgs::try_parse_from(env::args().skip(1)).ok()?;
+  use FlowistryCommand::*;
+  let file = match &args.command {
+    Spans { file }
+    | Focus { file, .. }
+    | Decompose { file, .. }
+    | Playground { file, .. } => PathBuf::from(file),
+    Preload | RustcVersion => return None,
+  };
+  Some((serde_json::to_string(&args).ok()?, file))
+}
+
 pub struct FlowistryPlugin;
 impl RustcPlugin for FlowistryPlugin {
   type Args = FlowistryPluginArgs;
@@ -132,6 +148,7 @@ impl RustcPlugin for FlowistryPlugin {
     compiler_args: Vec<String>,
     plugin_args: FlowistryPluginArgs,
   ) -> RustcResult<()> {
+    crate::replay::record(&compiler_args);
     let eval_mode = EvalMode {
       context_mode: plugin_args.context_mode.unwrap_or(ContextMode::SigOnly),
       mutability_mode: plugin_args
