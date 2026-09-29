@@ -7,8 +7,8 @@ fn load(p: *const usize) -> usize {
   ret
 }
 fn main() {
-  let x = 5usize;
-  let p = &x as *const usize;
+  `[let x = 5usize;]`
+  `[let p = &x]` as *const usize`[;]`
   `[let v = load(p);]`
   `[v;]`
 }

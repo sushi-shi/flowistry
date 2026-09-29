@@ -1,11 +1,11 @@
 // Inline assembly may read memory behind its pointer inputs.
 fn main() {
-  let mut x = 0usize;
-  let p = &mut x as *mut usize;
-  unsafe { *p = 7; }
+  `[let mut x = 0usize;]`
+  `[let p = &mut x]` as *mut usize`[;]`
+  unsafe { `[*p = 7;]` }
   let ret: usize;
   unsafe {
-    std::arch::asm!("/* {r} {p} */", p = in(reg) p, r = lateout(reg) ret, options(nostack));
+    `[std::arch::asm!("/* {r} {p} */", p = in(reg) p, r = lateout(reg) ret, options(nostack))]`;
   }
   `[ret;]`
 }
