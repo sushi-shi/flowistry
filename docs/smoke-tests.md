@@ -7,7 +7,37 @@ modes, and reports panics / ICEs. It can also compare two backend builds (for
 example `master` against a branch) position by position.
 
 It is a smoke test, not a correctness test: it answers "does the backend crash
-on real code?" and, with `--compare`, "did this change alter any output?".
+on real code?" and, with `--compare`, "did this change alter any output?". Because
+the corpus is locked (below), its per-run timings are also the basis for performance
+comparisons.
+
+## The locked corpus
+
+Without `--crate`, the script runs the corpus in `scripts/smoke-corpus/`:
+
+- **Registry crates** (itertools, either, smallvec, indexmap, hashbrown, serde_json,
+  regex-syntax, anyhow, bitflags, memchr), each pinned to an exact version and the
+  sha256 of its `.crate` archive, with the optional dependencies pruned to build
+  offline and the resulting `Cargo.lock`.
+- **Applications from git** (just, tokei, alacritty, niri, helix, bevy), each pinned to
+  a commit, analysing one package (`package`, e.g. `crates/bevy_ecs`). Their own
+  `Cargo.lock` pins dependencies; bevy has none, so one is stored in the corpus.
+- For every entry, the sampled positions (`positions.tsv`), so a change to the sampler
+  does not change what is measured.
+
+`--update-corpus` re-resolves it: git entries move to the current head of their `ref`,
+locks are regenerated, positions resampled and checksums recorded. `--fetch` downloads
+what is not available offline (git checkouts, crates, dependencies); runs are offline
+otherwise. `--prepare-only` stops after preparing.
+
+The git applications need native libraries (niri, alacritty), so use the flake's
+`smoke` shell: `nix develop github:sushi-shi/flowistry#smoke`. It uses the same pinned
+toolchain as the default shell.
+
+Known limitation (upstream `rustc_plugin`): a binary whose crate name differs from its
+package name (e.g. `dust`, package `du-dust`) is never recognised as the target crate,
+so it cannot be analysed. Binaries are also cached by cargo after one run; the script
+touches a binary's root file before each run to force the analysis.
 
 ## Running
 
@@ -19,8 +49,8 @@ a dedicated target directory:
 nix develop github:sushi-shi/flowistry -c env CARGO_TARGET_DIR=target/smoke-worker \
     cargo build --locked -p flowistry_ide
 
-nix develop github:sushi-shi/flowistry -c python3 scripts/smoke-real-crates.py \
-    target/smoke-worker/debug
+nix develop github:sushi-shi/flowistry#smoke -c python3 scripts/smoke-real-crates.py \
+    target/smoke-worker/debug --fetch   # --fetch only needed the first time
 ```
 
 The positional argument is the directory containing `cargo-flowistry` and
@@ -30,7 +60,7 @@ Useful options (see `--help` for all of them):
 
 | option | meaning |
 | --- | --- |
-| `--crate SPEC` | crate to test, repeatable: `NAME` (newest version in the registry), `NAME@VERSION`, or a path to a crate directory. Defaults to itertools, either, smallvec, indexmap, hashbrown, serde_json, regex-syntax, anyhow, bitflags, memchr. |
+| `--crate SPEC` | crate to test, repeatable: `NAME` (newest version in the registry), `NAME@VERSION`, or a path to a crate directory. Defaults to the locked corpus. |
 | `--positions N` | positions sampled per crate (default 60) |
 | `--seed S` | sampling seed (default 0); the same seed always picks the same positions |
 | `--modes M1,M2` | context modes (default `SigOnly,Recurse`) |
@@ -38,6 +68,9 @@ Useful options (see `--help` for all of them):
 | `--compare DIR` | a second backend bin dir; every run is repeated with it and the answers are compared |
 | `--json FILE` | write every run record (and, with `--keep-outputs`, the full focus output) |
 | `--fresh` | re-copy crates instead of reusing prepared copies |
+| `--update-corpus` | re-resolve the locked corpus (see above) |
+| `--fetch` | download corpus sources and dependencies not available offline |
+| `--prepare-only` | prepare crates (and positions) without running the analysis |
 
 The exit status is 1 if any run crashed or timed out, or if the two backends
 disagree under `--compare`.

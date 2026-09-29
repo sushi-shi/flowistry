@@ -32,6 +32,7 @@ import base64
 import concurrent.futures
 import glob
 import gzip
+import hashlib
 import json
 import os
 import random
@@ -40,6 +41,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import threading
 import time
 import zlib
@@ -73,6 +75,13 @@ CRASH_MARKERS = ["panicked", "internal compiler error"]
 
 PROBE_FILE = "__flowistry_smoke_probe__.rs"
 
+# The locked corpus: exact crate versions (with the sha256 of their .crate archives),
+# the manifest edits and Cargo.lock that make each build offline, and the sampled
+# positions. Runs without --crate use it, so results and timings stay comparable
+# across time, machines and changes to this script's sampler.
+CORPUS_DIR = REPO_ROOT / "scripts" / "smoke-corpus"
+CORPUS_FILE = CORPUS_DIR / "corpus.json"
+
 _print_lock = threading.Lock()
 
 
@@ -92,11 +101,64 @@ def parse_version(text):
     return (int(m[1]), int(m[2]), int(m[3])), m[4]
 
 
+def cargo_home():
+    return Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
+
+
 def registry_dirs(args):
     if args.registry:
         return [Path(r) for r in args.registry]
-    cargo_home = Path(os.environ.get("CARGO_HOME", Path.home() / ".cargo"))
-    return [Path(p) for p in sorted(glob.glob(str(cargo_home / "registry" / "src" / "*")))]
+    return [Path(p) for p in sorted(glob.glob(str(cargo_home() / "registry" / "src" / "*")))]
+
+
+def cached_crate_file(name, version):
+    """The downloaded `.crate` archive of a registry crate, if cargo still has it."""
+    matches = sorted(glob.glob(str(cargo_home() / "registry" / "cache" / "*" / f"{name}-{version}.crate")))
+    return Path(matches[0]) if matches else None
+
+
+def sha256_file(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def fetch_crate(name, version, work_dir, env):
+    """Download an exact crate version into cargo's registry cache (needs the network)."""
+    proj = work_dir / "_fetch" / f"{name}-{version}"
+    shutil.rmtree(proj, ignore_errors=True)
+    (proj / "src").mkdir(parents=True)
+    (proj / "src" / "lib.rs").write_text("")
+    (proj / "Cargo.toml").write_text(
+        '[package]\nname = "flowistry-smoke-fetch"\nversion = "0.0.0"\nedition = "2021"\n\n'
+        f'[dependencies]\n{name} = "={version}"\n\n[workspace]\n')
+    res = run(["cargo", "fetch"], proj, env)
+    if res.returncode != 0:
+        raise RuntimeError("cargo fetch failed: " + cargo_error(res.stderr))
+
+
+def locked_source(entry, args, registries, env):
+    """The source directory of a corpus crate, unpacked or fetched if needed.
+
+    The `.crate` archive, when cargo still has it, must match the corpus checksum.
+    """
+    name, version = entry["name"], entry["version"]
+    for attempt in range(2):
+        archive = cached_crate_file(name, version)
+        if archive is not None and entry.get("sha256") and sha256_file(archive) != entry["sha256"]:
+            raise RuntimeError(f"{archive} does not match the corpus checksum")
+        found = find_candidates(f"{name}@{version}", registries)
+        if found:
+            return found[0][1]
+        if archive is not None:
+            sources = args.work_dir / "_sources"
+            sources.mkdir(parents=True, exist_ok=True)
+            with tarfile.open(archive, "r:gz") as tar:
+                tar.extractall(sources, filter="data")
+            return sources / f"{name}-{version}"
+        if attempt == 0 and args.fetch:
+            fetch_crate(name, version, args.work_dir, env)
+            continue
+        break
+    raise RuntimeError(f"{name} {version} is not in the local cargo registry; rerun with --fetch")
 
 
 def find_candidates(spec, registries):
@@ -217,16 +279,21 @@ def run(cmd, cwd, env, timeout=None):
     return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
 
 
-def prepare_copy(src, dest, env, fresh):
+def prepare_copy(src, dest, env, fresh, locked=None):
     """Copy a registry crate to `dest` and make it buildable on its own, offline.
 
     Optional dependencies that cannot be resolved offline are removed (and
-    returned); a missing non-optional dependency raises RuntimeError.
+    returned); a missing non-optional dependency raises RuntimeError. With
+    `locked` ({"dir": corpus entry dir, "prune": [...]}), the corpus' pruned
+    dependencies and Cargo.lock are reproduced instead of being resolved.
     """
     marker = dest / ".flowistry-smoke-source"
+    key = str(src)
+    if locked is not None:
+        key += " locked " + sha256_file(locked["dir"] / "Cargo.lock") + " " + " ".join(locked["prune"])
     if not fresh and marker.is_file():
         source, _, pruned = marker.read_text().partition("\n")
-        if source == str(src):
+        if source == key:
             return pruned.split()
     if dest.exists():
         shutil.rmtree(dest)
@@ -238,6 +305,17 @@ def prepare_copy(src, dest, env, fresh):
     manifest = dest / "Cargo.toml"
     sections = manifest_sections(manifest.read_text())
     strip_dev_only(sections)
+    if locked is not None:
+        prune = set(locked["prune"])
+        pruned = sorted(remove_deps(
+            sections, lambda kind, key, pkg, optional: optional and (key in prune or pkg in prune)))
+        manifest.write_text(render_manifest(sections))
+        shutil.copyfile(locked["dir"] / "Cargo.lock", dest / "Cargo.lock")
+        res = run(["cargo", "metadata", "--offline", "--locked", "--format-version", "1"], dest, env)
+        if res.returncode != 0:
+            raise RuntimeError("the corpus Cargo.lock does not resolve offline: " + cargo_error(res.stderr))
+        marker.write_text(key + "\n" + " ".join(pruned))
+        return pruned
     pruned = []
     for _ in range(50):
         manifest.write_text(render_manifest(sections))
@@ -254,19 +332,24 @@ def prepare_copy(src, dest, env, fresh):
         pruned += sorted(removed)
     else:
         raise RuntimeError("cargo generate-lockfile --offline kept failing")
-    marker.write_text(str(src) + "\n" + " ".join(pruned))
+    marker.write_text(key + "\n" + " ".join(pruned))
     return pruned
 
 
 def lib_target(crate_dir, env):
+    """The root source file of the package in `crate_dir` (its library, else its binary),
+    and whether that is a binary."""
     res = run(["cargo", "metadata", "--offline", "--no-deps", "--format-version", "1"], crate_dir, env)
     if res.returncode != 0:
         raise RuntimeError("cargo metadata failed: " + cargo_error(res.stderr))
-    pkg = json.loads(res.stdout)["packages"][0]
-    for target in pkg["targets"]:
-        if "lib" in target["kind"] or "rlib" in target["kind"] or "proc-macro" in target["kind"]:
-            return Path(target["src_path"])
-    raise RuntimeError("crate has no library target")
+    manifest = (Path(crate_dir) / "Cargo.toml").resolve()
+    packages = json.loads(res.stdout)["packages"]
+    pkg = next((p for p in packages if Path(p["manifest_path"]).resolve() == manifest), packages[0])
+    for kinds in (("lib", "rlib", "proc-macro"), ("bin",)):
+        for target in pkg["targets"]:
+            if any(k in target["kind"] for k in kinds):
+                return Path(target["src_path"]), kinds == ("bin",)
+    raise RuntimeError("package has no library or binary target")
 
 
 # --------------------------------------------------------------------------
@@ -310,7 +393,11 @@ def crash_signature(stderr):
     return "no decodable response: " + last_lines(stderr, 2)
 
 
-def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout):
+def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=None):
+    # rustc_plugin clears cargo's cached metadata for library targets only; for a binary,
+    # cargo would consider the target fresh and never run the plugin again.
+    if touch is not None:
+        os.utime(touch)
     cmd = ["cargo", "flowistry", "--context-mode", mode, "focus", rel_file, str(line), str(col)]
     start = time.monotonic()
     try:
@@ -496,7 +583,23 @@ def sample_positions(crate_dir, files, count, seed, crate_label):
     return sorted(picked)
 
 
-def compiled_files(crate_dir, lib_dir, env, timeout):
+def read_positions(path):
+    """Positions stored as `file<TAB>line<TAB>column` (0-based line, as passed to focus)."""
+    positions = []
+    for row in path.read_text().splitlines():
+        if row and not row.startswith("#"):
+            rel, line, col = row.split("\t")
+            positions.append((rel, int(line), int(col)))
+    return positions
+
+
+def write_positions(path, positions):
+    rows = ["# file\tline (0-based)\tcolumn; generated by smoke-real-crates.py --update-corpus"]
+    rows += [f"{rel}\t{line}\t{col}" for rel, line, col in positions]
+    path.write_text("\n".join(rows) + "\n")
+
+
+def compiled_files(crate_dir, lib_dir, env, timeout, touch=None, workspace_root=None):
     """Probe the backend with an uncompiled file to learn which files the crate compiles.
 
     The probe also builds dependencies and checks that the crate builds at all.
@@ -505,7 +608,7 @@ def compiled_files(crate_dir, lib_dir, env, timeout):
     probe.write_text("")
     try:
         rel = os.path.relpath(probe, crate_dir)
-        result = flowistry_focus(crate_dir, env, rel, 0, 0, "SigOnly", timeout)
+        result = flowistry_focus(crate_dir, env, rel, 0, 0, "SigOnly", timeout, touch)
     finally:
         probe.unlink(missing_ok=True)
     msg = result.get("message", "")
@@ -513,9 +616,12 @@ def compiled_files(crate_dir, lib_dir, env, timeout):
     if not m:
         raise RuntimeError(f"probe did not list source files ({result['status']}): {msg[:500]}")
     root = crate_dir.resolve()
+    # rustc names files relative to the workspace root, which may be above the package.
+    bases = [root] + ([Path(workspace_root).resolve()] if workspace_root is not None else [])
     files = set()
     for name in m[1].split(", "):
-        path = Path(name) if os.path.isabs(name) else root / name
+        path = Path(name) if os.path.isabs(name) else next(
+            (b / name for b in bases if (b / name).is_file()), root / name)
         try:
             rel = path.resolve().relative_to(root)
         except (ValueError, OSError):
@@ -531,8 +637,30 @@ def compiled_files(crate_dir, lib_dir, env, timeout):
 
 
 def smoke_crate(spec, args, registries, backends):
-    candidates = find_candidates(spec, registries)
-    report = {"spec": spec, "crate": None, "skipped": [], "records": [], "files": []}
+    """Run one crate. `spec` is a --crate string, or a corpus entry (a dict)."""
+    entry = spec if isinstance(spec, dict) else None
+    if entry is not None and "git" in entry:
+        return smoke_git_entry(entry, args, backends)
+    report = {"spec": spec if entry is None else f"{entry['name']}@{entry['version']}",
+              "crate": None, "skipped": [], "records": [], "files": []}
+    entry_dir = locked = None
+    if entry is not None:
+        label = f"{entry['name']}-{entry['version']}"
+        entry_dir = CORPUS_DIR / label
+        try:
+            src = locked_source(entry, args, registries,
+                                backend_env(backends[0][1], args.work_dir / "_fetch" / "target"))
+        except Exception as e:  # noqa: BLE001 - reported as a skipped crate
+            report["skipped"].append((label, str(e)))
+            return report
+        candidates = [(label, src)]
+        if not args.update_corpus:
+            if not (entry_dir / "Cargo.lock").is_file():
+                report["skipped"].append((label, f"{entry_dir}/Cargo.lock is missing; run --update-corpus"))
+                return report
+            locked = {"dir": entry_dir, "prune": entry.get("prune", [])}
+    else:
+        candidates = find_candidates(spec, registries)
     if not candidates:
         report["skipped"].append((spec, "not found in the cargo registry"))
         return report
@@ -540,35 +668,156 @@ def smoke_crate(spec, args, registries, backends):
         dest = args.work_dir / label
         base_env = backend_env(backends[0][1], dest / "target" / "smoke-base")
         try:
-            pruned = prepare_copy(src, dest, base_env, args.fresh)
-            lib_dir = lib_target(dest, base_env).parent
-            files = compiled_files(dest, lib_dir, base_env, args.timeout)
+            pruned = prepare_copy(src, dest, base_env, args.fresh or args.update_corpus, locked)
+            root_src, is_bin = lib_target(dest, base_env)
+            touch = root_src if is_bin else None
+            files = compiled_files(dest, root_src.parent, base_env, args.timeout, touch)
             if args.compare:
                 # Warm up the second backend's target dir too.
-                compiled_files(dest, lib_dir, backend_env(backends[1][1], dest / "target" / "smoke-cmp"),
-                               args.timeout)
+                compiled_files(dest, root_src.parent,
+                               backend_env(backends[1][1], dest / "target" / "smoke-cmp"), args.timeout, touch)
         except Exception as e:  # noqa: BLE001 - any failure means "try the next version"
             log(f"[{label}] skipped: {e}")
             report["skipped"].append((label, str(e)))
             continue
-        report.update(crate=label, dir=str(dest), files=files, pruned=pruned)
+        report.update(crate=label, dir=str(dest), files=files, pruned=pruned,
+                      touch=str(touch) if touch else None)
         if pruned:
             log(f"[{label}] pruned optional dependencies unavailable offline: {', '.join(pruned)}")
         break
     if report["crate"] is None:
         return report
+    if entry is not None and args.update_corpus:
+        entry_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(Path(report["dir"]) / "Cargo.lock", entry_dir / "Cargo.lock")
+        archive = cached_crate_file(entry["name"], entry["version"])
+        entry["prune"] = report["pruned"]
+        entry["sha256"] = sha256_file(archive) if archive is not None else entry.get("sha256")
+        if archive is None:
+            log(f"[{report['crate']}] no .crate archive in the cargo cache; checksum not recorded")
+    return run_positions(report, entry_dir, Path(report["dir"]), args, backends)
 
-    label, dest = report["crate"], Path(report["dir"])
-    positions = sample_positions(dest, report["files"], args.positions, args.seed, label.rsplit("-", 1)[0])
+
+def git(argv, cwd):
+    return subprocess.run(["git", *argv], cwd=cwd, capture_output=True, text=True)
+
+
+def resolve_git_ref(url, ref):
+    res = git(["ls-remote", url, ref], REPO_ROOT)
+    for line in res.stdout.splitlines():
+        sha, name = line.split("\t")
+        if name in (ref, f"refs/heads/{ref}", f"refs/tags/{ref}"):
+            return sha
+    raise RuntimeError(f"cannot resolve {ref} in {url}: {res.stderr.strip() or 'no such ref'}")
+
+
+def git_checkout(entry, args, env):
+    """A checkout of a git corpus entry at its pinned commit.
+
+    Cloning and downloading dependencies need the network, so they only happen with
+    --fetch or --update-corpus; the repository's own Cargo.lock pins dependencies.
+    """
+    dest = args.work_dir / "_git" / entry["name"]
+    head = git(["rev-parse", "HEAD"], dest).stdout.strip() if (dest / ".git").is_dir() else None
+    online = args.fetch or args.update_corpus
+    if head != entry["rev"]:
+        if not online:
+            raise RuntimeError(f"{entry['git']} is not checked out at {entry['rev'][:12]}; rerun with --fetch")
+        if not (dest / ".git").is_dir():
+            dest.mkdir(parents=True, exist_ok=True)
+            git(["init", "-q"], dest)
+            git(["remote", "add", "origin", entry["git"]], dest)
+        for argv in (["fetch", "-q", "--depth", "1", "origin", entry["rev"]],
+                     ["checkout", "-q", "--force", "--detach", "FETCH_HEAD"]):
+            res = git(argv, dest)
+            if res.returncode != 0:
+                raise RuntimeError(f"git {argv[0]} failed: {res.stderr.strip()}")
+    # The checkout lies inside this repository, whose workspace cargo would otherwise use.
+    manifest = dest / "Cargo.toml"
+    text = manifest.read_text()
+    if not re.search(r"^\[workspace\]", text, re.M):
+        manifest.write_text(text + "\n[workspace]\n")
+    fetch_env = dict(env)
+    fetch_env.pop("CARGO_NET_OFFLINE", None)
+    # Repositories that do not commit a Cargo.lock (e.g. libraries) get one stored in the
+    # corpus, so their dependencies are pinned too.
+    if git(["ls-files", "--error-unmatch", "Cargo.lock"], dest).returncode != 0:
+        stored = CORPUS_DIR / entry["name"] / "Cargo.lock"
+        if args.update_corpus:
+            res = run(["cargo", "generate-lockfile"], dest, fetch_env)
+            if res.returncode != 0:
+                raise RuntimeError("cargo generate-lockfile failed: " + cargo_error(res.stderr))
+            stored.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(dest / "Cargo.lock", stored)
+        elif stored.is_file():
+            shutil.copyfile(stored, dest / "Cargo.lock")
+        else:
+            raise RuntimeError(f"{stored} is missing; run --update-corpus")
+    if online:
+        res = run(["cargo", "fetch", "--locked"], dest, fetch_env)
+        if res.returncode != 0:
+            raise RuntimeError("cargo fetch --locked failed: " + cargo_error(res.stderr))
+    return dest
+
+
+def smoke_git_entry(entry, args, backends):
+    """Run a corpus entry that is a git repository pinned to a commit."""
+    report = {"spec": entry["git"], "crate": None, "skipped": [], "records": [], "files": []}
+    try:
+        if args.update_corpus and entry.get("ref"):
+            entry["rev"] = resolve_git_ref(entry["git"], entry["ref"])
+        if not entry.get("rev"):
+            raise RuntimeError("no pinned rev; run --update-corpus")
+        label = f"{entry['name']}-{entry['rev'][:12]}"
+        entry_dir = CORPUS_DIR / entry["name"]
+        checkout = git_checkout(entry, args, backend_env(backends[0][1], args.work_dir / "_fetch" / "target"))
+        dest = checkout / entry.get("package", ".")
+        base_env = backend_env(backends[0][1], checkout / "target" / "smoke-base")
+        root_src, is_bin = lib_target(dest, base_env)
+        touch = root_src if is_bin else None
+        files = compiled_files(dest, root_src.parent, base_env, args.timeout, touch, checkout)
+        if args.compare:
+            compiled_files(dest, root_src.parent,
+                           backend_env(backends[1][1], checkout / "target" / "smoke-cmp"), args.timeout,
+                           touch, checkout)
+    except Exception as e:  # noqa: BLE001 - reported as a skipped crate
+        report["skipped"].append((entry["name"], str(e)))
+        log(f"[{entry['name']}] skipped: {e}")
+        return report
+    report.update(crate=label, dir=str(dest), target_root=str(checkout), files=files, pruned=[],
+                  touch=str(touch) if touch else None)
+    return run_positions(report, entry_dir, dest, args, backends)
+
+
+def run_positions(report, entry_dir, dest, args, backends):
+    """Pick (or load) the positions of a prepared crate and run the backend(s) on them."""
+    label = report["crate"]
+    positions_file = entry_dir / "positions.tsv" if entry_dir is not None else None
+    if positions_file is not None and not args.update_corpus:
+        if not positions_file.is_file():
+            report["skipped"].append((label, f"{positions_file} is missing; run --update-corpus"))
+            report["crate"] = None
+            return report
+        positions = read_positions(positions_file)
+    else:
+        positions = sample_positions(dest, report["files"], args.positions, args.seed,
+                                     label.rsplit("-", 1)[0])
+        if positions_file is not None:
+            entry_dir.mkdir(parents=True, exist_ok=True)
+            write_positions(positions_file, positions)
     log(f"[{label}] {len(report['files'])} compiled files, {len(positions)} positions")
-    envs = [(name, backend_env(bin_dir, dest / "target" / ("smoke-base" if i == 0 else "smoke-cmp")))
+    if args.prepare_only:
+        report["seconds"] = 0.0
+        return report
+    target_root = Path(report.get("target_root", dest))
+    envs = [(name, backend_env(bin_dir, target_root / "target" / ("smoke-base" if i == 0 else "smoke-cmp")))
             for i, (name, bin_dir) in enumerate(backends)]
     started = time.monotonic()
     for idx, (rel, line, col) in enumerate(positions):
         for mode in args.modes:
             rec = {"crate": label, "file": rel, "line": line, "column": col, "mode": mode}
             for name, env in envs:
-                result = flowistry_focus(dest, env, rel, line, col, mode, args.timeout)
+                result = flowistry_focus(dest, env, rel, line, col, mode, args.timeout, report.get("touch"))
                 rec[name] = result
                 if result["status"] in ("crash", "timeout"):
                     log(f"[{label}] {result['status'].upper()} ({name}) {mode} {rel}:{line}:{col}: "
@@ -677,7 +926,7 @@ def main():
                         help="second backend bin dir; compare its answers against the first")
     parser.add_argument("--crate", dest="crates", action="append", metavar="SPEC",
                         help="crate to test: NAME, NAME@VERSION or a path to a crate directory "
-                             "(repeatable; default: %s)" % ", ".join(DEFAULT_CRATES))
+                             "(repeatable; default: the locked corpus in scripts/smoke-corpus)")
     parser.add_argument("--registry", action="append", metavar="DIR",
                         help="registry source dir to search (default: $CARGO_HOME/registry/src/*)")
     parser.add_argument("--work-dir", type=Path, default=REPO_ROOT / "target" / "smoke-crates",
@@ -692,6 +941,14 @@ def main():
     parser.add_argument("--version-attempts", type=int, default=3,
                         help="older registry versions to try if the newest does not build (default: %(default)s)")
     parser.add_argument("--fresh", action="store_true", help="re-copy crates even if a prepared copy exists")
+    parser.add_argument("--update-corpus", action="store_true",
+                        help="re-resolve the locked corpus (scripts/smoke-corpus): re-prune dependencies, "
+                             "regenerate each Cargo.lock, resample positions, record checksums")
+    parser.add_argument("--prepare-only", action="store_true",
+                        help="prepare crates (and with --update-corpus, write the corpus) without "
+                             "running the analysis")
+    parser.add_argument("--fetch", action="store_true",
+                        help="download corpus crates and dependencies that are not available offline")
     parser.add_argument("--json", type=Path, metavar="FILE", help="write every run record to FILE")
     parser.add_argument("--keep-outputs", action="store_true", help="include full focus outputs in --json")
     parser.add_argument("--examples", type=int, default=5, help="example positions shown per problem group")
@@ -711,11 +968,37 @@ def main():
     args.work_dir.mkdir(parents=True, exist_ok=True)
 
     registries = registry_dirs(args)
-    specs = args.crates or DEFAULT_CRATES
+    corpus = json.loads(CORPUS_FILE.read_text()) if CORPUS_FILE.is_file() else None
+    if args.crates:
+        if args.update_corpus:
+            parser.error("--update-corpus applies to the locked corpus, not to --crate")
+        specs = args.crates
+    elif corpus is not None:
+        specs = [dict(e) for e in corpus["crates"]]
+        if args.update_corpus:
+            corpus["seed"], corpus["positions"] = args.seed, args.positions
+        else:
+            args.seed, args.positions = corpus["seed"], corpus["positions"]
+    elif args.update_corpus:
+        # Start a corpus from the newest registry version of each default crate.
+        specs = []
+        for name in DEFAULT_CRATES:
+            found = find_candidates(name, registries)
+            if not found:
+                parser.error(f"{name} is not in the local cargo registry")
+            specs.append({"name": name, "version": found[0][0][len(name) + 1:]})
+        corpus = {"seed": args.seed, "positions": args.positions}
+    else:
+        parser.error(f"{CORPUS_FILE} does not exist; create it with --update-corpus")
     started = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         reports = list(pool.map(lambda s: smoke_crate(s, args, registries, backends), specs))
     total = time.monotonic() - started
+    if args.update_corpus:
+        corpus["crates"] = specs
+        CORPUS_DIR.mkdir(parents=True, exist_ok=True)
+        CORPUS_FILE.write_text(json.dumps(corpus, indent=2) + "\n")
+        log(f"wrote {CORPUS_FILE}")
 
     print(summarize(reports, backends, args, total))
     if args.json:

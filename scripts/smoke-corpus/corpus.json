@@ -1,0 +1,119 @@
+{
+  "seed": 0,
+  "positions": 60,
+  "crates": [
+    {
+      "name": "itertools",
+      "version": "0.14.0",
+      "prune": [],
+      "sha256": "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+    },
+    {
+      "name": "either",
+      "version": "1.18.0",
+      "prune": [],
+      "sha256": "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
+    },
+    {
+      "name": "smallvec",
+      "version": "1.16.1",
+      "prune": [
+        "bincode",
+        "malloc_size_of",
+        "unty"
+      ],
+      "sha256": "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
+    },
+    {
+      "name": "indexmap",
+      "version": "2.14.2",
+      "prune": [
+        "sval"
+      ],
+      "sha256": "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
+    },
+    {
+      "name": "hashbrown",
+      "version": "0.17.1",
+      "prune": [
+        "alloc",
+        "core"
+      ],
+      "sha256": "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.151",
+      "prune": [],
+      "sha256": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
+    },
+    {
+      "name": "regex-syntax",
+      "version": "0.8.11",
+      "prune": [],
+      "sha256": "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+    },
+    {
+      "name": "anyhow",
+      "version": "1.0.104",
+      "prune": [],
+      "sha256": "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+    },
+    {
+      "name": "bitflags",
+      "version": "2.13.2",
+      "prune": [],
+      "sha256": "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.3",
+      "prune": [
+        "core"
+      ],
+      "sha256": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+    },
+    {
+      "name": "just",
+      "git": "https://github.com/casey/just",
+      "ref": "master",
+      "package": ".",
+      "rev": "4cca0e099b7b88d0106ee99303f3c6229f273853"
+    },
+    {
+      "name": "tokei",
+      "git": "https://github.com/XAMPPRocky/tokei",
+      "ref": "master",
+      "package": ".",
+      "rev": "c14f744716272fadeb27a74443cdffa0af35f82f"
+    },
+    {
+      "name": "alacritty",
+      "git": "https://github.com/alacritty/alacritty",
+      "ref": "master",
+      "package": "alacritty",
+      "rev": "d692748d3f61253ebe9f5094320120d22f6a046f"
+    },
+    {
+      "name": "niri",
+      "git": "https://github.com/niri-wm/niri",
+      "ref": "main",
+      "package": ".",
+      "rev": "1f03391ea644c2a43597de7f637269e26d1e1b49"
+    },
+    {
+      "name": "helix",
+      "git": "https://github.com/helix-editor/helix",
+      "ref": "master",
+      "package": "helix-term",
+      "rev": "079a789e8cb08ead67f19e1971a1b7438b37354b"
+    },
+    {
+      "name": "bevy",
+      "git": "https://github.com/bevyengine/bevy",
+      "ref": "main",
+      "package": "crates/bevy_ecs",
+      "rev": "f29c203ad5c785014a30dcb76844dc17bc05d8fb"
+    }
+  ]
+}
