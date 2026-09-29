@@ -16,6 +16,9 @@ debug = ["html-escape"]
 # Checks at run time that the lazily seeded argument rows of the analysis state
 # (`infoflow::LazyMatrix`) always equal the eagerly stored rows. Slow.
 shadow-eager = []
+# Checks that the block-level fixpoint engine computes the same state at every location
+# as the previous engine, which stores the state of every location. Slow.
+engine-diff = []
 
 [dependencies]
 anyhow = "1"

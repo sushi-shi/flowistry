@@ -52,7 +52,7 @@ mod recursive;
 /// # use rustc_utils::{mir::location_or_arg::index::LocationOrArgSet, PlaceExt};
 /// fn example<'tcx>(tcx: TyCtxt<'tcx>, results: &FlowResults<'_, 'tcx>) {
 ///   let ℓ: Location         = Location::START;
-///   let Θ: &FlowDomain      = results.state_at(ℓ);
+///   let Θ: &FlowDomain      = &results.state_at(ℓ);
 ///   let p: Place            = Place::make(Local::from_usize(1), &[], tcx);
 ///   let κ: LocationOrArgSet = results.analysis.deps_for(Θ, p);
 ///   for ℓ2 in κ.iter() {
@@ -61,7 +61,9 @@ mod recursive;
 /// }
 /// ```
 ///
-/// To access a [`FlowDomain`] for a given location, use the method [`AnalysisResults::state_at`](engine::AnalysisResults::state_at).
+/// To access a [`FlowDomain`] for a given location, use the method [`AnalysisResults::state_at`](engine::AnalysisResults::state_at),
+/// or [`AnalysisResults::for_each_state`](engine::AnalysisResults::for_each_state) to visit every location: the
+/// results only store the state at the entry of each basic block, and recompute the others.
 /// See [`FlowDomain`] for more on how to access the location set for a given place.
 ///
 /// **Note:** this analysis uses rustc's [dataflow analysis framework](https://rustc-dev-guide.rust-lang.org/mir/dataflow.html),
@@ -71,7 +73,8 @@ mod recursive;
 /// [`AnalysisDomain`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_dataflow/trait.AnalysisDomain.html).
 /// However, for performance purposes, several constructs were reimplemented within Flowistry, such as [`AnalysisResults`](engine::AnalysisResults)
 /// which replaces [`rustc_mir_dataflow::Results`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_mir_dataflow/struct.Results.html).
-pub type FlowResults<'a, 'tcx> = engine::AnalysisResults<'tcx, FlowAnalysis<'a, 'tcx>>;
+pub type FlowResults<'a, 'tcx> =
+  engine::AnalysisResults<'a, 'tcx, FlowAnalysis<'a, 'tcx>>;
 
 /// Counters of one run of the analysis on one body, see [`FlowResults::stats`].
 ///
@@ -84,6 +87,14 @@ pub struct FlowStats {
   /// Statement and terminator effects applied by the fixpoint iteration, counting
   /// every revisit of a location.
   pub location_visits: usize,
+  /// Visits of a basic block by the fixpoint iteration, counting revisits (none if
+  /// the location engine ran, see [`by_block`](Self::by_block)).
+  pub block_visits: usize,
+  /// Whether the block engine computed the results (see [`engine`]).
+  pub by_block: bool,
+  /// Reachable locations whose effect is not idempotent on its own output; the block
+  /// engine only runs if there are none.
+  pub unstable_locations: usize,
   /// Joins into a successor's state that changed it.
   pub changed_joins: usize,
   /// Applications of the transfer function (one per visit of a location that mutates
@@ -103,6 +114,9 @@ impl FlowStats {
     let mut counters = vec![
       ("locations", self.locations),
       ("location_visits", self.location_visits),
+      ("block_visits", self.block_visits),
+      ("by_block", self.by_block as usize),
+      ("unstable_locations", self.unstable_locations),
       ("changed_joins", self.changed_joins),
       ("transfers", self.transfers),
       ("mutations", self.mutations),
@@ -137,6 +151,9 @@ impl<'tcx> FlowResults<'_, 'tcx> {
     FlowStats {
       locations: self.analysis.body.all_locations().count(),
       location_visits: engine.location_visits,
+      block_visits: engine.block_visits,
+      by_block: engine.by_block,
+      unstable_locations: counters.unstable_locations.get(),
       changed_joins: engine.changed_joins,
       transfers: counters.transfers.get(),
       mutations: counters.mutations.get(),
@@ -153,15 +170,75 @@ impl<'tcx> FlowResults<'_, 'tcx> {
       locations: body.all_locations().count(),
       ..FlowSizeStats::default()
     };
-    for loc in body.all_locations() {
-      let state = self.state_at(loc);
+    self.for_each_state(|_, state| {
       for (_, locations) in state.rows() {
         stats.rows += 1;
         stats.row_entries += locations.count();
       }
       stats.explicit_rows += state.explicit_len();
-    }
+    });
     stats
+  }
+}
+
+/// Runs the other engine on a fresh analysis of the body. If `results` come from the
+/// block engine, checks that the location engine computes the same state at every
+/// location. Otherwise, only logs whether the engines disagree on the body (a
+/// `stat engine_diff.unstable_same` or `stat engine_diff.unstable_differs` line).
+#[cfg(feature = "engine-diff")]
+fn check_engines<'tcx>(
+  tcx: TyCtxt<'tcx>,
+  def_id: rustc_hir::def_id::DefId,
+  body_with_facts: &BodyWithBorrowckFacts<'tcx>,
+  mode: EvalMode,
+  results: &FlowResults<'_, 'tcx>,
+) {
+  let body = &body_with_facts.body;
+  let place_info = PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, mode);
+  let location_domain = place_info.location_domain().clone();
+  let analysis = FlowAnalysis::new(tcx, def_id, body, place_info);
+  let by_block = results.engine_stats().by_block;
+  let other = if by_block {
+    engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis)
+  } else {
+    engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
+  };
+  let mut differs = false;
+  results.for_each_state(|location, state| {
+    let other = other.state_at(location);
+    if *state == *other || differs {
+      return;
+    }
+    differs = true;
+    let mut rows = state
+      .rows()
+      .chain(other.rows())
+      .map(|(row, _)| *row)
+      .filter(|row| state.row_set(row) != other.row_set(row))
+      .map(|row| {
+        format!(
+          "  {row:?}: by block {:?}, by location {:?}",
+          state.row_set(&row),
+          other.row_set(&row)
+        )
+      })
+      .collect::<Vec<_>>();
+    rows.sort();
+    rows.dedup();
+    let message = format!(
+      "engine-diff: the engines disagree at {location:?} ({:?}) in {}:\n{}",
+      body.stmt_at(location),
+      tcx.def_path_debug_str(def_id),
+      rows.join("\n")
+    );
+    if by_block {
+      panic!("{message}");
+    }
+    log::info!(target: "flowistry::engine_diff", "{message}");
+  });
+  if !by_block {
+    let outcome = if differs { "differs" } else { "same" };
+    log::info!(target: "flowistry::stats", "stat engine_diff.unstable_{outcome} = 1");
   }
 }
 
@@ -220,9 +297,26 @@ pub fn compute_flow_with_mode<'a, 'tcx>(
       block_timer!("Flow");
 
       let analysis = FlowAnalysis::new(tcx, def_id, body, place_info);
-      engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
+      // The block engine stores far fewer states, but it computes the same states as the
+      // location engine only if the effect of every location is idempotent on its own
+      // output (see `engine`).
+      let unstable = analysis.unstable_locations();
+      analysis.counters.unstable_locations.set(unstable);
+      if unstable == 0 {
+        engine::iterate_to_fixpoint(tcx, body, location_domain.clone(), analysis)
+      } else {
+        engine::iterate_to_fixpoint_by_location(
+          tcx,
+          body,
+          location_domain.clone(),
+          analysis,
+        )
+      }
       // analysis.into_engine(tcx, body).iterate_to_fixpoint()
     };
+
+    #[cfg(feature = "engine-diff")]
+    check_engines(tcx, def_id, body_with_facts, mode, &results);
 
     if log::log_enabled!(target: "flowistry::stats", log::Level::Info) {
       for (name, value) in results.stats().counters() {
@@ -293,5 +387,61 @@ fn f(x: i32, v: &mut Vec<i32>) -> i32 {
       assert_eq!(size.locations, locations);
       assert!(size.rows > 0 && size.row_entries >= size.rows, "{size:?}");
     });
+  }
+
+  fn engine_stats_of(input: &str) -> FlowStats {
+    let stats = std::sync::Mutex::new(None);
+    test_utils::compile_body(input, |tcx, body_id, body_with_facts| {
+      let results = compute_flow(tcx, body_id, body_with_facts);
+      // Reading the states replays blocks: `state_at` and `for_each_state` agree.
+      results.for_each_state(|location, state| {
+        assert!(*state == *results.state_at(location), "{location:?}");
+      });
+      *stats.lock().unwrap() = Some(results.stats());
+    });
+    stats.into_inner().unwrap().unwrap()
+  }
+
+  /// A body whose effects are all idempotent on their own output runs on the block
+  /// engine.
+  #[test]
+  fn test_block_engine_when_exact() {
+    let stats = engine_stats_of(
+      r#"
+fn f(x: &mut (i32, i32), v: Vec<i32>, n: usize) -> i32 {
+  let mut y = 0;
+  for i in 0 .. n {
+    x.0 = y + v[i];
+    y = foo(x, y);
+  }
+  y
+}
+fn foo(x: &mut (i32, i32), y: i32) -> i32 { x.1 + y }
+"#,
+    );
+    assert!(stats.by_block, "{stats:?}");
+    assert_eq!(stats.unstable_locations, 0);
+    assert!(stats.block_visits > 0);
+  }
+
+  /// A call through raw pointers writes every place behind a raw pointer, including
+  /// the pointees its own inputs read: applying it to its own output adds dependencies,
+  /// so the location engine runs (see the fixture `revisited_raw_pointer_call`).
+  #[test]
+  fn test_location_engine_when_not_idempotent() {
+    let stats = engine_stats_of(
+      r#"
+fn f(p: *const u8, r: *const u8, n: usize) -> usize {
+  let mut i = 0;
+  while i < n { i += 1; }
+  let a = p;
+  g(a, a)
+}
+fn g(a: *const u8, b: *const u8) -> usize { 0 }
+"#,
+    );
+    assert!(!stats.by_block, "{stats:?}");
+    assert!(stats.unstable_locations > 0);
+    assert_eq!(stats.block_visits, 0);
   }
 }

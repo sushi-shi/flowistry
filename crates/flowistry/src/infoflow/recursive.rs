@@ -54,7 +54,7 @@ impl<'tcx> CalleeExitState<'tcx> {
         _ => None,
       });
     for loc in return_locs {
-      state.join(flow.state_at(loc));
+      state.join(&flow.state_at(loc));
     }
     CalleeExitState { state }
   }
