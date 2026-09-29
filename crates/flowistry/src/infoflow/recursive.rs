@@ -9,7 +9,7 @@ use rustc_middle::{
   mir::*,
   ty::{ClosureKind, GenericArgKind, Instance, InstanceKind, TyKind, TypingEnv},
 };
-use rustc_mir_dataflow::JoinSemiLattice;
+use rustc_mir_dataflow::{Analysis, JoinSemiLattice};
 use rustc_span::Spanned;
 use rustc_utils::mir::{
   borrowck_facts::get_body_with_borrowck_facts, location_or_arg::index::LocationOrArgSet,
@@ -45,7 +45,7 @@ struct CalleeExitState<'tcx> {
 
 impl<'tcx> CalleeExitState<'tcx> {
   fn new(flow: &FlowResults<'_, 'tcx>, body: &Body<'tcx>) -> Self {
-    let mut state = FlowDomain::new(flow.analysis.location_domain());
+    let mut state = flow.analysis.bottom_value(body);
     let return_locs = body
       .basic_blocks
       .iter_enumerated()
