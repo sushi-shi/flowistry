@@ -75,3 +75,27 @@ fn range_lists_have_no_repetitions() {
   // The places are mentioned at several locations, which used to repeat their spans.
   assert!(influenced > 0);
 }
+
+#[test]
+fn places_refer_to_a_table_of_distinct_ranges() {
+  let output = focus(1, 8);
+  let table = output["Ok"]["ranges"].as_array().unwrap();
+  let distinct = table.iter().map(Value::to_string).collect::<HashSet<_>>();
+  assert_eq!(distinct.len(), table.len(), "the table repeats a range");
+
+  let mut used = HashSet::new();
+  for place in output["Ok"]["place_info"].as_array().unwrap() {
+    let range = place["range"].as_u64().unwrap();
+    let lists = ["ranges", "slice", "direct_influence"]
+      .into_iter()
+      .flat_map(|field| place[field].as_array().unwrap());
+    for index in lists.map(|index| index.as_u64().unwrap()).chain([range]) {
+      assert!(
+        (index as usize) < table.len(),
+        "index {index} out of the table"
+      );
+      used.insert(index);
+    }
+  }
+  assert_eq!(used.len(), table.len(), "the table has unused ranges");
+}

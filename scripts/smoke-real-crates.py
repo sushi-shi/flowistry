@@ -473,6 +473,14 @@ def canonical(output):
 
     if not isinstance(output, dict):
         return output
+    if isinstance(output.get("ranges"), list):
+        # The range table format: places refer to the distinct ranges of the output by
+        # index. Resolve them, so that both formats compare equal.
+        table = output["ranges"]
+        resolve = lambda v: [table[i] for i in v] if isinstance(v, list) else table[v]
+        output = {k: v for k, v in output.items() if k != "ranges"}
+        output["place_info"] = [{k: resolve(v) for k, v in p.items()}
+                                for p in output.get("place_info", [])]
     places = []
     for p in output.get("place_info", []):
         p = dict(p)
