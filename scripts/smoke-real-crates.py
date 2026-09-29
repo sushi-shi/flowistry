@@ -34,6 +34,7 @@ import glob
 import gzip
 import hashlib
 import json
+import math
 import os
 import random
 import re
@@ -72,6 +73,10 @@ BENIGN_ERRORS = [
 ]
 
 CRASH_MARKERS = ["panicked", "internal compiler error"]
+
+# Timer output of the backend: `[<time> INFO  rustc_utils::timer] <phase> took <n>s`.
+PHASE_LOG = "rustc_utils::timer=info,flowistry_ide=info"
+PHASE_LINE = re.compile(r"\] (.+?) took ([0-9.]+)s$", re.M)
 
 PROBE_FILE = "__flowistry_smoke_probe__.rs"
 
@@ -393,7 +398,9 @@ def crash_signature(stderr):
     return "no decodable response: " + last_lines(stderr, 2)
 
 
-def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=None):
+def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=None, phases=False):
+    if phases:
+        env = dict(env, RUST_LOG=PHASE_LOG)
     # rustc_plugin clears cargo's cached metadata for library targets only; for a binary,
     # cargo would consider the target fresh and never run the plugin again.
     if touch is not None:
@@ -417,13 +424,41 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
     if any(m in stderr for m in CRASH_MARKERS) or response is None:
         return {"status": "crash", "message": crash_signature(stderr), "seconds": seconds,
                 "returncode": res.returncode, "stderr_tail": stderr[-4000:]}
+    timings = parse_phases(stderr) if phases else None
     if "Ok" in response:
-        return {"status": "ok", "seconds": seconds, "output": response["Ok"],
+        return {"status": "ok", "seconds": seconds, "output": response["Ok"], "phases": timings,
                 "places": len(response["Ok"].get("place_info", []))}
     err = response.get("Err", response)
     message = err.get("error") or err.get("type") or json.dumps(err)
     status = "benign" if any(b in message for b in BENIGN_ERRORS) else "error"
-    return {"status": status, "message": message, "seconds": seconds}
+    return {"status": status, "message": message, "seconds": seconds, "phases": timings}
+
+
+def parse_phases(stderr):
+    """Sum the backend's `<phase> took <n>s` timer lines by phase name.
+
+    Per-body timers (`get_bodies_with_borrowck_facts for <body>`) are summed under one name.
+    """
+    totals = {}
+    for m in PHASE_LINE.finditer(stderr):
+        name = re.sub(r" for .*$", "", m[1])
+        totals[name] = totals.get(name, 0.0) + float(m[2])
+    return {k: round(v, 4) for k, v in totals.items()}
+
+
+def focus_repeated(crate_dir, env, rel_file, line, col, mode, args, touch=None):
+    """Run a position `--repeat` times; keep the fastest run (the least disturbed by noise),
+    unless some run failed, in which case that failure is the result."""
+    runs = [flowistry_focus(crate_dir, env, rel_file, line, col, mode, args.timeout, touch, args.phases)
+            for _ in range(max(1, args.repeat))]
+    worst = {"crash": 0, "timeout": 1, "error": 2}
+    failed = sorted((r for r in runs if r["status"] in worst), key=lambda r: worst[r["status"]])
+    if failed:
+        return failed[0]
+    best = min(runs, key=lambda r: r["seconds"])
+    if len(runs) > 1:
+        best["all_seconds"] = [r["seconds"] for r in runs]
+    return best
 
 
 def canonical(output):
@@ -599,6 +634,18 @@ def write_positions(path, positions):
     path.write_text("\n".join(rows) + "\n")
 
 
+def in_nested_package(root, rel):
+    """Whether `rel` lies in another package nested under `root` (a directory with its own
+    Cargo.toml). rustc_plugin cannot tell such packages apart when the outer one has a build
+    script (\"Too many matching targets\"), and they are not this package's code anyway."""
+    d = (root / rel).parent
+    while d != root:
+        if (d / "Cargo.toml").is_file():
+            return True
+        d = d.parent
+    return False
+
+
 def compiled_files(crate_dir, lib_dir, env, timeout, touch=None, workspace_root=None):
     """Probe the backend with an uncompiled file to learn which files the crate compiles.
 
@@ -628,6 +675,8 @@ def compiled_files(crate_dir, lib_dir, env, timeout, touch=None, workspace_root=
             continue  # dependency or std file
         if rel.parts[0] == "target" or rel.suffix != ".rs" or not (root / rel).is_file():
             continue
+        if in_nested_package(root, rel):
+            continue  # another workspace member nested inside this package's directory
         files.add(str(rel))
     return sorted(files)
 
@@ -764,7 +813,7 @@ def smoke_git_entry(entry, args, backends):
     """Run a corpus entry that is a git repository pinned to a commit."""
     report = {"spec": entry["git"], "crate": None, "skipped": [], "records": [], "files": []}
     try:
-        if args.update_corpus and entry.get("ref"):
+        if args.update_corpus and entry.get("ref") and (args.bump or not entry.get("rev")):
             entry["rev"] = resolve_git_ref(entry["git"], entry["ref"])
         if not entry.get("rev"):
             raise RuntimeError("no pinned rev; run --update-corpus")
@@ -817,7 +866,7 @@ def run_positions(report, entry_dir, dest, args, backends):
         for mode in args.modes:
             rec = {"crate": label, "file": rel, "line": line, "column": col, "mode": mode}
             for name, env in envs:
-                result = flowistry_focus(dest, env, rel, line, col, mode, args.timeout, report.get("touch"))
+                result = focus_repeated(dest, env, rel, line, col, mode, args, report.get("touch"))
                 rec[name] = result
                 if result["status"] in ("crash", "timeout"):
                     log(f"[{label}] {result['status'].upper()} ({name}) {mode} {rel}:{line}:{col}: "
@@ -910,8 +959,40 @@ def summarize(reports, backends, args, total_seconds):
             a, b = rec[names[0]], rec[names[1]]
             out.append(f"    {rec['crate']} {rec['mode']} {rec['file']}:{rec['line']}:{rec['column']}: "
                        f"{a['status']} vs {b['status']}")
+    if args.phases or args.repeat > 1 or len(names) == 2:
+        out.append("")
+        out += timing_summary(reports, names)
     out.append(f"total runtime: {total_seconds:.0f}s")
     return "\n".join(out)
+
+
+def timing_summary(reports, names):
+    """Wall time and per-phase totals over runs that succeeded for every backend.
+
+    With two backends, also the ratio of totals and the geometric mean of per-run ratios
+    (so a few huge positions do not hide a change on typical ones).
+    """
+    runs = [rec for r in reports for rec in r["records"]
+            if all(rec[n]["status"] == "ok" for n in names)]
+    out = [f"timing over {len(runs)} run(s) that succeeded for every backend:"]
+    phase_names = sorted({p for rec in runs for n in names for p in (rec[n].get("phases") or {})})
+    rows = [("wall", lambda res: res["seconds"])]
+    rows += [(p, lambda res, p=p: (res.get("phases") or {}).get(p, 0.0)) for p in phase_names]
+    header = f"  {'phase':<34}" + "".join(f" {n:>12}" for n in names)
+    if len(names) == 2:
+        header += f" {'ratio':>7} {'geomean':>8}"
+    out.append(header)
+    for label, get in rows:
+        totals = [sum(get(rec[n]) for rec in runs) for n in names]
+        line = f"  {label:<34}" + "".join(f" {t:>11.2f}s" for t in totals)
+        if len(names) == 2:
+            pairs = [(get(rec[names[0]]), get(rec[names[1]])) for rec in runs]
+            pairs = [(a, b) for a, b in pairs if a > 0 and b > 0]
+            ratio = totals[1] / totals[0] if totals[0] else float("nan")
+            geo = (2 ** (sum(math.log2(b / a) for a, b in pairs) / len(pairs))) if pairs else float("nan")
+            line += f" {ratio:>7.3f} {geo:>8.3f}"
+        out.append(line)
+    return out
 
 
 def main():
@@ -944,11 +1025,19 @@ def main():
     parser.add_argument("--update-corpus", action="store_true",
                         help="re-resolve the locked corpus (scripts/smoke-corpus): re-prune dependencies, "
                              "regenerate each Cargo.lock, resample positions, record checksums")
+    parser.add_argument("--bump", action="store_true",
+                        help="with --update-corpus, move git entries to the current head of their ref "
+                             "(otherwise their pinned commit is kept)")
     parser.add_argument("--prepare-only", action="store_true",
                         help="prepare crates (and with --update-corpus, write the corpus) without "
                              "running the analysis")
     parser.add_argument("--fetch", action="store_true",
                         help="download corpus crates and dependencies that are not available offline")
+    parser.add_argument("--phases", action="store_true",
+                        help="record the backend's per-phase timers for every run (a timing section is "
+                             "added to the report; use release builds of the backend)")
+    parser.add_argument("--repeat", type=int, default=1,
+                        help="run every position N times and keep the fastest, to reduce timing noise")
     parser.add_argument("--json", type=Path, metavar="FILE", help="write every run record to FILE")
     parser.add_argument("--keep-outputs", action="store_true", help="include full focus outputs in --json")
     parser.add_argument("--examples", type=int, default=5, help="example positions shown per problem group")
@@ -969,16 +1058,20 @@ def main():
 
     registries = registry_dirs(args)
     corpus = json.loads(CORPUS_FILE.read_text()) if CORPUS_FILE.is_file() else None
-    if args.crates:
-        if args.update_corpus:
-            parser.error("--update-corpus applies to the locked corpus, not to --crate")
+    if args.crates and not args.update_corpus:
         specs = args.crates
     elif corpus is not None:
-        specs = [dict(e) for e in corpus["crates"]]
         if args.update_corpus:
-            corpus["seed"], corpus["positions"] = args.seed, args.positions
+            # Entries are updated in place; with --crate, only the named ones.
+            specs = [e for e in corpus["crates"] if not args.crates or e["name"] in args.crates]
+            unknown = set(args.crates or []) - {e["name"] for e in corpus["crates"]}
+            if unknown:
+                parser.error(f"not in the corpus: {', '.join(sorted(unknown))}")
+            if not args.crates:
+                corpus["seed"], corpus["positions"] = args.seed, args.positions
         else:
-            args.seed, args.positions = corpus["seed"], corpus["positions"]
+            specs = [dict(e) for e in corpus["crates"]]
+        args.seed, args.positions = corpus["seed"], corpus["positions"]
     elif args.update_corpus:
         # Start a corpus from the newest registry version of each default crate.
         specs = []
@@ -995,7 +1088,8 @@ def main():
         reports = list(pool.map(lambda s: smoke_crate(s, args, registries, backends), specs))
     total = time.monotonic() - started
     if args.update_corpus:
-        corpus["crates"] = specs
+        if not args.crates:
+            corpus["crates"] = specs
         CORPUS_DIR.mkdir(parents=True, exist_ok=True)
         CORPUS_FILE.write_text(json.dumps(corpus, indent=2) + "\n")
         log(f"wrote {CORPUS_FILE}")
