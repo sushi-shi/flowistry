@@ -1,0 +1,10 @@
+/* recurse: union initialization writes the active field */
+union U {
+  a: u8,
+  b: i32,
+}
+fn main() {
+  `[let x = 1;]`
+  `[let u = U { b: x };]`
+  `[unsafe { u.b };]`
+}

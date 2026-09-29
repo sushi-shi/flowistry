@@ -150,6 +150,21 @@ where
       // then destructure this into a series of mutations like
       // _1.field1 = op1, _1.field2 = op2, and so on.
       Rvalue::Aggregate(agg_kind, ops) => {
+        // A union aggregate `U { f: op }` has a single operand, for its active field.
+        if let AggregateKind::Adt(def_id, idx, substs, _, Some(active_field)) =
+          &**agg_kind
+          && let [input_op] = &ops.raw[..]
+        {
+          let field_def = &tcx.adt_def(*def_id).variant(*idx).fields[*active_field];
+          let field = PlaceElem::Field(*active_field, field_def.ty(tcx, substs));
+          (self.f)(location, vec![Mutation {
+            mutated: mutated.project_deeper(&[field], tcx),
+            inputs: input_op.as_place().into_iter().collect(),
+            kind: MutationKind::Assign,
+          }]);
+          return;
+        }
+
         let info = match &**agg_kind {
           AggregateKind::Adt(def_id, idx, substs, _, _) => {
             let adt_def = tcx.adt_def(*def_id);
@@ -423,6 +438,43 @@ fn f(s: m::S) { let t = s; }
     assert_eq!(t_writes, vec![(p.local("t").field(1).mk(), vec![
       p.local("s").field(1).mk()
     ])]);
+  }
+
+  #[test]
+  fn test_union_aggregate_writes_active_field() {
+    let input = r#"
+union U { a: u8, b: i32 }
+fn f(x: i32) { let u = U { b: x }; }
+"#;
+    test_utils::compile_body(input, check_union_aggregate);
+  }
+
+  fn check_union_aggregate<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    body_id: rustc_hir::BodyId,
+    body_with_facts: &rustc_borrowck::consumers::BodyWithBorrowckFacts<'tcx>,
+  ) {
+    let body = &body_with_facts.body;
+    let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+    let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+    let p = Placer::new(tcx, body);
+    let u = p.local("u").mk();
+
+    let mut writes = Vec::new();
+    let mut visitor = ModularMutationVisitor::new(&place_info, |_, mts| {
+      writes.extend(mts.into_iter().map(|mt| (mt.mutated, mt.kind)));
+    });
+    for location in body.all_locations() {
+      visitor.visit_location(body, location);
+    }
+    let u_writes = writes
+      .into_iter()
+      .filter(|(mutated, _)| mutated.local == u.local)
+      .collect::<Vec<_>>();
+
+    // Only the active field `b` (index 1, of type i32) is written.
+    let b = tcx.mk_place_field(u, FieldIdx::from_usize(1), tcx.types.i32);
+    assert_eq!(u_writes, vec![(b, MutationKind::Assign)]);
   }
 
   #[test]
