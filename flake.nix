@@ -68,6 +68,19 @@
           SYSROOT = "${toolchain}";
           LD_LIBRARY_PATH = compilerLibraries;
         };
+
+        # The default shell plus the native libraries that the git repositories in the
+        # smoke-test corpus (scripts/smoke-corpus) need to build: niri and alacritty.
+        smoke = pkgs.mkShell {
+          packages = [ toolchain pkgs.pkg-config pkgs.python3 pkgs.time pkgs.git pkgs.cmake ];
+          nativeBuildInputs = [ pkgs.rustPlatform.bindgenHook ];
+          buildInputs = with pkgs; [
+            cairo dbus libGL libdisplay-info_0_3 libinput seatd libxkbcommon libgbm pango
+            wayland systemd pipewire fontconfig freetype libxcb
+          ];
+          SYSROOT = "${toolchain}";
+          LD_LIBRARY_PATH = compilerLibraries;
+        };
       });
     };
 }
