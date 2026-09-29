@@ -1,0 +1,14 @@
+trait Tr {
+  fn f(&self, x: &mut i32) {}
+}
+struct S;
+impl Tr for S {
+  fn f(&self, x: &mut i32) {
+    *x = 1;
+  }
+}
+fn g(t: &dyn Tr, x: &mut i32) {
+  t.f(x);
+  `(x)`;
+}
+fn main() {}

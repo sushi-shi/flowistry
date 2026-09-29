@@ -6,8 +6,10 @@ use rustc_middle::{
   mir::{visit::Visitor, *},
   ty::{AdtKind, TyKind},
 };
-use rustc_utils::{AdtDefExt, OperandExt, mir::place::PlaceCollector};
+use rustc_span::Spanned;
+use rustc_utils::{OperandExt, mir::place::PlaceCollector};
 
+use super::callsite::cmp_places_structurally;
 use crate::mir::{
   placeinfo::PlaceInfo,
   utils::{self, AsyncHack},
@@ -77,9 +79,10 @@ impl MutationKind {
       MutationKind::Assign | MutationKind::CallReturn => MutationStatus::Definitely,
       MutationKind::CallArgument { .. } => MutationStatus::Possibly,
       MutationKind::CalleeEffect(effect) => match effect {
-        CalleeEffect::Return(Precision::Exact | Precision::Coarsened) => {
-          MutationStatus::Definitely
-        }
+        CalleeEffect::Return(Precision::Exact) => MutationStatus::Definitely,
+        // Several coarsened return effects can land on the same caller place, each
+        // covering only a part of it: none of them overwrites the whole place.
+        CalleeEffect::Return(Precision::Coarsened) => MutationStatus::Possibly,
         CalleeEffect::ArgPointee(Precision::Exact | Precision::Coarsened) => {
           MutationStatus::Possibly
         }
@@ -149,6 +152,21 @@ where
       // then destructure this into a series of mutations like
       // _1.field1 = op1, _1.field2 = op2, and so on.
       Rvalue::Aggregate(agg_kind, ops) => {
+        // A union aggregate `U { f: op }` has a single operand, for its active field.
+        if let AggregateKind::Adt(def_id, idx, substs, _, Some(active_field)) =
+          &**agg_kind
+          && let [input_op] = &ops.raw[..]
+        {
+          let field_def = &tcx.adt_def(*def_id).variant(*idx).fields[*active_field];
+          let field = PlaceElem::Field(*active_field, field_def.ty(tcx, substs));
+          (self.f)(location, vec![Mutation {
+            mutated: mutated.project_deeper(&[field], tcx),
+            inputs: input_op.as_place().into_iter().collect(),
+            kind: MutationKind::Assign,
+          }]);
+          return;
+        }
+
         let info = match &**agg_kind {
           AggregateKind::Adt(def_id, idx, substs, _, _) => {
             let adt_def = tcx.adt_def(*def_id);
@@ -207,12 +225,8 @@ where
         if let TyKind::Adt(adt_def, substs) = place_ty.kind()
           && adt_def.is_struct()
         {
-          let fields = adt_def
-            .all_visible_fields(self.place_info.def_id, self.place_info.tcx)
-            .enumerate()
-            .map(|(i, field_def)| {
-              PlaceElem::Field(FieldIdx::from_usize(i), field_def.ty(tcx, substs))
-            });
+          let fields = utils::visible_fields(*adt_def, self.place_info.def_id, tcx)
+            .map(|(field, field_def)| PlaceElem::Field(field, field_def.ty(tcx, substs)));
           let mut mutations = fields
             .map(|field| {
               let mutated_field = mutated.project_deeper(&[field], tcx);
@@ -260,19 +274,10 @@ where
         destination,
         ..
       } => {
-        let async_hack = AsyncHack::new(
-          self.place_info.tcx,
-          self.place_info.body,
-          self.place_info.def_id,
-        );
-        let arg_places = utils::arg_places(args)
-          .into_iter()
-          .filter(|(_, place)| !async_hack.ignore_place(*place))
-          .collect::<Vec<_>>();
-        let arg_inputs = arg_places
-          .iter()
-          .map(|(_, place)| *place)
-          .collect::<Vec<_>>();
+        let CallArgumentWrites {
+          inputs: arg_inputs,
+          mutations: arg_mutations,
+        } = call_argument_writes(self.place_info, args, |_| true);
 
         let ret_is_unit = destination
           .ty(self.place_info.body.local_decls(), tcx)
@@ -295,16 +300,7 @@ where
           inputs,
           kind: MutationKind::CallReturn,
         }];
-
-        for (arg_index, arg) in arg_places {
-          for arg_mut in self.place_info.reachable_values(arg, Mutability::Mut) {
-            mutations.push(Mutation {
-              mutated: *arg_mut,
-              inputs: arg_inputs.clone(),
-              kind: MutationKind::CallArgument { arg: arg_index },
-            });
-          }
-        }
+        mutations.extend(arg_mutations);
 
         (self.f)(location, mutations);
       }
@@ -312,6 +308,61 @@ where
       _ => {}
     }
   }
+}
+
+/// The modular approximation of the writes of a call through its operands.
+pub(crate) struct CallArgumentWrites<'tcx> {
+  /// Every place operand of the call (except async contexts): the inputs of each
+  /// write.
+  pub inputs: Vec<Place<'tcx>>,
+  /// The writes through the selected operands.
+  pub mutations: Vec<Mutation<'tcx>>,
+}
+
+/// Computes the modular approximation of the writes of a call with operands `args`
+/// through the operands whose index satisfies `operands`: the callee may write any
+/// place mutably reachable from them, with every operand as an input.
+///
+/// Operands of the async [`Context`](std::task::Context) type are ignored (see
+/// [`AsyncHack`]). The writes are ordered deterministically (see
+/// [`cmp_places_structurally`]).
+pub(crate) fn call_argument_writes<'tcx>(
+  place_info: &PlaceInfo<'_, 'tcx>,
+  args: &[Spanned<Operand<'tcx>>],
+  operands: impl Fn(usize) -> bool,
+) -> CallArgumentWrites<'tcx> {
+  let async_hack = AsyncHack::new(place_info.tcx, place_info.body, place_info.def_id);
+  let arg_places = utils::arg_places(args)
+    .into_iter()
+    .filter(|(_, place)| !async_hack.ignore_place(*place))
+    .collect::<Vec<_>>();
+  let inputs = arg_places
+    .iter()
+    .map(|(_, place)| *place)
+    .collect::<Vec<_>>();
+
+  let mutations = arg_places
+    .iter()
+    .filter(|(i, _)| operands(*i))
+    .flat_map(|(i, arg)| {
+      let mut reachable = place_info
+        .reachable_values(*arg, Mutability::Mut)
+        .iter()
+        .copied()
+        .collect::<Vec<_>>();
+      reachable.sort_by(|p1, p2| {
+        cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
+      });
+      let inputs = &inputs;
+      reachable.into_iter().map(move |mutated| Mutation {
+        mutated,
+        inputs: inputs.clone(),
+        kind: MutationKind::CallArgument { arg: *i },
+      })
+    })
+    .collect();
+
+  CallArgumentWrites { inputs, mutations }
 }
 
 #[cfg(test)]
@@ -391,6 +442,81 @@ fn f(g: fn(&mut i32, i32) -> i32, s: S) {
   }
 
   #[test]
+  fn test_struct_copy_uses_real_field_indices() {
+    let input = r#"
+mod m { pub struct S { a: u8, pub b: i32 } }
+fn f(s: m::S) { let t = s; }
+"#;
+    test_utils::compile_body(input, check_struct_copy);
+  }
+
+  fn check_struct_copy<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    body_id: rustc_hir::BodyId,
+    body_with_facts: &rustc_borrowck::consumers::BodyWithBorrowckFacts<'tcx>,
+  ) {
+    let body = &body_with_facts.body;
+    let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+    let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+    let p = Placer::new(tcx, body);
+    let t = p.local("t").mk();
+
+    let mut writes = Vec::new();
+    let mut visitor = ModularMutationVisitor::new(&place_info, |_, mts| {
+      writes.extend(mts.into_iter().map(|mt| (mt.mutated, mt.inputs)));
+    });
+    for location in body.all_locations() {
+      visitor.visit_location(body, location);
+    }
+    let t_writes = writes
+      .into_iter()
+      .filter(|(mutated, _)| mutated.local == t.local)
+      .collect::<Vec<_>>();
+
+    // Only `b`, the field at index 1, is visible, and it is copied from `s.b`.
+    assert_eq!(t_writes, vec![(p.local("t").field(1).mk(), vec![
+      p.local("s").field(1).mk()
+    ])]);
+  }
+
+  #[test]
+  fn test_union_aggregate_writes_active_field() {
+    let input = r#"
+union U { a: u8, b: i32 }
+fn f(x: i32) { let u = U { b: x }; }
+"#;
+    test_utils::compile_body(input, check_union_aggregate);
+  }
+
+  fn check_union_aggregate<'tcx>(
+    tcx: TyCtxt<'tcx>,
+    body_id: rustc_hir::BodyId,
+    body_with_facts: &rustc_borrowck::consumers::BodyWithBorrowckFacts<'tcx>,
+  ) {
+    let body = &body_with_facts.body;
+    let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+    let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+    let p = Placer::new(tcx, body);
+    let u = p.local("u").mk();
+
+    let mut writes = Vec::new();
+    let mut visitor = ModularMutationVisitor::new(&place_info, |_, mts| {
+      writes.extend(mts.into_iter().map(|mt| (mt.mutated, mt.kind)));
+    });
+    for location in body.all_locations() {
+      visitor.visit_location(body, location);
+    }
+    let u_writes = writes
+      .into_iter()
+      .filter(|(mutated, _)| mutated.local == u.local)
+      .collect::<Vec<_>>();
+
+    // Only the active field `b` (index 1, of type i32) is written.
+    let b = tcx.mk_place_field(u, FieldIdx::from_usize(1), tcx.types.i32);
+    assert_eq!(u_writes, vec![(b, MutationKind::Assign)]);
+  }
+
+  #[test]
   fn test_mutation_kind_status() {
     use CalleeEffect::*;
     use MutationStatus::*;
@@ -400,7 +526,7 @@ fn f(g: fn(&mut i32, i32) -> i32, s: S) {
       (MutationKind::CallReturn, Definitely),
       (MutationKind::CallArgument { arg: 3 }, Possibly),
       (MutationKind::CalleeEffect(Return(Exact)), Definitely),
-      (MutationKind::CalleeEffect(Return(Coarsened)), Definitely),
+      (MutationKind::CalleeEffect(Return(Coarsened)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Exact)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Coarsened)), Possibly),
     ];

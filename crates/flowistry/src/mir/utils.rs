@@ -1,10 +1,11 @@
 //! A potpourri of utilities for working with the MIR, primarily exposed as extension traits.
 
+use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::FxHashSet as HashSet;
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::*,
-  ty::{GenericArgKind, RegionKind, RegionVid, Ty, TyCtxt, TypingEnv},
+  ty::{AdtDef, FieldDef, GenericArgKind, RegionKind, RegionVid, Ty, TyCtxt, TypingEnv},
 };
 use rustc_span::Spanned;
 use rustc_utils::{BodyExt, OperandExt, PlaceExt};
@@ -90,6 +91,23 @@ pub fn arg_mut_ptrs<'tcx>(
         .map(move |place| (*i, tcx.mk_place_deref(place)))
     })
     .collect::<Vec<_>>()
+}
+
+/// The fields of a struct that are visible from `def_id`, with their index in the
+/// struct (not their index among the visible fields).
+///
+/// Note: `rustc_utils`' `AdtDefExt::all_visible_fields().enumerate()` gives the latter,
+/// which is not a valid [`FieldIdx`] when a private field precedes a visible one.
+pub fn visible_fields<'tcx>(
+  adt_def: AdtDef<'tcx>,
+  def_id: DefId,
+  tcx: TyCtxt<'tcx>,
+) -> impl Iterator<Item = (FieldIdx, &'tcx FieldDef)> {
+  adt_def
+    .non_enum_variant()
+    .fields
+    .iter_enumerated()
+    .filter(move |(_, field)| field.vis.is_accessible_from(def_id, tcx))
 }
 
 /// Given the arguments to a function, returns all places in the arguments.

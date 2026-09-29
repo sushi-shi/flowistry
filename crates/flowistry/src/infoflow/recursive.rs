@@ -7,9 +7,10 @@
 use log::{debug, info};
 use rustc_middle::{
   mir::*,
-  ty::{ClosureKind, GenericArgKind, TyKind},
+  ty::{ClosureKind, GenericArgKind, Instance, InstanceKind, TyKind, TypingEnv},
 };
 use rustc_mir_dataflow::JoinSemiLattice;
+use rustc_span::Spanned;
 use rustc_utils::mir::{
   borrowck_facts::get_body_with_borrowck_facts, location_or_arg::index::LocationOrArgSet,
 };
@@ -19,13 +20,14 @@ use super::{
   BODY_STACK, FlowResults,
   analysis::FlowAnalysis,
   callsite::{
-    CallSite, CalleeRow, EffectPath, FallbackReason, Resolved, RowRole, Target,
+    CallSite, CalleeRow, Coarsening, EffectPath, FallbackReason, Resolved, RowRole,
+    Target, cmp_places_structurally,
   },
 };
 use crate::{
   infoflow::{
     FlowDomain,
-    mutation::{CalleeEffect, Mutation, MutationKind, Precision},
+    mutation::{CalleeEffect, Mutation, MutationKind, Precision, call_argument_writes},
   },
   mir::utils::{self, ErasedTy},
 };
@@ -81,6 +83,10 @@ impl<'tcx> CalleeExitState<'tcx> {
 enum RowExport {
   /// The row is not observable by the caller.
   Hidden,
+  /// A unit part of the return place: it carries no data, but its dependencies
+  /// (e.g. the control dependencies of the returned variant) are dependencies of
+  /// the whole return value.
+  UnitReturn,
   /// The caller place of the row can be an input of callee effects, but the callee
   /// did not write it (or its writes are invisible to the caller).
   Source(EffectPath),
@@ -92,7 +98,7 @@ enum RowExport {
 impl RowExport {
   fn source(&self) -> Option<&EffectPath> {
     match self {
-      RowExport::Hidden => None,
+      RowExport::Hidden | RowExport::UnitReturn => None,
       RowExport::Source(path) | RowExport::Effect(path, _) => Some(path),
     }
   }
@@ -102,7 +108,12 @@ impl RowExport {
 fn export(role: RowRole, row_ty: ErasedTy<'_>, written: bool) -> RowExport {
   // Unit rows carry no data.
   if row_ty.is_unit() {
-    return RowExport::Hidden;
+    return match role {
+      RowRole::Return(_) => RowExport::UnitReturn,
+      RowRole::ArgDirect(_) | RowRole::ArgPointee(_) | RowRole::Internal => {
+        RowExport::Hidden
+      }
+    };
   }
   match role {
     RowRole::Internal => RowExport::Hidden,
@@ -131,7 +142,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     debug!("Checking whether can recurse into {func:?}");
 
     let func = func.constant().ok_or(FallbackReason::FuncNotConstant)?;
-    let TyKind::FnDef(def_id, _) = func.const_.ty().kind() else {
+    let TyKind::FnDef(def_id, fn_args) = func.const_.ty().kind() else {
       return Err(FallbackReason::NotFnDef);
     };
     let def_id = *def_id;
@@ -147,6 +158,25 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       .hir_get_if_local(def_id)
       .ok_or(FallbackReason::NotLocal)?;
     let body_id = node.body_id().ok_or(FallbackReason::NoBody)?;
+
+    // A call to a trait method names the trait's item, whose body is the default
+    // implementation. Only recurse into it if the call really resolves to it, and not
+    // to an impl that overrides it (or to an impl that cannot be known here).
+    if tcx.trait_of_assoc(def_id).is_some() {
+      let typing_env = TypingEnv::post_analysis(tcx, self.def_id);
+      let fn_args = tcx.erase_and_anonymize_regions(*fn_args);
+      match Instance::try_resolve(tcx, typing_env, def_id, fn_args) {
+        // Only a statically resolved call to the item itself runs its body: a
+        // virtual call through `dyn Trait` (InstanceKind::Virtual) names the same
+        // item but dispatches to the impl of the dynamic type.
+        Ok(Some(Instance {
+          def: InstanceKind::Item(resolved),
+          ..
+        }))
+          if resolved == def_id => {}
+        _ => return Err(FallbackReason::ResolvesElsewhere),
+      }
+    }
 
     // TODO(wcrichto, 2024-12-02): mir_unsafety_check_result got removed, need to find a replacement
     // let unsafety = tcx.mir_unsafety_check_result(def_id.expect_local());
@@ -215,7 +245,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       .iter()
       .filter_map(|(row, export, target)| match export {
         RowExport::Effect(path, effect) => Some((path, *effect, *row, *target)),
-        RowExport::Hidden | RowExport::Source(_) => None,
+        RowExport::Hidden | RowExport::UnitReturn | RowExport::Source(_) => None,
       })
       .collect::<Vec<_>>();
     // Ties (rows with the same path) are broken structurally, so the order is total.
@@ -225,15 +255,37 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
         .then_with(|| r1.cmp_structural(*r2))
     });
 
-    let mutations = effects
+    // The caller places of the observable rows that a callee row depends on.
+    let inputs_of = |row: CalleeRow<'tcx>| -> Vec<Place<'tcx>> {
+      let row_deps = exit.deps(row);
+      translated
+        .iter()
+        .filter(|(source, ..)| row_deps.is_superset(exit.deps(*source)))
+        .map(|(_, _, source)| source.place())
+        .collect()
+    };
+
+    // The callee always writes its whole return place, even when no row records it
+    // (e.g. a return value without data dependencies, or with only unit fields). This
+    // write comes first: the field effects below then refine it. Its inputs are those
+    // of the unit parts of the return value only (e.g. `Ok(())` depending on a
+    // condition), so that each data field keeps its own dependencies.
+    let mut whole_return_inputs = rows
+      .iter()
+      .filter(|(_, export)| matches!(export, RowExport::UnitReturn))
+      .flat_map(|(row, _)| inputs_of(*row))
+      .collect::<Vec<_>>();
+    whole_return_inputs.dedup();
+    let whole_return = Mutation {
+      mutated: site.destination(),
+      inputs: whole_return_inputs,
+      kind: MutationKind::CalleeEffect(CalleeEffect::Return(Precision::Exact)),
+    };
+
+    let effect_mutations = effects
       .into_iter()
       .flat_map(|(_, effect, row, target)| {
-        let row_deps = exit.deps(row);
-        let inputs = translated
-          .iter()
-          .filter(|(source, ..)| row_deps.is_superset(exit.deps(*source)))
-          .map(|(_, _, source)| source.place())
-          .collect::<Vec<_>>();
+        let inputs = inputs_of(row);
 
         let precision = match target {
           Target::Exact(_) => Precision::Exact,
@@ -254,16 +306,57 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       })
       .collect::<Vec<_>>();
 
-    Ok(mutations)
+    let opaque_mutations = self.opaque_operand_mutations(&site, args, body);
+
+    Ok(
+      std::iter::once(whole_return)
+        .chain(effect_mutations)
+        .chain(opaque_mutations)
+        .collect(),
+    )
+  }
+
+  /// The modular approximation of the writes through operands passed to opaque callee
+  /// parameters (e.g. of a generic or trait-object type): the callee's analysis
+  /// cannot see the pointers hidden in them, so its rows miss those writes.
+  fn opaque_operand_mutations(
+    &self,
+    site: &CallSite<'_, 'tcx>,
+    args: &[Spanned<Operand<'tcx>>],
+    callee_body: &Body<'tcx>,
+  ) -> Vec<Mutation<'tcx>> {
+    let opaque = site.opaque_operands(callee_body);
+    call_argument_writes(&self.place_info, args, |i| opaque.contains(&i)).mutations
   }
 
   /// The caller places written by a callee effect on `target`.
   fn write_targets(&self, target: Target<'tcx>) -> SmallVec<[Place<'tcx>; 4]> {
     match target {
       Target::Exact(place) => smallvec![place],
-      // FIXME: an effect coarsened through a pointer may write data reachable from
-      // `place`, which is not written here.
-      Target::Coarsened { place, lost: _ } => smallvec![place],
+      Target::Coarsened {
+        place,
+        lost: Coarsening::Interior,
+      } => smallvec![place],
+      // The effect is behind a pointer stored somewhere in `place` that the caller
+      // cannot name: it may write anything mutably reachable from `place`.
+      Target::Coarsened {
+        place,
+        lost: Coarsening::ThroughPointer,
+      } => {
+        let mut targets: SmallVec<[Place<'tcx>; 4]> = smallvec![place];
+        let reachable = self.place_info.reachable_values(place, Mutability::Mut);
+        let mut reachable = reachable
+          .iter()
+          .copied()
+          .filter(|reachable| *reachable != place)
+          .collect::<SmallVec<[_; 4]>>();
+        // Deterministic order.
+        reachable.sort_by(|p1, p2| {
+          cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
+        });
+        targets.extend(reachable);
+        targets
+      }
     }
   }
 }

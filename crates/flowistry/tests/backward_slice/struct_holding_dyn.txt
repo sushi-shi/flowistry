@@ -1,0 +1,19 @@
+trait Set {
+  fn set(&mut self);
+}
+impl Set for &mut i32 {
+  fn set(&mut self) {
+    **self = 1;
+  }
+}
+struct H<'a> {
+  b: Box<dyn Set + 'a>,
+}
+fn h(mut w: H) {
+  w.b.set();
+}
+fn main() {
+  let mut x = 0;
+  h(H { b: Box::new(&mut x) });
+  `(x)`;
+}

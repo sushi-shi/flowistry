@@ -4,6 +4,6 @@ fn f(x: i32) -> Option<()> {
 }
 fn main() {
   let x = 1;
-  let r = f(x);
+  `[let r = f(x);]`
   `[r;]`
 }
