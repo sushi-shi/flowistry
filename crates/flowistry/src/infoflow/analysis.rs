@@ -9,7 +9,7 @@ use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{visit::Visitor, *},
-  ty::TyCtxt,
+  ty::{TyCtxt, TypingEnv},
 };
 use rustc_mir_dataflow::Analysis;
 use rustc_utils::{
@@ -31,7 +31,10 @@ use super::{
 };
 use crate::{
   extensions::{ContextMode, MutabilityMode},
-  mir::placeinfo::{NormPlace, PlaceInfo},
+  mir::{
+    placeinfo::{NormPlace, PlaceInfo},
+    utils::ErasedTy,
+  },
 };
 
 /// Represents the information flows at a given instruction. See [`FlowResults`](super::FlowResults) for a high-level explanation of this datatype.
@@ -188,7 +191,8 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
   }
 
   /// The places written by a mutation of `mutated`: its aliases, except those behind
-  /// a shared reference (unless mutability is ignored).
+  /// a shared reference (unless mutability is ignored, or the alias has interior
+  /// mutability).
   pub(crate) fn written_aliases(
     &self,
     mutated: Place<'tcx>,
@@ -197,6 +201,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       MutabilityMode::IgnoreMut => true,
       MutabilityMode::DistinguishMut => false,
     };
+    let typing_env = TypingEnv::post_analysis(self.tcx, self.def_id);
     self
       .place_info
       .aliases(mutated)
@@ -208,7 +213,13 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
           let ty = sub_place.ty(self.body.local_decls(), self.tcx).ty;
           matches!(ty.ref_mutability(), Some(Mutability::Not))
         });
-        !has_immut || ignore_mut
+        // State behind a shared reference can still be written if it is interior
+        // mutable, e.g. a `RefCell` written through a guard obtained from `&self`.
+        let interior_mutable = || {
+          let ty = alias.ty(self.body.local_decls(), self.tcx).ty;
+          !ErasedTy::new(self.tcx, ty).is_freeze(self.tcx, typing_env)
+        };
+        !has_immut || ignore_mut || interior_mutable()
       })
       .copied()
       .collect()

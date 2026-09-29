@@ -19,6 +19,7 @@ use super::{
     CallSite, Coarsening, FallbackReason, Resolved, Target, cmp_places_structurally,
   },
   effects::CallEffects,
+  interior::InteriorMutation,
   mutation::{CalleeEffect, Mutation, MutationKind, Precision, call_argument_writes},
   summary::{CalleeSummary, InputContents},
 };
@@ -172,9 +173,12 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     // The modular approximation of the writes through operands passed to opaque
     // callee parameters (e.g. of a generic or trait-object type): the callee's
     // analysis cannot see the pointers hidden in them.
-    let opaque_mutations = call_argument_writes(&self.place_info, args, |i| {
-      summary.opaque_operands.contains(&i)
-    })
+    let opaque_mutations = call_argument_writes(
+      &self.place_info,
+      args,
+      |i| summary.opaque_operands.contains(&i),
+      InteriorMutation::Possible,
+    )
     .mutations
     .into_iter()
     .map(|mutation| Mutation {

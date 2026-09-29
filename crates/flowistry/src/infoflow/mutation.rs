@@ -10,7 +10,10 @@ use rustc_middle::{
 use rustc_span::Spanned;
 use rustc_utils::{OperandExt, mir::place::PlaceCollector};
 
-use super::callsite::cmp_places_structurally;
+use super::{
+  callsite::cmp_places_structurally,
+  interior::{InteriorMutation, interior_mutable_places},
+};
 use crate::mir::{
   placeinfo::PlaceInfo,
   utils::{self, AsyncHack},
@@ -298,7 +301,12 @@ where
         let CallArgumentWrites {
           inputs: arg_inputs,
           mutations: arg_mutations,
-        } = call_argument_writes(self.place_info, args, |_| true);
+        } = call_argument_writes(
+          self.place_info,
+          args,
+          |_| true,
+          InteriorMutation::of_call(tcx, self.place_info.def_id, func),
+        );
 
         let ret_is_unit = destination
           .ty(self.place_info.body.local_decls(), tcx)
@@ -424,7 +432,9 @@ pub(crate) struct CallArgumentWrites<'tcx> {
 
 /// Computes the modular approximation of the writes of a call with operands `args`
 /// through the operands whose index satisfies `operands`: the callee may write any
-/// place mutably reachable from them, with every operand as an input.
+/// place mutably reachable from them, and, unless `interior` says it does not, the
+/// interior-mutable state they give shared access to (see
+/// [`interior_mutable_places`]), with every operand as an input.
 ///
 /// Operands of the async [`Context`](std::task::Context) type are ignored (see
 /// [`AsyncHack`]). The writes are ordered deterministically (see
@@ -433,6 +443,7 @@ pub(crate) fn call_argument_writes<'tcx>(
   place_info: &PlaceInfo<'_, 'tcx>,
   args: &[Spanned<Operand<'tcx>>],
   operands: impl Fn(usize) -> bool,
+  interior: InteriorMutation,
 ) -> CallArgumentWrites<'tcx> {
   let async_hack = AsyncHack::new(place_info.tcx, place_info.body, place_info.def_id);
   let arg_places = utils::arg_places(args)
@@ -456,6 +467,12 @@ pub(crate) fn call_argument_writes<'tcx>(
       reachable.sort_by(|p1, p2| {
         cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
       });
+      match interior {
+        InteriorMutation::Possible => {
+          reachable.extend(interior_mutable_places(place_info, *arg))
+        }
+        InteriorMutation::None => {}
+      }
       let inputs = &inputs;
       reachable.into_iter().map(move |mutated| Mutation {
         mutated,

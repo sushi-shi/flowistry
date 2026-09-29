@@ -1209,15 +1209,6 @@ fn main() { let mut t = 0; let WRITE = 5; f(&mut t, WRITE); let v = `(t)`; }"#,
   ),
 ];
 
-/// Writes that SigOnly sees and Recurse does not, yet: interior mutability behind a
-/// shared reference is not modeled.
-const KNOWN_RECURSE_MISSES: &[&str] = &[
-  "nested Cell field",
-  "RefCell::replace via &mut self",
-  "&mut self method, Cell::set on field",
-  "&mut self helper passes &RefCell to local fn",
-];
-
 #[test]
 fn recurse_sees_every_write_sig_only_sees() {
   let mut misses = Vec::new();
@@ -1228,5 +1219,5 @@ fn recurse_sees_every_write_sig_only_sees() {
       misses.push(*name);
     }
   }
-  assert_eq!(misses, KNOWN_RECURSE_MISSES);
+  assert_eq!(misses, Vec::<&str>::new());
 }
