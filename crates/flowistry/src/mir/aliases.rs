@@ -10,10 +10,7 @@ use rustc_data_structures::{
   intern::Interned,
 };
 use rustc_hir::def_id::DefId;
-use rustc_index::{
-  IndexVec,
-  bit_set::{ChunkedBitSet, SparseBitMatrix},
-};
+use rustc_index::{IndexVec, bit_set::SparseBitMatrix};
 use rustc_middle::{
   mir::{visit::Visitor, *},
   ty::{Region, RegionKind, RegionVid, Ty, TyCtxt, TyKind},
@@ -88,8 +85,7 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
     body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
     pointer_mode: PointerMode,
   ) -> Self {
-    let loans =
-      Self::compute_loans(tcx, def_id, body_with_facts, pointer_mode, |_, _, _| true);
+    let loans = Self::compute_loans(tcx, def_id, body_with_facts, pointer_mode, None);
     Aliases {
       tcx,
       body: &body_with_facts.body,
@@ -108,7 +104,8 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
     selector: impl Fn(RegionVid, RegionVid, BorrowckLocationIndex) -> bool,
   ) -> Self {
     let pointer_mode = EvalMode::from_ambient().pointer_mode;
-    let loans = Self::compute_loans(tcx, def_id, body_with_facts, pointer_mode, selector);
+    let loans =
+      Self::compute_loans(tcx, def_id, body_with_facts, pointer_mode, Some(&selector));
     Aliases {
       tcx,
       body: &body_with_facts.body,
@@ -121,19 +118,31 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
     def_id: DefId,
     body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
     pointer_mode: PointerMode,
-    constraint_selector: impl Fn(RegionVid, RegionVid, BorrowckLocationIndex) -> bool,
+    constraint_selector: Option<
+      &dyn Fn(RegionVid, RegionVid, BorrowckLocationIndex) -> bool,
+    >,
   ) -> LoanMap<'tcx> {
     let start = Instant::now();
     let body = &body_with_facts.body;
     let static_region = RegionVid::from_usize(0);
     let input_facts = &body_with_facts.input_facts.as_ref().unwrap();
-    let subset_base = input_facts
-      .subset_base
-      .iter()
-      .cloned()
-      .map(|(r1, r2, i)| (RegionVid::from(r1), RegionVid::from(r2), i))
-      .filter(|(r1, r2, i)| constraint_selector(*r1, *r2, *i))
-      .collect::<Vec<_>>();
+
+    // The relation below ignores the points of `subset_base`, which has a fact at every
+    // point (consecutively) for each constraint that holds everywhere: millions of
+    // facts in large bodies. Without a selector, which may depend on the point, only
+    // one fact of each run is needed.
+    let mut subset_base = Vec::new();
+    let mut previous = None;
+    for &(r1, r2, point) in &input_facts.subset_base {
+      let pair = (RegionVid::from(r1), RegionVid::from(r2));
+      match constraint_selector {
+        None if previous == Some(pair) => continue,
+        None => previous = Some(pair),
+        Some(selector) if !selector(pair.0, pair.1, point) => continue,
+        Some(_) => {}
+      }
+      subset_base.push(pair);
+    }
 
     let all_pointers = body
       .local_decls()
@@ -145,7 +154,7 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
     let max_region = all_pointers
       .iter()
       .map(|(region, _)| *region)
-      .chain(subset_base.iter().flat_map(|(r1, r2, _)| [*r1, *r2]))
+      .chain(subset_base.iter().flat_map(|(r1, r2)| [*r1, *r2]))
       .filter(|r| *r != UNKNOWN_REGION)
       .max()
       .unwrap_or(static_region);
@@ -158,7 +167,7 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
     let ignore_regions = async_hack.ignore_regions();
 
     // subset('a, 'b) :- subset_base('a, 'b, _).
-    for (a, b, _) in subset_base {
+    for (a, b) in subset_base {
       if ignore_regions.contains(&a) || ignore_regions.contains(&b) {
         continue;
       }
@@ -269,13 +278,11 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
       .collect::<Vec<_>>();
     let subset_graph = VecGraph::<_, false>::new(num_regions, edge_pairs);
     let subset_sccs = Sccs::<RegionVid, RegionSccIndex>::new(&subset_graph);
-    let mut scc_to_regions = IndexVec::from_elem_n(
-      ChunkedBitSet::new_empty(num_regions),
-      subset_sccs.num_sccs(),
-    );
+    let mut scc_to_regions: IndexVec<RegionSccIndex, Vec<RegionVid>> =
+      IndexVec::from_elem_n(Vec::new(), subset_sccs.num_sccs());
     for r in all_regions.clone() {
       let scc = subset_sccs.scc(r);
-      scc_to_regions[scc].insert(r);
+      scc_to_regions[scc].push(r);
     }
     let scc_order = reverse_post_order(&subset_sccs, subset_sccs.scc(static_region));
     elapsed("relation construction", start);
@@ -314,7 +321,7 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
       loop {
         let mut changed = false;
         let scc = &scc_to_regions[scc_idx];
-        for a in scc.iter() {
+        for &a in scc {
           for b in subset.iter(a) {
             if a == b {
               continue;
@@ -326,7 +333,7 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
             let b_contains =
               unsafe { &mut *(contains.get_mut(&b).unwrap() as *mut LoanSet<'tcx>) };
 
-            let cyclic = scc.contains(b);
+            let cyclic = subset_sccs.scc(b) == scc_idx;
             match definite.get(&b) {
               Some((ty, proj)) if !cyclic => {
                 for (p, mutability) in a_contains.iter() {
@@ -555,6 +562,53 @@ fn main() {
         aliases.aliases(d_deref),
         hashset! { p.local("c").field(1).mk(), d_deref },
       );
+    });
+  }
+
+  /// Without a selector, the relation is built from one fact of each run of facts
+  /// that differ only by their point. It must equal the relation of all facts.
+  #[test]
+  fn test_loans_without_selector_match_all_facts() {
+    let input = r#"
+struct S<'a> { x: &'a mut i32, y: Vec<&'a i32> }
+
+fn f<'a>(s: &mut S<'a>, v: &'a i32) -> &'a i32 {
+  s.y.push(v);
+  let mut last = v;
+  for (i, w) in s.y.iter().enumerate() {
+    if i % 2 == 0 { last = w; }
+  }
+  *s.x += *last;
+  last
+}
+
+fn main() {
+  let mut a = 0;
+  let b = 1;
+  let mut s = S { x: &mut a, y: vec![] };
+  let r = f(&mut s, &b);
+  let t = (r, &s);
+}
+    "#;
+    test_utils::compile_body(input, |tcx, body_id, body_with_facts| {
+      let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+      let facts = &body_with_facts.input_facts.as_ref().unwrap().subset_base;
+      let pairs = facts.iter().map(|(a, b, _)| (a, b)).collect::<HashSet<_>>();
+      assert!(
+        facts.len() > pairs.len(),
+        "the facts repeat pairs across points"
+      );
+
+      let fast =
+        Aliases::build_with_mode(tcx, def_id, body_with_facts, PointerMode::Precise);
+      let all = Aliases::compute_loans(
+        tcx,
+        def_id,
+        body_with_facts,
+        PointerMode::Precise,
+        Some(&|_, _, _| true),
+      );
+      assert_eq!(fast.loans, all);
     });
   }
 }
