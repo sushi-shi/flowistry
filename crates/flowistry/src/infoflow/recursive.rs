@@ -84,14 +84,9 @@ enum RowExport {
   /// The caller place of the row can be an input of callee effects, but the callee
   /// did not write it (or its writes are invisible to the caller).
   Source(EffectPath),
-  /// The callee wrote the row, which the caller observes.
-  Effect(EffectPath, EffectKind),
-}
-
-#[derive(Clone, Copy, Debug)]
-enum EffectKind {
-  Return,
-  ArgPointee,
+  /// The callee wrote the row, which the caller observes as the given kind of
+  /// effect (once the precision of its translation is known).
+  Effect(EffectPath, fn(Precision) -> CalleeEffect),
 }
 
 impl RowExport {
@@ -112,9 +107,9 @@ fn export(role: RowRole, row_ty: ErasedTy<'_>, written: bool) -> RowExport {
   match role {
     RowRole::Internal => RowExport::Hidden,
     // The return place is always written by the time the callee returns.
-    RowRole::Return(path) => RowExport::Effect(path, EffectKind::Return),
+    RowRole::Return(path) => RowExport::Effect(path, CalleeEffect::Return),
     RowRole::ArgPointee(path) if written => {
-      RowExport::Effect(path, EffectKind::ArgPointee)
+      RowExport::Effect(path, CalleeEffect::ArgPointee)
     }
     RowRole::ArgPointee(path) => RowExport::Source(path),
     // Writes to a parameter itself are local to the callee.
@@ -202,16 +197,29 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       })
       .collect::<Vec<_>>();
 
-    // Emit parents before their children, in a deterministic order.
-    let mut effects = rows
+    // Translate every observable row once. Rows without caller state (e.g. rooted at
+    // a constant operand) are neither effects nor inputs.
+    let translated = rows
       .iter()
-      .filter_map(|(row, export)| match export {
-        RowExport::Effect(path, kind) => Some((path, *kind, *row)),
+      .filter_map(|(row, export)| {
+        let path = export.source()?;
+        match site.translate(path) {
+          Resolved::Target(target) => Some((*row, export, target)),
+          Resolved::NoCallerState => None,
+        }
+      })
+      .collect::<Vec<_>>();
+
+    // Emit parents before their children, in a deterministic order.
+    let mut effects = translated
+      .iter()
+      .filter_map(|(row, export, target)| match export {
+        RowExport::Effect(path, effect) => Some((path, *effect, *row, *target)),
         RowExport::Hidden | RowExport::Source(_) => None,
       })
       .collect::<Vec<_>>();
     // Ties (rows with the same path) are broken structurally, so the order is total.
-    effects.sort_by(|(p1, _, r1), (p2, _, r2)| {
+    effects.sort_by(|(p1, _, r1, _), (p2, _, r2, _)| {
       (p1.elems.len(), p1)
         .cmp(&(p2.elems.len(), p2))
         .then_with(|| r1.cmp_structural(*r2))
@@ -219,30 +227,19 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
 
     let mutations = effects
       .into_iter()
-      .flat_map(|(path, kind, row)| {
-        let Resolved::Target(target) = site.translate(path) else {
-          return SmallVec::<[Mutation<'tcx>; 4]>::new();
-        };
-
+      .flat_map(|(_, effect, row, target)| {
         let row_deps = exit.deps(row);
-        let inputs = rows
+        let inputs = translated
           .iter()
-          .filter(|(source, _)| row_deps.is_superset(exit.deps(*source)))
-          .filter_map(|(_, export)| export.source())
-          .filter_map(|source| match site.translate(source) {
-            Resolved::Target(target) => Some(target.place()),
-            Resolved::NoCallerState => None,
-          })
+          .filter(|(source, ..)| row_deps.is_superset(exit.deps(*source)))
+          .map(|(_, _, source)| source.place())
           .collect::<Vec<_>>();
 
         let precision = match target {
           Target::Exact(_) => Precision::Exact,
           Target::Coarsened { .. } => Precision::Coarsened,
         };
-        let effect = match kind {
-          EffectKind::Return => CalleeEffect::Return(precision),
-          EffectKind::ArgPointee => CalleeEffect::ArgPointee(precision),
-        };
+        let effect = effect(precision);
         debug!("callee row {row:?} -> {target:?}, inputs {inputs:?}");
 
         self
@@ -253,7 +250,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
             inputs: inputs.clone(),
             kind: MutationKind::CalleeEffect(effect),
           })
-          .collect()
+          .collect::<SmallVec<[Mutation<'tcx>; 4]>>()
       })
       .collect::<Vec<_>>();
 
