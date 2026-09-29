@@ -1,0 +1,8 @@
+fn f(`[a: (i32, i32)]`, b: i32) {
+  `[let mut c = a;]`
+  `[let e = c.1;]`
+  `[c = (b, b);]`
+  `[let d = c.0;]`
+}
+
+fn main() {}

@@ -1,0 +1,12 @@
+fn f(mut a: (i32, i32), n: usize) {
+  let mut i = 0;
+  while i < n {
+    a.0 = a.1 + 1;
+    a.1 = a.0;
+    i += 1;
+  }
+  let r = a.0;
+  `(r)`;
+}
+
+fn main() {}

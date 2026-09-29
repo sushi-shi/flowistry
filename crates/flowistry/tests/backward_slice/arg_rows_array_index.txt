@@ -1,0 +1,7 @@
+fn f(mut a: [i32; 4], i: usize, y: i32) {
+  a[i] = y;
+  let z = a[0];
+  `(z)`;
+}
+
+fn main() {}
