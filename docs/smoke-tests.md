@@ -21,12 +21,12 @@ Without `--crate`, the script runs the corpus in `scripts/smoke-corpus/`:
   offline and the resulting `Cargo.lock`.
 - **Applications from git**, each pinned to a commit and analysing one package
   (`package`): just, tokei, alacritty, niri, helix (`helix-term`), bevy (`crates/bevy_ecs`),
-  brains (`open/stratum-proxy`), local_lru, cargo-inspect, biodiff, objdiff (`objdiff-cli`),
+  brains (`open/stratum-proxy`) and bosminer (`open/bosminer`, the Braiins OS miner), local_lru, cargo-inspect, biodiff, objdiff (`objdiff-cli`),
   boxxy and sudo-rs. Their own `Cargo.lock` pins dependencies; for repositories without one
   (bevy) a generated lock is stored in the corpus. Optional fields: `root` (the cargo
   workspace's subdirectory, e.g. brains), `submodules` (check out git submodules, e.g. biodiff's
   bundled WFA2), and `env` (build environment, e.g. `CFLAGS=-std=gnu17` for old C code that
-  gcc 15 rejects under C23, or `RUSTFLAGS=--cap-lints=warn` for crates that deny warnings).
+  gcc 15 rejects under C23, or `RUSTFLAGS=--cap-lints=warn` for old crates that deny warnings).
 - For every entry, the sampled positions (`positions.tsv`), so a change to the sampler
   does not change what is measured.
 

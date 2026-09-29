@@ -121,10 +121,7 @@
       "ref": "main",
       "root": "open/stratum-proxy",
       "package": ".",
-      "rev": "3c1a16f9b21b7b5b2be123ada13b1b22061519ba",
-      "env": {
-        "RUSTFLAGS": "--cap-lints=warn"
-      }
+      "rev": "b8decc39a4ebd23b026300677d26432bd0986865"
     },
     {
       "name": "local_lru",
@@ -174,6 +171,14 @@
       "ref": "main",
       "package": ".",
       "rev": "bc73403512aa2cdfeeaaf720960c9b9fc04e3f62"
+    },
+    {
+      "name": "bosminer",
+      "git": "https://github.com/sushi-shi/brains",
+      "ref": "main",
+      "root": "open/bosminer",
+      "package": "bosminer",
+      "rev": "b8decc39a4ebd23b026300677d26432bd0986865"
     }
   ]
 }
