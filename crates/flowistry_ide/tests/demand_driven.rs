@@ -149,3 +149,26 @@ fn errors_in_the_focused_body_fail_the_request() {
     run.stderr
   );
 }
+
+/// rustc borrow-checks closures with their enclosing function, and cannot check one
+/// on its own: focusing in a nested closure first checks the enclosing function.
+#[test]
+fn closures_are_checked_with_their_enclosing_function() {
+  let dir = setup(
+    "closures",
+    "\npub struct Map<K, V> { entries: Vec<(K, V)> }\n\nimpl<K, V> Map<K, V> {\n    pub fn sort_by<F: FnMut(&K, &K) -> std::cmp::Ordering>(&mut self, mut cmp: F) {\n        let mut run = move |entries: &mut Vec<(K, V)>| {\n            entries.sort_by(|a, b| cmp(&a.0, &b.0));\n        };\n        run(&mut self.entries);\n    }\n}\n",
+  );
+  // `cmp(&a.0, &b.0)` in the inner closure, then `entries` in the outer one.
+  for (line, column) in [(18, 35), (18, 12)] {
+    for mode in ["SigOnly", "Recurse"] {
+      let run = focus(&dir, mode, line, column);
+      assert!(
+        !run.stderr.contains("internal compiler error")
+          && !run.stderr.contains("panicked"),
+        "{}",
+        run.stderr
+      );
+      assert!(places(&run) > 0);
+    }
+  }
+}

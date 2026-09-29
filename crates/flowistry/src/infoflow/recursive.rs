@@ -11,9 +11,7 @@ use rustc_middle::{
 };
 use rustc_mir_dataflow::JoinSemiLattice;
 use rustc_span::Spanned;
-use rustc_utils::mir::{
-  borrowck_facts::get_body_with_borrowck_facts, location_or_arg::index::LocationOrArgSet,
-};
+use rustc_utils::mir::location_or_arg::index::LocationOrArgSet;
 use smallvec::{SmallVec, smallvec};
 
 use super::{
@@ -207,7 +205,8 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       return Err(FallbackReason::RecursiveCall);
     }
 
-    let body_with_facts = get_body_with_borrowck_facts(tcx, def_id.expect_local());
+    let body_with_facts =
+      crate::mir::borrowck::body_with_borrowck_facts(tcx, def_id.expect_local());
     let body = &body_with_facts.body;
     let site = CallSite::parse(tcx, self.def_id, self.body, call, def_id, body)?;
 

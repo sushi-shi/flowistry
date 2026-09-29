@@ -8,7 +8,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 use rustc_utils::{
   SpanExt, block_timer,
-  mir::{borrowck_facts::get_body_with_borrowck_facts, location_or_arg::LocationOrArg},
+  mir::location_or_arg::LocationOrArg,
   source_map::{
     range::CharRange,
     spanner::{EnclosingHirSpans, Spanner},
@@ -34,7 +34,7 @@ pub struct FocusOutput {
 
 pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
   let def_id = tcx.hir_body_owner_def_id(body_id);
-  let body_with_facts = get_body_with_borrowck_facts(tcx, def_id);
+  let body_with_facts = flowistry::mir::borrowck::body_with_borrowck_facts(tcx, def_id);
   let body = &body_with_facts.body;
   let results = &infoflow::compute_flow(tcx, body_id, body_with_facts);
 

@@ -659,13 +659,15 @@ fn coarsening(path: &EffectPath, i: usize) -> Coarsening {
 mod test {
   use rustc_borrowck::consumers::BodyWithBorrowckFacts;
   use rustc_middle::{mir::BasicBlock, ty::GenericArgsRef};
-  use rustc_utils::mir::borrowck_facts::get_body_with_borrowck_facts;
   use smallvec::smallvec;
 
   use super::*;
   use crate::{
     extensions::EvalMode,
-    mir::placeinfo::PlaceInfo,
+    mir::{
+      borrowck::body_with_borrowck_facts as get_body_with_borrowck_facts,
+      placeinfo::PlaceInfo,
+    },
     test_utils::{self, IncrementalDir},
   };
 
