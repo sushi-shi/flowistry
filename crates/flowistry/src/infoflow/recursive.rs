@@ -83,6 +83,10 @@ impl<'tcx> CalleeExitState<'tcx> {
 enum RowExport {
   /// The row is not observable by the caller.
   Hidden,
+  /// A unit part of the return place: it carries no data, but its dependencies
+  /// (e.g. the control dependencies of the returned variant) are dependencies of
+  /// the whole return value.
+  UnitReturn,
   /// The caller place of the row can be an input of callee effects, but the callee
   /// did not write it (or its writes are invisible to the caller).
   Source(EffectPath),
@@ -94,7 +98,7 @@ enum RowExport {
 impl RowExport {
   fn source(&self) -> Option<&EffectPath> {
     match self {
-      RowExport::Hidden => None,
+      RowExport::Hidden | RowExport::UnitReturn => None,
       RowExport::Source(path) | RowExport::Effect(path, _) => Some(path),
     }
   }
@@ -104,7 +108,12 @@ impl RowExport {
 fn export(role: RowRole, row_ty: ErasedTy<'_>, written: bool) -> RowExport {
   // Unit rows carry no data.
   if row_ty.is_unit() {
-    return RowExport::Hidden;
+    return match role {
+      RowRole::Return(_) => RowExport::UnitReturn,
+      RowRole::ArgDirect(_) | RowRole::ArgPointee(_) | RowRole::Internal => {
+        RowExport::Hidden
+      }
+    };
   }
   match role {
     RowRole::Internal => RowExport::Hidden,
@@ -236,7 +245,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       .iter()
       .filter_map(|(row, export, target)| match export {
         RowExport::Effect(path, effect) => Some((path, *effect, *row, *target)),
-        RowExport::Hidden | RowExport::Source(_) => None,
+        RowExport::Hidden | RowExport::UnitReturn | RowExport::Source(_) => None,
       })
       .collect::<Vec<_>>();
     // Ties (rows with the same path) are broken structurally, so the order is total.
@@ -246,24 +255,37 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
         .then_with(|| r1.cmp_structural(*r2))
     });
 
+    // The caller places of the observable rows that a callee row depends on.
+    let inputs_of = |row: CalleeRow<'tcx>| -> Vec<Place<'tcx>> {
+      let row_deps = exit.deps(row);
+      translated
+        .iter()
+        .filter(|(source, ..)| row_deps.is_superset(exit.deps(*source)))
+        .map(|(_, _, source)| source.place())
+        .collect()
+    };
+
     // The callee always writes its whole return place, even when no row records it
     // (e.g. a return value without data dependencies, or with only unit fields). This
-    // write comes first, without inputs: the field effects below then refine it.
+    // write comes first: the field effects below then refine it. Its inputs are those
+    // of the unit parts of the return value only (e.g. `Ok(())` depending on a
+    // condition), so that each data field keeps its own dependencies.
+    let mut whole_return_inputs = rows
+      .iter()
+      .filter(|(_, export)| matches!(export, RowExport::UnitReturn))
+      .flat_map(|(row, _)| inputs_of(*row))
+      .collect::<Vec<_>>();
+    whole_return_inputs.dedup();
     let whole_return = Mutation {
       mutated: site.destination(),
-      inputs: Vec::new(),
+      inputs: whole_return_inputs,
       kind: MutationKind::CalleeEffect(CalleeEffect::Return(Precision::Exact)),
     };
 
     let effect_mutations = effects
       .into_iter()
       .flat_map(|(_, effect, row, target)| {
-        let row_deps = exit.deps(row);
-        let inputs = translated
-          .iter()
-          .filter(|(source, ..)| row_deps.is_superset(exit.deps(*source)))
-          .map(|(_, _, source)| source.place())
-          .collect::<Vec<_>>();
+        let inputs = inputs_of(row);
 
         let precision = match target {
           Target::Exact(_) => Precision::Exact,

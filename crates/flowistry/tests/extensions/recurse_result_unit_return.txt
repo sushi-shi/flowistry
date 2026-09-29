@@ -1,0 +1,9 @@
+/* recurse: Result<(), ()> return keeps control dependencies */
+fn check(x: i32) -> Result<(), ()> {
+  if x > 0 { Ok(()) } else { Err(()) }
+}
+fn main() {
+  let x = 1;
+  let r = check(x);
+  `(r)`;
+}
