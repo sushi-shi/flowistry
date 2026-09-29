@@ -464,7 +464,10 @@ def focus_repeated(crate_dir, env, rel_file, line, col, mode, args, touch=None):
 
 
 def canonical(output):
-    """Order-insensitive form of a focus output, for comparing two backends."""
+    """Order-insensitive form of a focus output, for comparing two backends.
+
+    The range lists of a place are compared as sets: the editor highlights each range,
+    so neither their order nor repetitions carry meaning."""
     def key(x):
         return json.dumps(x, sort_keys=True)
 
@@ -475,7 +478,7 @@ def canonical(output):
         p = dict(p)
         for field in ["ranges", "slice", "direct_influence"]:
             if field in p:
-                p[field] = sorted(p[field], key=key)
+                p[field] = sorted({key(x): x for x in p[field]}.values(), key=key)
         places.append(p)
     out = dict(output)
     out["place_info"] = sorted(places, key=key)
