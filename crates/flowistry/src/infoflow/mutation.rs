@@ -2,6 +2,7 @@
 
 use log::debug;
 use rustc_abi::FieldIdx;
+use rustc_ast::InlineAsmOptions;
 use rustc_middle::{
   mir::{visit::Visitor, *},
   ty::{AdtKind, TyKind},
@@ -46,6 +47,17 @@ pub enum MutationKind {
     arg: usize,
   },
 
+  /// An output operand of an inline assembly block (`asm!`) is written from all of
+  /// its inputs: the assembly itself is not analyzed.
+  AsmOutput,
+
+  /// Memory mutably reachable from the input operand at index `operand` of an inline
+  /// assembly block may be written, unless the block is `nomem` or `readonly`.
+  AsmMemory {
+    /// Index of the assembly operand through which the place is reachable.
+    operand: usize,
+  },
+
   /// An effect of a callee, translated from an analysis of the callee's body
   /// (see [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse)).
   CalleeEffect(CalleeEffect),
@@ -76,8 +88,12 @@ impl MutationKind {
   /// Whether this kind of write definitely or only possibly mutates its place.
   pub fn status(self) -> MutationStatus {
     match self {
-      MutationKind::Assign | MutationKind::CallReturn => MutationStatus::Definitely,
-      MutationKind::CallArgument { .. } => MutationStatus::Possibly,
+      MutationKind::Assign | MutationKind::CallReturn | MutationKind::AsmOutput => {
+        MutationStatus::Definitely
+      }
+      MutationKind::CallArgument { .. } | MutationKind::AsmMemory { .. } => {
+        MutationStatus::Possibly
+      }
       MutationKind::CalleeEffect(effect) => match effect {
         CalleeEffect::Return(Precision::Exact) => MutationStatus::Definitely,
         // Several coarsened return effects can land on the same caller place, each
@@ -305,9 +321,91 @@ where
         (self.f)(location, mutations);
       }
 
+      TerminatorKind::InlineAsm {
+        operands, options, ..
+      } => {
+        (self.f)(
+          location,
+          inline_asm_writes(self.place_info, operands, *options),
+        );
+      }
+
       _ => {}
     }
   }
+}
+
+/// The writes of an inline assembly block (`asm!`), which is not analyzed: every
+/// output is written from every input. Unless the block is declared `nomem`, it may
+/// also read memory reachable from its inputs, and unless it is `nomem` or
+/// `readonly`, it may write memory mutably reachable from them.
+fn inline_asm_writes<'tcx>(
+  place_info: &PlaceInfo<'_, 'tcx>,
+  operands: &[InlineAsmOperand<'tcx>],
+  options: InlineAsmOptions,
+) -> Vec<Mutation<'tcx>> {
+  let mut input_operands = Vec::new();
+  let mut outputs = Vec::new();
+  for (index, operand) in operands.iter().enumerate() {
+    match operand {
+      InlineAsmOperand::In { value, .. } => {
+        input_operands.extend(value.as_place().map(|p| (index, p)))
+      }
+      InlineAsmOperand::InOut {
+        in_value,
+        out_place,
+        ..
+      } => {
+        input_operands.extend(in_value.as_place().map(|p| (index, p)));
+        outputs.extend(*out_place);
+      }
+      InlineAsmOperand::Out { place, .. } => outputs.extend(*place),
+      InlineAsmOperand::Const { .. }
+      | InlineAsmOperand::SymFn { .. }
+      | InlineAsmOperand::SymStatic { .. }
+      | InlineAsmOperand::Label { .. } => {}
+    }
+  }
+
+  let mut inputs = input_operands.iter().map(|(_, p)| *p).collect::<Vec<_>>();
+  if !options.contains(InlineAsmOptions::NOMEM) {
+    for (_, input) in &input_operands {
+      inputs.extend(
+        place_info
+          .reachable_values(*input, Mutability::Not)
+          .iter()
+          .copied(),
+      );
+    }
+  }
+
+  let mut mutations = outputs
+    .into_iter()
+    .map(|mutated| Mutation {
+      mutated,
+      inputs: inputs.clone(),
+      kind: MutationKind::AsmOutput,
+    })
+    .collect::<Vec<_>>();
+  if !options.intersects(InlineAsmOptions::NOMEM | InlineAsmOptions::READONLY) {
+    for (operand, input) in &input_operands {
+      let mut reachable = place_info
+        .reachable_values(*input, Mutability::Mut)
+        .iter()
+        .copied()
+        .filter(|place| place != input)
+        .collect::<Vec<_>>();
+      reachable.sort_by(|p1, p2| {
+        cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
+      });
+      mutations.extend(reachable.into_iter().map(|mutated| Mutation {
+        mutated,
+        inputs: inputs.clone(),
+        kind: MutationKind::AsmMemory { operand: *operand },
+      }));
+    }
+  }
+  mutations
 }
 
 /// The modular approximation of the writes of a call through its operands.
@@ -525,6 +623,8 @@ fn f(x: i32) { let u = U { b: x }; }
       (MutationKind::Assign, Definitely),
       (MutationKind::CallReturn, Definitely),
       (MutationKind::CallArgument { arg: 3 }, Possibly),
+      (MutationKind::AsmOutput, Definitely),
+      (MutationKind::AsmMemory { operand: 0 }, Possibly),
       (MutationKind::CalleeEffect(Return(Exact)), Definitely),
       (MutationKind::CalleeEffect(Return(Coarsened)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Exact)), Possibly),
@@ -532,6 +632,48 @@ fn f(x: i32) { let u = U { b: x }; }
     ];
     for (kind, status) in cases {
       assert_eq!(kind.status(), status, "{kind:?}");
+    }
+  }
+
+  #[test]
+  fn test_inline_asm_writes_respect_memory_options() {
+    for (options, expect_memory_writes) in [
+      ("nostack", true),
+      ("readonly, nostack", false),
+      ("nomem, nostack", false),
+    ] {
+      let input = format!(
+        r#"
+fn f(p: *mut usize) -> usize {{
+  let r: usize;
+  unsafe {{ std::arch::asm!("/* {{r}} {{p}} */", p = in(reg) p, r = lateout(reg) r, options({options})); }}
+  r
+}}
+"#
+      );
+      test_utils::compile_body(input, move |tcx, body_id, body_with_facts| {
+        let body = &body_with_facts.body;
+        let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+        let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+        let r = Placer::new(tcx, body).local("r").mk();
+
+        let mut kinds = Vec::new();
+        let mut visitor = ModularMutationVisitor::new(&place_info, |_, mts| {
+          kinds.extend(mts.into_iter().map(|mt| (mt.mutated, mt.kind)));
+        });
+        for location in body.all_locations() {
+          visitor.visit_location(body, location);
+        }
+
+        assert!(
+          kinds.contains(&(r, MutationKind::AsmOutput)),
+          "{options}: {kinds:?}"
+        );
+        let memory_writes = kinds
+          .iter()
+          .any(|(_, kind)| matches!(kind, MutationKind::AsmMemory { .. }));
+        assert_eq!(memory_writes, expect_memory_writes, "{options}: {kinds:?}");
+      });
     }
   }
 }

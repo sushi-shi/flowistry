@@ -1,0 +1,14 @@
+/* recurse: inline assembly inside a callee */
+fn load(p: *const usize) -> usize {
+  let ret: usize;
+  unsafe {
+    std::arch::asm!("/* {r} {p} */", p = in(reg) p, r = lateout(reg) ret, options(nostack));
+  }
+  ret
+}
+fn main() {
+  `[let x = 5usize;]`
+  `[let p = &x]` as *const usize`[;]`
+  `[let v = load(p);]`
+  `[v;]`
+}
