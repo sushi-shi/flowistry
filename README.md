@@ -78,6 +78,8 @@ The documentation is published here: https://willcrichton.net/flowistry/flowistr
 
 > Note: Docs.rs doesn't support documentation for crates that use `#![feature(rustc_private)]` so we have to host it ourselves.
 
+To smoke-test a backend build against real crates (crash detection and build-to-build comparison), see [docs/smoke-tests.md](docs/smoke-tests.md).
+
 ## Usage
 
 Note that the latest Flowistry has a [**Maximum** Supported Rust Version](https://github.com/cognitive-engineering-lab/rustc_plugin/tree/main#maximum-supported-rust-version) of **Rust 1.73**. 
