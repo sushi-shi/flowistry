@@ -2,11 +2,12 @@ use std::{cell::RefCell, iter};
 
 use either::Either;
 use log::{debug, trace};
+use rustc_data_structures::fx::FxHashMap;
 use rustc_index::IndexVec;
 use rustc_middle::mir::*;
-use rustc_span::Span;
+use rustc_span::{Span, SpanData, SyntaxContext};
 use rustc_utils::{
-  OperandExt, SpanExt, block_timer,
+  OperandExt, block_timer,
   mir::location_or_arg::{
     LocationOrArg,
     index::{LocationOrArgDomain, LocationOrArgIndex, LocationOrArgSet},
@@ -303,19 +304,92 @@ pub fn compute_dependency_spans<'tcx>(
   let all_deps = compute_dependencies(results, targets, direction);
   debug!("all_deps={all_deps:?}");
 
+  // The targets' dependencies share most locations: convert each location once.
+  let mut location_spans = FxHashMap::default();
   all_deps
     .into_iter()
     .map(|deps| {
-      let location_spans = deps
-        .iter()
-        .flat_map(|location| {
+      let mut spans = Vec::new();
+      for location in deps.iter() {
+        spans.extend_from_slice(location_spans.entry(*location).or_insert_with(|| {
           spanner.location_to_spans(*location, body, EnclosingHirSpans::OuterOnly)
-        })
-        .collect::<Vec<_>>();
+        }));
+      }
 
-      let merged_spans = Span::merge_overlaps(location_spans);
+      let merged_spans = merge_spans(spans);
       trace!("Spans: {merged_spans:?}");
       merged_spans
     })
     .collect::<Vec<_>>()
+}
+
+/// Merges the overlapping (or touching) spans of `spans`, with the same result as
+/// [`SpanExt::merge_overlaps`] but in `O(n log n)` instead of `O(n²)`.
+///
+/// Once the spans are sorted by position, a span can only overlap the last merged
+/// one. Each span is decoded once, and without tracking its parent: this runs after
+/// the analysis, outside of any query, and decoding a span with tracking goes through
+/// the incremental dependency graph.
+pub fn merge_spans(spans: Vec<Span>) -> Vec<Span> {
+  let mut spans = spans
+    .into_iter()
+    .map(|span| (span.data_untracked(), span))
+    .collect::<Vec<_>>();
+  spans.sort_by_key(|(data, _)| (data.lo, data.hi));
+
+  let mut merged: Vec<(SpanData, Span)> = Vec::with_capacity(spans.len());
+  for (data, span) in spans {
+    // See the note in `SpanExt::subtract`.
+    let span = span.with_ctxt(SyntaxContext::root());
+    match merged.last_mut() {
+      Some((last_data, last)) if data.lo <= last_data.hi && last_data.lo <= data.hi => {
+        *last = span.to(*last);
+        *last_data = last.data_untracked();
+      }
+      _ => merged.push((data, span)),
+    }
+  }
+  merged.into_iter().map(|(_, span)| span).collect()
+}
+
+#[cfg(test)]
+mod test {
+  use rustc_span::BytePos;
+  use rustc_utils::SpanExt;
+
+  use super::*;
+
+  #[test]
+  fn merge_spans_matches_merge_overlaps() {
+    rustc_span::create_default_session_globals_then(|| {
+      // A small deterministic generator (xorshift64*).
+      let mut state = 0x9e37_79b9_7f4a_7c15u64;
+      let mut next = |n: u32| {
+        state ^= state >> 12;
+        state ^= state << 25;
+        state ^= state >> 27;
+        (state.wrapping_mul(0x2545_f491_4f6c_dd1d) % u64::from(n)) as u32
+      };
+      for _ in 0 .. 2000 {
+        let spans = (0 .. next(24))
+          .map(|_| {
+            let lo = next(200);
+            let hi = lo + next(20);
+            SpanData {
+              lo: BytePos(lo),
+              hi: BytePos(hi),
+              ctxt: SyntaxContext::root(),
+              parent: None,
+            }
+            .span()
+          })
+          .collect::<Vec<_>>();
+        assert_eq!(
+          merge_spans(spans.clone()),
+          Span::merge_overlaps(spans.clone()),
+          "{spans:?}"
+        );
+      }
+    });
+  }
 }

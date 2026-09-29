@@ -13,7 +13,9 @@ use rustc_utils::{BodyExt, block_timer};
 
 pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
-  dependencies::{Direction, compute_dependencies, compute_dependency_spans},
+  dependencies::{
+    Direction, compute_dependencies, compute_dependency_spans, merge_spans,
+  },
   domain::{LazyMatrix, SeedRows},
 };
 use crate::{
