@@ -1,0 +1,12 @@
+// Known over-approximation (upstream #36): aliasing comes from lifetimes, which do not
+// record when a pointer changes targets. `ptr` may point to `x` or `y` anywhere, so the
+// write through it after `ptr = &mut y` is treated as a possible write to `x`.
+fn main() {
+  `[let mut x = 0;]`
+  `[let mut y = 9;]`
+  let mut ptr = &mut x;
+  let test = *ptr;
+  `[ptr = &mut y;]`
+  `[*ptr = 20;]`
+  `[x;]`
+}
