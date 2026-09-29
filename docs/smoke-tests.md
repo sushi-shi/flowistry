@@ -127,6 +127,11 @@ comparison: `ranges`, `slice` and `direct_influence` are sorted within each
 entry, and entries are sorted by their full JSON content. With that, a build
 compared against itself is stable.
 
+Unless `--keep-outputs` is given, outputs are not kept: each is decompressed and
+parsed one `place_info` entry at a time and reduced to a SHA-256 digest of its
+canonical form, and the digests are compared. Outputs can be hundreds of MB of JSON,
+which as parsed Python objects took the harness to over 16 GB.
+
 ## What it does
 
 1. **Prepare.** Each crate is copied from `$CARGO_HOME/registry/src/*/` into
