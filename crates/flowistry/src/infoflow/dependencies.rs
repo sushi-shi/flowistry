@@ -1,6 +1,7 @@
 use std::{cell::RefCell, iter};
 
 use either::Either;
+use indexical::ToIndex;
 use log::{debug, trace};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_index::IndexVec;
@@ -219,15 +220,17 @@ pub fn compute_dependencies<'tcx>(
 
     let index = ForwardIndex::new(&all_target_deps, location_domain);
     results.for_each_state(|location, state| {
+      // Converting a location to its index hashes it: do it once per location.
+      let location_index = location.to_index(location_domain);
       let check = |place| {
         let deps = deps(state, aliases, place);
         let mut outputs = outputs.borrow_mut();
         index.candidates(deps, |i, j| {
           let outputs = &mut outputs[i as usize];
-          if !outputs.contains(location)
+          if !outputs.contains(location_index)
             && deps.contains_all(&all_target_deps[i as usize].all_forward[j as usize])
           {
-            outputs.insert(location);
+            outputs.insert(location_index);
           }
         });
       };

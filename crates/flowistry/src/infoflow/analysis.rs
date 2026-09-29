@@ -274,9 +274,10 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
   }
 
   /// The number of reachable locations whose effect is not idempotent on its own
-  /// output (see [`batch_is_idempotent`](Self::batch_is_idempotent)). The block engine
-  /// computes the same states as the location engine if there are none.
-  pub(crate) fn unstable_locations(&self) -> usize {
+  /// output (see [`batch_is_idempotent`](Self::batch_is_idempotent)), counting at most
+  /// `limit` of them. The block engine computes the same states as the location engine
+  /// if there are none.
+  pub(crate) fn unstable_locations(&self, limit: usize) -> usize {
     let body = self.body;
     traversal::reverse_postorder(body)
       .flat_map(|(block, data)| {
@@ -286,6 +287,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
         })
       })
       .filter(|location| !self.effect_is_idempotent(*location))
+      .take(limit)
       .count()
   }
 
@@ -347,6 +349,39 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       .flat_map(|discr| self.influence_keys(discr))
       .copied()
       .collect::<Vec<_>>();
+
+    // If no mutation reads a row that the batch clears or writes, `f` reads only rows
+    // of `x` that `x ∨ f(x)` leaves unchanged, so it computes the same dependencies and
+    // writes them to the same rows: `f(x ∨ f(x)) = f(x)`. This is the common case, and
+    // cheaper than following the sources of every row below.
+    let strong = |mt: &Mutation<'tcx>| {
+      mt.status() == MutationStatus::Definitely
+        && self.place_info.aliases(mt.mutated).len() == 1
+    };
+    let changed = mutations
+      .iter()
+      .flat_map(|mt| {
+        let cleared: &[NormPlace<'tcx>] = if strong(mt) {
+          self.children_keys(mt.mutated)
+        } else {
+          &[]
+        };
+        self.mutable_alias_keys(mt.mutated).iter().chain(cleared)
+      })
+      .copied()
+      .collect::<HashSet<_>>();
+    let mut reads = mutations
+      .iter()
+      .flat_map(|mt| {
+        mt.inputs
+          .iter()
+          .chain([&mt.mutated])
+          .flat_map(|place| self.influence_keys(*place))
+      })
+      .chain(&control_keys);
+    if !reads.any(|key| changed.contains(key)) {
+      return true;
+    }
 
     /// The sources of the value of a row within the batch.
     struct RowSources<'tcx> {
