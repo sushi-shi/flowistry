@@ -3,8 +3,7 @@ use std::{cell::RefCell, iter};
 use either::Either;
 use indexical::ToIndex;
 use log::{debug, trace};
-use rustc_data_structures::fx::FxHashMap;
-use rustc_index::IndexVec;
+use rustc_index::{IndexVec, bit_set::DenseBitSet};
 use rustc_middle::mir::*;
 use rustc_span::{Span, SpanData, SyntaxContext};
 use rustc_utils::{
@@ -307,23 +306,66 @@ pub fn compute_dependency_spans<'tcx>(
   let all_deps = compute_dependencies(results, targets, direction);
   debug!("all_deps={all_deps:?}");
 
-  // The targets' dependencies share most locations: convert each location once.
-  let mut location_spans = FxHashMap::default();
+  // The targets' dependencies share most locations. Convert each location once, and
+  // sort the spans of all of them once: the spans of a target are then entries of
+  // this list, visited in order, and merge without sorting. The sort is stable and the
+  // list is built in the order of the locations, so spans at the same position keep
+  // the order they would have in the target's own list.
+  let domain = results.analysis.location_domain();
+  let mut used = LocationOrArgSet::new(domain);
+  for deps in &all_deps {
+    used.union(deps);
+  }
+  let mut spans = Vec::new();
+  for location in used.iter() {
+    for span in spanner.location_to_spans(*location, body, EnclosingHirSpans::OuterOnly) {
+      // See the note in `SpanExt::subtract`.
+      let span = span.with_ctxt(SyntaxContext::root());
+      spans.push((span.data_untracked(), span, domain.index(location)));
+    }
+  }
+  let mut order = (0 .. spans.len()).collect::<Vec<_>>();
+  order.sort_by_key(|i| (spans[*i].0.lo, spans[*i].0.hi));
+  let mut ranks =
+    IndexVec::<LocationOrArgIndex, Vec<usize>>::from_elem_n(Vec::new(), domain.len());
+  for (rank, i) in order.iter().enumerate() {
+    ranks[spans[*i].2].push(rank);
+  }
+  let sorted = order
+    .iter()
+    .map(|i| (spans[*i].0, spans[*i].1))
+    .collect::<Vec<_>>();
+
+  let mut marked = DenseBitSet::new_empty(sorted.len());
   all_deps
     .into_iter()
     .map(|deps| {
-      let mut spans = Vec::new();
-      for location in deps.iter() {
-        spans.extend_from_slice(location_spans.entry(*location).or_insert_with(|| {
-          spanner.location_to_spans(*location, body, EnclosingHirSpans::OuterOnly)
-        }));
+      marked.clear();
+      for location in deps.indices() {
+        for rank in &ranks[location] {
+          marked.insert(*rank);
+        }
       }
-
-      let merged_spans = merge_spans(spans);
+      let merged_spans = merge_sorted(marked.iter().map(|rank| sorted[rank]));
       trace!("Spans: {merged_spans:?}");
       merged_spans
     })
     .collect::<Vec<_>>()
+}
+
+/// Merges spans sorted by position (and in the root context), see [`merge_spans`].
+fn merge_sorted(spans: impl Iterator<Item = (SpanData, Span)>) -> Vec<Span> {
+  let mut merged: Vec<(SpanData, Span)> = Vec::new();
+  for (data, span) in spans {
+    match merged.last_mut() {
+      Some((last_data, last)) if data.lo <= last_data.hi && last_data.lo <= data.hi => {
+        *last = span.to(*last);
+        *last_data = last.data_untracked();
+      }
+      _ => merged.push((data, span)),
+    }
+  }
+  merged.into_iter().map(|(_, span)| span).collect()
 }
 
 /// Merges the overlapping (or touching) spans of `spans`, with the same result as
@@ -339,20 +381,12 @@ pub fn merge_spans(spans: Vec<Span>) -> Vec<Span> {
     .map(|span| (span.data_untracked(), span))
     .collect::<Vec<_>>();
   spans.sort_by_key(|(data, _)| (data.lo, data.hi));
-
-  let mut merged: Vec<(SpanData, Span)> = Vec::with_capacity(spans.len());
-  for (data, span) in spans {
-    // See the note in `SpanExt::subtract`.
-    let span = span.with_ctxt(SyntaxContext::root());
-    match merged.last_mut() {
-      Some((last_data, last)) if data.lo <= last_data.hi && last_data.lo <= data.hi => {
-        *last = span.to(*last);
-        *last_data = last.data_untracked();
-      }
-      _ => merged.push((data, span)),
-    }
-  }
-  merged.into_iter().map(|(_, span)| span).collect()
+  // See the note in `SpanExt::subtract`.
+  merge_sorted(
+    spans
+      .into_iter()
+      .map(|(data, span)| (data, span.with_ctxt(SyntaxContext::root()))),
+  )
 }
 
 #[cfg(test)]
