@@ -71,6 +71,9 @@ Useful options (see `--help` for all of them):
 | `--update-corpus` | re-resolve the locked corpus (see above) |
 | `--fetch` | download corpus sources and dependencies not available offline |
 | `--prepare-only` | prepare crates (and positions) without running the analysis |
+| `--bump` | with `--update-corpus`, move git entries to the current head of their ref |
+| `--phases` | record the backend's per-phase timers; adds a timing section (per-phase totals, and with `--compare` the ratio of totals and the geometric mean of per-run ratios). Use release builds. |
+| `--repeat N` | run every position N times and keep the fastest, to reduce timing noise |
 
 The exit status is 1 if any run crashed or timed out, or if the two backends
 disagree under `--compare`.
