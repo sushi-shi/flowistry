@@ -3,8 +3,8 @@ use std::{
   rc::Rc,
 };
 
-use log::{debug, trace};
-use rustc_data_structures::fx::FxHashMap as HashMap;
+use log::debug;
+use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::{BodyId, def_id::DefId};
 use rustc_middle::{
   mir::{visit::Visitor, *},
@@ -13,6 +13,7 @@ use rustc_middle::{
 use rustc_mir_dataflow::Analysis;
 use rustc_utils::{
   BodyExt, OperandExt, PlaceExt,
+  cache::Cache,
   mir::{
     control_dependencies::ControlDependencies,
     location_or_arg::{
@@ -82,6 +83,7 @@ pub struct FlowAnalysis<'a, 'tcx> {
   pub(crate) control_dependencies: ControlDependencies<BasicBlock>,
   pub(crate) recurse_cache: RefCell<HashMap<BodyId, FlowResults<'a, 'tcx>>>,
   pub(crate) counters: TransferCounters,
+  pub(crate) caches: TransferCaches<'tcx>,
   /// The rows of argument places at the start of the body, shared by every state.
   pub(crate) seeds: Rc<SeedRows<NormPlace<'tcx>, LocationOrArg>>,
 }
@@ -91,6 +93,39 @@ pub struct FlowAnalysis<'a, 'tcx> {
 pub(crate) struct TransferCounters {
   pub(crate) transfers: Cell<usize>,
   pub(crate) mutations: Cell<usize>,
+}
+
+/// Memoized computations of the transfer function. Each depends only on its key (a
+/// place or a location of the body), so it is computed at its first use, with the
+/// same queries in the same order as without the cache, and reused afterwards.
+#[derive(Default)]
+pub(crate) struct TransferCaches<'tcx> {
+  /// The batches of mutations of each location per the modular approximation.
+  modular_mutations: RefCell<HashMap<Location, Rc<[Vec<Mutation<'tcx>>]>>>,
+  /// The mutations of each call per the analysis of the callee (in
+  /// [`ContextMode::Recurse`]), or why the call is approximated instead.
+  callee_mutations: RefCell<HashMap<Location, CalleeMutations<'tcx>>>,
+  /// The rows whose values influence a place (see [`FlowAnalysis::influences`]).
+  influence_keys: Cache<Place<'tcx>, Box<[NormPlace<'tcx>]>>,
+  /// The rows of the children of a place, which a strong update of it clears.
+  children_keys: Cache<Place<'tcx>, Box<[NormPlace<'tcx>]>>,
+  /// The rows of the mutable aliases of a place, which a mutation of it writes.
+  mutable_alias_keys: Cache<Place<'tcx>, Box<[NormPlace<'tcx>]>>,
+}
+
+type CalleeMutations<'tcx> = Result<Rc<[Mutation<'tcx>]>, FallbackReason>;
+
+/// The distinct normalized places of `places`.
+fn distinct_keys<'tcx>(
+  place_info: &PlaceInfo<'_, 'tcx>,
+  places: impl IntoIterator<Item = Place<'tcx>>,
+) -> Box<[NormPlace<'tcx>]> {
+  let mut seen = HashSet::default();
+  places
+    .into_iter()
+    .map(|place| place_info.normalize(place))
+    .filter(|key| seen.insert(*key))
+    .collect()
 }
 
 impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
@@ -124,6 +159,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       control_dependencies,
       recurse_cache,
       counters: TransferCounters::default(),
+      caches: TransferCaches::default(),
       seeds: Rc::new(seeds),
     }
   }
@@ -151,6 +187,89 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     conflicts.chain(provenance).copied().collect()
   }
 
+  /// The distinct rows of the places that influence `place` (cached).
+  fn influence_keys(&self, place: Place<'tcx>) -> &[NormPlace<'tcx>] {
+    self.caches.influence_keys.get(&place, |place| {
+      distinct_keys(&self.place_info, self.influences(place))
+    })
+  }
+
+  /// The distinct rows of the children of `place` (cached).
+  fn children_keys(&self, place: Place<'tcx>) -> &[NormPlace<'tcx>] {
+    self.caches.children_keys.get(&place, |place| {
+      distinct_keys(&self.place_info, self.place_info.children(place))
+    })
+  }
+
+  /// The distinct rows of the aliases of `place` that a mutation of `place` writes
+  /// (cached).
+  fn mutable_alias_keys(&self, place: Place<'tcx>) -> &[NormPlace<'tcx>] {
+    self.caches.mutable_alias_keys.get(&place, |place| {
+      let ignore_mut = match self.place_info.mode().mutability_mode {
+        MutabilityMode::IgnoreMut => true,
+        MutabilityMode::DistinguishMut => false,
+      };
+      let body = self.body;
+      let mutable_aliases = self
+        .place_info
+        .aliases(place)
+        .iter()
+        .filter(|alias| {
+          // Remove any conflicts that aren't actually mutable, e.g. if x : &T ends up
+          // as an alias of y: &mut T. See test function_lifetime_alias_mut for an example.
+          let has_immut = alias.iter_projections().any(|(sub_place, _)| {
+            let ty = sub_place.ty(body.local_decls(), self.tcx).ty;
+            matches!(ty.ref_mutability(), Some(Mutability::Not))
+          });
+          !has_immut || ignore_mut
+        })
+        .copied()
+        .collect::<SmallVec<[_; 8]>>();
+      debug!("  Mutable aliases of {place:?}: {mutable_aliases:?}");
+      distinct_keys(&self.place_info, mutable_aliases)
+    })
+  }
+
+  /// The batches of mutations at `location` per the modular approximation (cached).
+  pub(crate) fn modular_mutations(
+    &self,
+    location: Location,
+  ) -> Rc<[Vec<Mutation<'tcx>>]> {
+    if let Some(batches) = self.caches.modular_mutations.borrow().get(&location) {
+      return Rc::clone(batches);
+    }
+    let mut batches = Vec::new();
+    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+      batches.push(mutations);
+    })
+    .visit_location(self.body, location);
+    let batches = Rc::<[_]>::from(batches);
+    self
+      .caches
+      .modular_mutations
+      .borrow_mut()
+      .insert(location, Rc::clone(&batches));
+    batches
+  }
+
+  /// The mutations of the call at `location` per the analysis of the callee (cached).
+  fn callee_mutations(
+    &self,
+    location: Location,
+    call: &TerminatorKind<'tcx>,
+  ) -> CalleeMutations<'tcx> {
+    if let Some(mutations) = self.caches.callee_mutations.borrow().get(&location) {
+      return mutations.clone();
+    }
+    let mutations = self.recurse_into_call(call).map(Rc::from);
+    self
+      .caches
+      .callee_mutations
+      .borrow_mut()
+      .insert(location, mutations.clone());
+    mutations
+  }
+
   /// Returns all the dependencies of `place` within `state`.
   ///
   /// Prefer using this method instead of accessing `FlowDomain` directly,
@@ -161,13 +280,10 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     place: Place<'tcx>,
   ) -> LocationOrArgSet {
     let mut deps = LocationOrArgSet::new(self.location_domain());
-    for subplace in self
-      .place_info
-      .reachable_values(place, Mutability::Not)
-      .iter()
-      .flat_map(|place| self.influences(*place))
-    {
-      deps.union(state.row_set(&self.place_info.normalize(subplace)));
+    for reachable in self.place_info.reachable_values(place, Mutability::Not) {
+      for key in self.influence_keys(*reachable) {
+        deps.union(state.row_set(key));
+      }
     }
     deps
   }
@@ -176,7 +292,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
   pub(crate) fn transfer_function(
     &self,
     state: &mut FlowDomain<'tcx>,
-    mutations: Vec<Mutation<'tcx>>,
+    mutations: &[Mutation<'tcx>],
     location: Location,
   ) {
     debug!("  Applying mutations {mutations:?}");
@@ -195,17 +311,12 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     };
 
     // Add every influence on `input` to `deps`.
-    let add_deps = |state: &FlowDomain<'tcx>,
-                    input,
-                    target_deps: &mut LocationOrArgSet| {
-      for relevant in self.influences(input) {
-        let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
-        trace!(
-          "    For relevant {relevant:?} for input {input:?} adding deps {relevant_deps:?}"
-        );
-        target_deps.union(relevant_deps);
-      }
-    };
+    let add_deps =
+      |state: &FlowDomain<'tcx>, input, target_deps: &mut LocationOrArgSet| {
+        for key in self.influence_keys(input) {
+          target_deps.union(state.row_set(key));
+        }
+      };
 
     // Register every explicitly provided input as an input.
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
@@ -233,43 +344,22 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       }
     }
 
-    let ignore_mut = match self.place_info.mode().mutability_mode {
-      MutabilityMode::IgnoreMut => true,
-      MutabilityMode::DistinguishMut => false,
-    };
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
       // Clear sub-places of mutated place (if sound to do so)
       if mt.status() == MutationStatus::Definitely
         && self.place_info.aliases(mt.mutated).len() == 1
       {
-        for sub in self.place_info.children(mt.mutated).iter() {
-          state.clear_row(&self.place_info.normalize(*sub));
+        for key in self.children_keys(mt.mutated) {
+          state.clear_row(key);
         }
       }
 
       // Add deps of mutated to include provenance of mutated pointers
       add_deps(state, mt.mutated, deps);
 
-      let mutable_aliases = self
-        .place_info
-        .aliases(mt.mutated)
-        .iter()
-        .filter(|alias| {
-          // Remove any conflicts that aren't actually mutable, e.g. if x : &T ends up
-          // as an alias of y: &mut T. See test function_lifetime_alias_mut for an example.
-          let has_immut = alias.iter_projections().any(|(sub_place, _)| {
-            let ty = sub_place.ty(body.local_decls(), self.tcx).ty;
-            matches!(ty.ref_mutability(), Some(Mutability::Not))
-          });
-          !has_immut || ignore_mut
-        })
-        .collect::<SmallVec<[_; 8]>>();
-
-      debug!("  Mutated places: {mutable_aliases:?}");
       debug!("    with deps {deps:?}");
-
-      for alias in mutable_aliases {
-        state.union_into_row(self.place_info.normalize(*alias), deps);
+      for key in self.mutable_alias_keys(mt.mutated) {
+        state.union_into_row(*key, deps);
       }
     }
   }
@@ -304,14 +394,13 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
   fn apply_primary_statement_effect(
     &self,
     state: &mut Self::Domain,
-    statement: &Statement<'tcx>,
+    _statement: &Statement<'tcx>,
     location: Location,
   ) {
-    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
-      debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
+    for mutations in self.modular_mutations(location).iter() {
+      debug_assert!(definite_writes_disjoint(mutations), "{mutations:?}");
       self.transfer_function(state, mutations, location)
-    })
-    .visit_statement(statement, location);
+    }
   }
 
   fn apply_primary_terminator_effect<'mir>(
@@ -323,9 +412,9 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     if matches!(terminator.kind, TerminatorKind::Call { .. })
       && self.place_info.mode().context_mode == ContextMode::Recurse
     {
-      match self.recurse_into_call(&terminator.kind) {
+      match self.callee_mutations(location, &terminator.kind) {
         Ok(mutations) => {
-          self.transfer_function(state, mutations, location);
+          self.transfer_function(state, &mutations, location);
           return terminator.edges();
         }
         Err(reason) => {
@@ -341,11 +430,10 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
       }
     }
 
-    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
-      debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
+    for mutations in self.modular_mutations(location).iter() {
+      debug_assert!(definite_writes_disjoint(mutations), "{mutations:?}");
       self.transfer_function(state, mutations, location)
-    })
-    .visit_terminator(terminator, location);
+    }
 
     terminator.edges()
   }
