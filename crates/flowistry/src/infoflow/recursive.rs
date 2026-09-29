@@ -7,7 +7,7 @@
 use log::{debug, info};
 use rustc_middle::{
   mir::*,
-  ty::{ClosureKind, GenericArgKind, Instance, TyKind, TypingEnv},
+  ty::{ClosureKind, GenericArgKind, Instance, InstanceKind, TyKind, TypingEnv},
 };
 use rustc_mir_dataflow::JoinSemiLattice;
 use rustc_span::Spanned;
@@ -157,7 +157,14 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       let typing_env = TypingEnv::post_analysis(tcx, self.def_id);
       let fn_args = tcx.erase_and_anonymize_regions(*fn_args);
       match Instance::try_resolve(tcx, typing_env, def_id, fn_args) {
-        Ok(Some(instance)) if instance.def_id() == def_id => {}
+        // Only a statically resolved call to the item itself runs its body: a
+        // virtual call through `dyn Trait` (InstanceKind::Virtual) names the same
+        // item but dispatches to the impl of the dynamic type.
+        Ok(Some(Instance {
+          def: InstanceKind::Item(resolved),
+          ..
+        }))
+          if resolved == def_id => {}
         _ => return Err(FallbackReason::ResolvesElsewhere),
       }
     }

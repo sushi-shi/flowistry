@@ -1,0 +1,20 @@
+/* recurse: field whose type is an associated type */
+trait Tr<'a> {
+  type P;
+}
+impl<'a> Tr<'a> for () {
+  type P = &'a mut i32;
+}
+pub struct W<'a> {
+  pub p: <() as Tr<'a>>::P,
+}
+fn set(w: &mut W, v: i32) {
+  *w.p = v;
+}
+fn main() {
+  `[let mut x = 0;]`
+  `[let v = 5;]`
+  `[let mut w = W { p: &mut x };]`
+  `[set(&mut w, v);]`
+  `[x;]`
+}
