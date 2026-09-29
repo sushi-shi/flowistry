@@ -23,8 +23,20 @@
 //! copies, and a row is only copied when it is written while shared. Consecutive
 //! locations mostly have the same rows, so this saves most copies and most of the
 //! memory of the states, and a join skips a shared row without comparing its bits.
+//!
+//! # Row groups
+//!
+//! A call can write thousands of rows with one value: in `Recurse` mode, a callee
+//! returning a large enum (e.g. an error type with many variants) writes every leaf
+//! of the call's destination with the same dependencies. Stored row by row, these
+//! rows make up most of every later state. A [`RowGroups`] layout (shared by all
+//! states of a body, like the seeds) lists such groups of rows, and
+//! [`LazyMatrix::assign_group`] sets the value of every member at once: the state then
+//! stores the group's value once. A member written on its own afterwards (or joined
+//! with a state where the members have their own values) *expands* its group: every
+//! member gets its own row again, sharing the group's value.
 
-use std::{fmt, hash::Hash, rc::Rc};
+use std::{cell::Cell, fmt, hash::Hash, rc::Rc};
 
 use indexical::{IndexedDomain, IndexedValue, bitset::rustc::IndexSet};
 use rustc_data_structures::fx::FxHashMap;
@@ -142,6 +154,113 @@ where
   }
 }
 
+/// Identifies a group of a [`RowGroups`] layout.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct GroupId(u32);
+
+/// A group of rows that some writes set to one value together, see
+/// [`LazyMatrix::assign_group`].
+pub struct RowGroup<R> {
+  id: GroupId,
+  members: Box<[R]>,
+}
+
+impl<R> RowGroup<R> {
+  /// The identifier of the group in its layout.
+  pub fn id(&self) -> GroupId {
+    self.id
+  }
+
+  /// The rows of the group.
+  pub fn members(&self) -> &[R] {
+    &self.members
+  }
+}
+
+/// Disjoint groups of rows of a body, none of them seeded (see the [module
+/// documentation](self#row-groups)). Shared by all the states of a body.
+pub struct RowGroups<R> {
+  groups: Vec<RowGroup<R>>,
+  group_of: FxHashMap<R, GroupId>,
+  /// How often a state expanded a group, see [`RowGroups::expansions`].
+  expansions: Cell<usize>,
+}
+
+impl<R: Clone + Eq + Hash> RowGroups<R> {
+  /// No groups.
+  pub fn none() -> Self {
+    RowGroups {
+      groups: Vec::new(),
+      group_of: FxHashMap::default(),
+      expansions: Cell::new(0),
+    }
+  }
+
+  /// Adds a group of the distinct rows `members`. Returns the group with the same
+  /// members if there is one, and `None` if one of `members` is in another group.
+  pub fn add(&mut self, members: Vec<R>) -> Option<GroupId> {
+    let first = self.group_of.get(members.first()?).copied();
+    if let Some(id) = first {
+      let group = &self.groups[id.0 as usize];
+      let same = group.members.len() == members.len()
+        && members
+          .iter()
+          .all(|row| self.group_of.get(row) == Some(&id));
+      return same.then_some(id);
+    }
+    if members.iter().any(|row| self.group_of.contains_key(row)) {
+      return None;
+    }
+    let id = GroupId(u32::try_from(self.groups.len()).unwrap());
+    for row in &members {
+      let previous = self.group_of.insert(row.clone(), id);
+      assert!(
+        previous.is_none(),
+        "the members of a group must be distinct"
+      );
+    }
+    self.groups.push(RowGroup {
+      id,
+      members: members.into_boxed_slice(),
+    });
+    Some(id)
+  }
+
+  /// Whether there are no groups.
+  pub fn is_empty(&self) -> bool {
+    self.groups.is_empty()
+  }
+
+  /// The number of groups.
+  pub fn len(&self) -> usize {
+    self.groups.len()
+  }
+
+  /// The number of rows in groups.
+  pub fn members_len(&self) -> usize {
+    self.group_of.len()
+  }
+
+  /// The group `id`.
+  pub fn group(&self, id: GroupId) -> &RowGroup<R> {
+    &self.groups[id.0 as usize]
+  }
+
+  /// The group of `row`, if any.
+  pub fn group_of(&self, row: &R) -> Option<GroupId> {
+    if self.groups.is_empty() {
+      return None;
+    }
+    self.group_of.get(row).copied()
+  }
+
+  /// How often a state stored the value of a group member by member again, because
+  /// a member was written on its own (or joined with such a state).
+  pub fn expansions(&self) -> usize {
+    self.expansions.get()
+  }
+}
+
 /// An explicit value of a seeded row.
 #[derive(Clone)]
 struct SeededRow<C: IndexedValue + 'static> {
@@ -154,16 +273,23 @@ struct SeededRow<C: IndexedValue + 'static> {
 /// [`SeedRows`]) are implicit until they are written. See the [module
 /// documentation](self).
 ///
-/// The *value* of a row is its explicit value if it has one; else the singleton of its
-/// seed if the matrix is seeded and the row is seeded; else the empty set.
+/// The *value* of a row is its explicit value if it has one; else the value of its
+/// group if the row is in a group ([`RowGroups`]) whose value is stored; else the
+/// singleton of its seed if the matrix is seeded and the row is seeded; else the empty
+/// set.
 pub struct LazyMatrix<R, C: IndexedValue + 'static> {
   /// Whether the seeds are part of the value of this matrix.
   seeded: bool,
-  /// Explicit rows that are not seeded. Never empty.
+  /// Explicit rows that are not seeded. Never empty. A member of a group whose value
+  /// is stored in `grouped` has no explicit row.
   plain: FxHashMap<R, Row<C>>,
   /// Explicit rows that are seeded; empty rows are tombstones.
   seeded_rows: FxHashMap<R, SeededRow<C>>,
+  /// The value of every member of a group, for the groups whose members have no
+  /// explicit rows. Never empty.
+  grouped: FxHashMap<GroupId, Row<C>>,
   seeds: Rc<SeedRows<R, C>>,
+  groups: Rc<RowGroups<R>>,
   #[cfg(feature = "shadow-eager")]
   shadow: indexical::bitset::rustc::IndexMatrix<R, C>,
 }
@@ -173,15 +299,109 @@ where
   R: Clone + Eq + Hash,
   C: IndexedValue + 'static,
 {
-  /// The empty matrix (the bottom of the lattice), not seeded.
+  /// The empty matrix (the bottom of the lattice), not seeded, without row groups.
   pub fn new(seeds: &Rc<SeedRows<R, C>>) -> Self {
+    Self::with_groups(seeds, &Rc::new(RowGroups::none()))
+  }
+
+  /// The empty matrix (the bottom of the lattice), not seeded, whose rows may be
+  /// written group by group (see [`assign_group`](Self::assign_group)).
+  ///
+  /// # Panics
+  ///
+  /// In debug builds, if a member of a group is seeded.
+  pub fn with_groups(seeds: &Rc<SeedRows<R, C>>, groups: &Rc<RowGroups<R>>) -> Self {
+    debug_assert!(
+      groups
+        .group_of
+        .keys()
+        .all(|row| seeds.column(row).is_none()),
+      "a seeded row cannot be in a group"
+    );
     LazyMatrix {
       seeded: false,
       plain: FxHashMap::default(),
       seeded_rows: FxHashMap::default(),
+      grouped: FxHashMap::default(),
       seeds: Rc::clone(seeds),
+      groups: Rc::clone(groups),
       #[cfg(feature = "shadow-eager")]
       shadow: indexical::bitset::rustc::IndexMatrix::new(&seeds.domain),
+    }
+  }
+
+  /// The row groups of this matrix.
+  pub fn groups(&self) -> &Rc<RowGroups<R>> {
+    &self.groups
+  }
+
+  /// Gives every member of the group `id` its own explicit row with the value of the
+  /// group, if the value of the group is stored. The values do not change.
+  fn expand(&mut self, id: GroupId) {
+    let Some(value) = self.grouped.remove(&id) else {
+      return;
+    };
+    let groups = &self.groups;
+    groups.expansions.set(groups.expansions.get() + 1);
+    for row in groups.group(id).members() {
+      self.plain.insert(row.clone(), Rc::clone(&value));
+    }
+  }
+
+  /// Expands the group of `row` (see [`expand`](Self::expand)) if its value is stored.
+  fn expand_group_of(&mut self, row: &R) {
+    if !self.grouped.is_empty()
+      && let Some(id) = self.groups.group_of(row)
+    {
+      self.expand(id);
+    }
+  }
+
+  /// Sets the value of every member of the group `id` to `value`, as clearing each
+  /// member and adding `value` to it would.
+  pub fn assign_group(&mut self, id: GroupId, value: &IndexSet<C>) {
+    let groups = Rc::clone(&self.groups);
+    let members = groups.group(id).members();
+    #[cfg(feature = "shadow-eager")]
+    for row in members {
+      self.shadow.clear_row(row);
+      self.shadow.union_into_row(row.clone(), value);
+    }
+
+    if self.grouped.remove(&id).is_none() {
+      for row in members {
+        self.plain.remove(row);
+      }
+    }
+    if !value.inner().is_empty() {
+      self.grouped.insert(id, Rc::new(value.clone()));
+    }
+
+    #[cfg(feature = "shadow-eager")]
+    for row in members {
+      self.check_row(row);
+    }
+  }
+
+  /// Empties the value of every member of the group `id`, as clearing each member
+  /// would.
+  pub fn clear_group(&mut self, id: GroupId) {
+    let groups = Rc::clone(&self.groups);
+    let members = groups.group(id).members();
+    #[cfg(feature = "shadow-eager")]
+    for row in members {
+      self.shadow.clear_row(row);
+    }
+
+    if self.grouped.remove(&id).is_none() {
+      for row in members {
+        self.plain.remove(row);
+      }
+    }
+
+    #[cfg(feature = "shadow-eager")]
+    for row in members {
+      self.check_row(row);
     }
   }
 
@@ -213,6 +433,12 @@ where
     if let Some(set) = self.plain.get(row) {
       return set;
     }
+    if !self.grouped.is_empty()
+      && let Some(id) = self.groups.group_of(row)
+    {
+      // Members of groups are not seeded.
+      return self.grouped.get(&id).unwrap_or(&self.seeds.empty);
+    }
     match self.seeds.column(row) {
       None => &self.seeds.empty,
       Some(col) => match self.seeded_rows.get(row) {
@@ -237,6 +463,7 @@ where
     #[cfg(feature = "shadow-eager")]
     let checked_row = row.clone();
 
+    self.expand_group_of(&row);
     let changed = if let Some(set) = self.plain.get_mut(&row) {
       union_set_into_row(set, from)
     } else {
@@ -279,6 +506,7 @@ where
     #[cfg(feature = "shadow-eager")]
     self.shadow.clear_row(row);
 
+    self.expand_group_of(row);
     if self.plain.remove(row).is_none()
       && let Some(col) = self.seeds.column(row)
     {
@@ -316,12 +544,25 @@ where
       })
       .into_iter()
       .flatten();
-    plain.chain(explicit).chain(implicit)
+    let grouped = self.grouped.iter().flat_map(|(id, value)| {
+      (self.groups.group(*id).members())
+        .iter()
+        .map(move |row| (row, &**value))
+    });
+    plain.chain(explicit).chain(implicit).chain(grouped)
   }
 
-  /// The number of explicitly stored rows (including tombstones).
+  /// The number of explicitly stored rows (including tombstones), counting the stored
+  /// value of a group as one row.
   pub fn explicit_len(&self) -> usize {
-    self.plain.len() + self.seeded_rows.len()
+    self.plain.len() + self.seeded_rows.len() + self.grouped.len()
+  }
+
+  /// The number of rows whose value is the stored value of their group.
+  pub fn grouped_len(&self) -> usize {
+    (self.grouped.keys())
+      .map(|id| self.groups.group(*id).members().len())
+      .sum()
   }
 
   /// The number of seeded rows whose value is implicit.
@@ -343,10 +584,42 @@ where
   /// returning true if some value of `self` changed.
   fn join(&mut self, other: &Self) -> bool {
     debug_assert!(Rc::ptr_eq(&self.seeds, &other.seeds));
+    debug_assert!(Rc::ptr_eq(&self.groups, &other.groups));
     let was_seeded = self.seeded;
     let mut changed = false;
 
+    // The groups whose value `other` stores: their members have no explicit rows in
+    // `other`.
+    for (id, value) in &other.grouped {
+      if let Some(own) = self.grouped.get_mut(id) {
+        changed |= union_row(own, value);
+        continue;
+      }
+      let groups = Rc::clone(&self.groups);
+      let members = groups.group(*id).members();
+      if members.iter().any(|row| self.plain.contains_key(row)) {
+        // Some members have their own values in `self`.
+        for row in members {
+          match self.plain.get_mut(row) {
+            Some(own) => changed |= union_row(own, value),
+            None => {
+              self.plain.insert(row.clone(), Rc::clone(value));
+              changed = true;
+            }
+          }
+        }
+      } else {
+        // Every member is empty in `self`; `value` is not.
+        self.grouped.insert(*id, Rc::clone(value));
+        changed = true;
+      }
+    }
+
     for (row, set) in &other.plain {
+      if !self.plain.contains_key(row) {
+        // A member of a group whose value `self` stores needs its own row.
+        self.expand_group_of(row);
+      }
       match self.plain.get_mut(row) {
         Some(own) => changed |= union_row(own, set),
         None => {
@@ -416,7 +689,9 @@ where
       seeded: self.seeded,
       plain: self.plain.clone(),
       seeded_rows: self.seeded_rows.clone(),
+      grouped: self.grouped.clone(),
       seeds: Rc::clone(&self.seeds),
+      groups: Rc::clone(&self.groups),
       #[cfg(feature = "shadow-eager")]
       shadow: self.shadow.clone(),
     }
@@ -431,10 +706,15 @@ where
 {
   fn eq(&self, other: &Self) -> bool {
     let same = |row: &R| self.row_set(row) == other.row_set(row);
+    let groups = &self.groups;
+    let grouped = (self.grouped.keys())
+      .chain(other.grouped.keys())
+      .flat_map(|id| groups.group(*id).members());
     let explicit = (self.plain.keys())
       .chain(other.plain.keys())
       .chain(self.seeded_rows.keys())
-      .chain(other.seeded_rows.keys());
+      .chain(other.seeded_rows.keys())
+      .chain(grouped);
     explicit.into_iter().all(same)
       && (self.seeded == other.seeded || self.seeds.iter().all(|(row, _)| same(row)))
   }
@@ -488,6 +768,15 @@ where
     for row in self.plain.keys().chain(self.seeded_rows.keys()) {
       self.check_row(row);
     }
+    for id in self.grouped.keys() {
+      for row in self.groups.group(*id).members() {
+        assert!(
+          !self.plain.contains_key(row),
+          "a member of a stored group has a row"
+        );
+        self.check_row(row);
+      }
+    }
     if self.seeded {
       for (row, _) in self.seeds.iter() {
         self.check_row(row);
@@ -520,6 +809,24 @@ pub(crate) trait RowMatrix<R, C: IndexedValue + 'static> {
 
   /// Empties the value of `row`.
   fn clear_row(&mut self, row: &R);
+
+  /// Sets the value of every member of `group` to `value`.
+  fn assign_group(&mut self, group: &RowGroup<R>, value: &IndexSet<C>)
+  where
+    R: Clone,
+  {
+    for row in group.members() {
+      self.clear_row(row);
+      self.union_into_row(row.clone(), value);
+    }
+  }
+
+  /// Empties the value of every member of `group`.
+  fn clear_group(&mut self, group: &RowGroup<R>) {
+    for row in group.members() {
+      self.clear_row(row);
+    }
+  }
 }
 
 impl<R, C> RowMatrix<R, C> for LazyMatrix<R, C>
@@ -527,6 +834,16 @@ where
   R: Clone + Eq + Hash,
   C: IndexedValue + 'static,
 {
+  fn assign_group(&mut self, group: &RowGroup<R>, value: &IndexSet<C>) {
+    debug_assert!(std::ptr::eq(self.groups.group(group.id()), group));
+    LazyMatrix::assign_group(self, group.id(), value)
+  }
+
+  fn clear_group(&mut self, group: &RowGroup<R>) {
+    debug_assert!(std::ptr::eq(self.groups.group(group.id()), group));
+    LazyMatrix::clear_group(self, group.id())
+  }
+
   fn col_domain(&self) -> &Rc<IndexedDomain<C>> {
     LazyMatrix::col_domain(self)
   }
@@ -591,7 +908,10 @@ mod test {
     }
   }
 
-  const ROWS: u32 = 24;
+  const ROWS: u32 = 36;
+  /// Rows `SEEDABLE ..` are never seeded; they form the groups `GROUPS`.
+  const SEEDABLE: u32 = 24;
+  const GROUPS: [std::ops::Range<u32>; 2] = [24 .. 30, 30 .. 36];
 
   type Eager = IndexMatrix<u32, Col>;
   type Lazy = LazyMatrix<u32, Col>;
@@ -621,7 +941,9 @@ mod test {
     lazy_rows.sort();
     eager_rows.sort();
     assert_eq!(lazy_rows, eager_rows, "non-empty rows after {what}");
-    assert!(lazy.explicit_len() + lazy.implicit_len() >= lazy_rows.len());
+    assert!(
+      lazy.explicit_len() + lazy.implicit_len() + lazy.grouped_len() >= lazy_rows.len()
+    );
   }
 
   /// Random sequences of operations on several states give the same values, and the
@@ -634,19 +956,50 @@ mod test {
     for round in 0 .. 300 {
       // About half of the rows are seeded, with one of a few columns each.
       let mut seeds = Vec::new();
-      for row in 0 .. ROWS {
+      for row in 0 .. SEEDABLE {
         if rng.below(2) == 0 {
           seeds.push((row, ColIdx::from_usize(30 + rng.below(4))));
         }
       }
       let seed_rows = Rc::new(SeedRows::new(&domain, seeds.iter().copied()));
-      let mut states = (0 .. 4)
-        .map(|_| (Lazy::new(&seed_rows), Eager::new(&domain)))
+      let mut groups = RowGroups::none();
+      let group_ids = GROUPS
+        .iter()
+        .map(|rows| groups.add(rows.clone().collect()).unwrap())
         .collect::<Vec<_>>();
+      let groups = Rc::new(groups);
+      let new_state = || (Lazy::with_groups(&seed_rows, &groups), Eager::new(&domain));
+      let mut states = (0 .. 4).map(|_| new_state()).collect::<Vec<_>>();
       for step in 0 .. 60 {
         let i = rng.below(states.len());
         let what = format!("round {round} step {step}");
-        match rng.below(10) {
+        match rng.below(13) {
+          10 | 11 => {
+            let g = rng.below(GROUPS.len());
+            let mut from = IndexSet::new(&domain);
+            for _ in 0 .. rng.below(3) {
+              from.insert(ColIdx::from_usize(rng.below(34)));
+            }
+            let (lazy, eager) = &mut states[i];
+            lazy.assign_group(group_ids[g], &from);
+            for row in GROUPS[g].clone() {
+              eager.clear_row(&row);
+              // The eager matrix would store an empty row, which `==` distinguishes.
+              if !from.is_empty() {
+                eager.union_into_row(row, &from);
+              }
+            }
+            assert_same(lazy, eager, &format!("{what}: assign group"));
+          }
+          12 => {
+            let g = rng.below(GROUPS.len());
+            let (lazy, eager) = &mut states[i];
+            lazy.clear_group(group_ids[g]);
+            for row in GROUPS[g].clone() {
+              eager.clear_row(&row);
+            }
+            assert_same(lazy, eager, &format!("{what}: clear group"));
+          }
           0 => {
             let (lazy, eager) = &mut states[i];
             lazy.seed();
@@ -691,7 +1044,7 @@ mod test {
             let (a, b) = (&states[i], &states[j]);
             assert_eq!(a.0 == b.0, a.1 == b.1, "{what}: eq");
             if rng.below(4) == 0 {
-              states[i] = (Lazy::new(&seed_rows), Eager::new(&domain));
+              states[i] = new_state();
             }
           }
         }

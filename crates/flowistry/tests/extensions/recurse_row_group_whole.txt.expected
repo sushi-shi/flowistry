@@ -1,0 +1,22 @@
+/* recurse */
+enum Big {
+  A(u8, u16, u32, u64),
+  B(i8, i16, i32, i64),
+  C(bool, char, (u8, u8), (u16, u16)),
+  D { x: u32, y: u32, z: u32 },
+}
+
+fn make(n: u32) -> Result<u32, Big> {
+  if n > 3 { Err(Big::D { x: n, y: n, z: n }) } else { Ok(n) }
+}
+
+fn main() {
+  `[let n = 1;]`
+  `[let m = 2;]`
+  `[let a = make(n);]`
+  `[let b = make(m);]`
+  `[let mut total = 0;]`
+  `[if let Err(Big::D { y, .. }) = a { total += y; }]`
+  `[if let Ok(k) = b { total += k; }]`
+  `[total;]`
+}
