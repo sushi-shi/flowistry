@@ -528,6 +528,10 @@ impl<'a, 'tcx> CallSite<'a, 'tcx> {
             if !field_def.vis.is_accessible_from(self.caller_def_id, tcx) {
               return None;
             }
+            // Not normalized: a field whose type is an associated type (e.g.
+            // `<() as Tr<'a>>::P`) stays an alias, so a later Deref through it fails
+            // and the effect is coarsened (ThroughPointer). That is sound: the
+            // coarsened write is widened to what is mutably reachable.
             field_def.ty(tcx, args)
           }
           _ if place_ty.variant_index.is_some() => return None,

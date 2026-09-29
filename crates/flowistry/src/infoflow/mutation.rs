@@ -6,8 +6,10 @@ use rustc_middle::{
   mir::{visit::Visitor, *},
   ty::{AdtKind, TyKind},
 };
+use rustc_span::Spanned;
 use rustc_utils::{OperandExt, mir::place::PlaceCollector};
 
+use super::callsite::cmp_places_structurally;
 use crate::mir::{
   placeinfo::PlaceInfo,
   utils::{self, AsyncHack},
@@ -272,19 +274,10 @@ where
         destination,
         ..
       } => {
-        let async_hack = AsyncHack::new(
-          self.place_info.tcx,
-          self.place_info.body,
-          self.place_info.def_id,
-        );
-        let arg_places = utils::arg_places(args)
-          .into_iter()
-          .filter(|(_, place)| !async_hack.ignore_place(*place))
-          .collect::<Vec<_>>();
-        let arg_inputs = arg_places
-          .iter()
-          .map(|(_, place)| *place)
-          .collect::<Vec<_>>();
+        let CallArgumentWrites {
+          inputs: arg_inputs,
+          mutations: arg_mutations,
+        } = call_argument_writes(self.place_info, args, |_| true);
 
         let ret_is_unit = destination
           .ty(self.place_info.body.local_decls(), tcx)
@@ -307,16 +300,7 @@ where
           inputs,
           kind: MutationKind::CallReturn,
         }];
-
-        for (arg_index, arg) in arg_places {
-          for arg_mut in self.place_info.reachable_values(arg, Mutability::Mut) {
-            mutations.push(Mutation {
-              mutated: *arg_mut,
-              inputs: arg_inputs.clone(),
-              kind: MutationKind::CallArgument { arg: arg_index },
-            });
-          }
-        }
+        mutations.extend(arg_mutations);
 
         (self.f)(location, mutations);
       }
@@ -324,6 +308,61 @@ where
       _ => {}
     }
   }
+}
+
+/// The modular approximation of the writes of a call through its operands.
+pub(crate) struct CallArgumentWrites<'tcx> {
+  /// Every place operand of the call (except async contexts): the inputs of each
+  /// write.
+  pub inputs: Vec<Place<'tcx>>,
+  /// The writes through the selected operands.
+  pub mutations: Vec<Mutation<'tcx>>,
+}
+
+/// Computes the modular approximation of the writes of a call with operands `args`
+/// through the operands whose index satisfies `operands`: the callee may write any
+/// place mutably reachable from them, with every operand as an input.
+///
+/// Operands of the async [`Context`](std::task::Context) type are ignored (see
+/// [`AsyncHack`]). The writes are ordered deterministically (see
+/// [`cmp_places_structurally`]).
+pub(crate) fn call_argument_writes<'tcx>(
+  place_info: &PlaceInfo<'_, 'tcx>,
+  args: &[Spanned<Operand<'tcx>>],
+  operands: impl Fn(usize) -> bool,
+) -> CallArgumentWrites<'tcx> {
+  let async_hack = AsyncHack::new(place_info.tcx, place_info.body, place_info.def_id);
+  let arg_places = utils::arg_places(args)
+    .into_iter()
+    .filter(|(_, place)| !async_hack.ignore_place(*place))
+    .collect::<Vec<_>>();
+  let inputs = arg_places
+    .iter()
+    .map(|(_, place)| *place)
+    .collect::<Vec<_>>();
+
+  let mutations = arg_places
+    .iter()
+    .filter(|(i, _)| operands(*i))
+    .flat_map(|(i, arg)| {
+      let mut reachable = place_info
+        .reachable_values(*arg, Mutability::Mut)
+        .iter()
+        .copied()
+        .collect::<Vec<_>>();
+      reachable.sort_by(|p1, p2| {
+        cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
+      });
+      let inputs = &inputs;
+      reachable.into_iter().map(move |mutated| Mutation {
+        mutated,
+        inputs: inputs.clone(),
+        kind: MutationKind::CallArgument { arg: *i },
+      })
+    })
+    .collect();
+
+  CallArgumentWrites { inputs, mutations }
 }
 
 #[cfg(test)]

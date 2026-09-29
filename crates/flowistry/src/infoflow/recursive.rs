@@ -21,15 +21,15 @@ use super::{
   analysis::FlowAnalysis,
   callsite::{
     CallSite, CalleeRow, Coarsening, EffectPath, FallbackReason, Resolved, RowRole,
-    Target,
+    Target, cmp_places_structurally,
   },
 };
 use crate::{
   infoflow::{
     FlowDomain,
-    mutation::{CalleeEffect, Mutation, MutationKind, Precision},
+    mutation::{CalleeEffect, Mutation, MutationKind, Precision, call_argument_writes},
   },
-  mir::utils::{self, AsyncHack, ErasedTy},
+  mir::utils::{self, ErasedTy},
 };
 
 /// The state of a callee at its exits (the join of its states at every `return`).
@@ -325,35 +325,8 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     args: &[Spanned<Operand<'tcx>>],
     callee_body: &Body<'tcx>,
   ) -> Vec<Mutation<'tcx>> {
-    let async_hack = AsyncHack::new(self.tcx, self.body, self.def_id);
-    let arg_places = utils::arg_places(args)
-      .into_iter()
-      .filter(|(_, place)| !async_hack.ignore_place(*place))
-      .collect::<Vec<_>>();
-    let inputs = arg_places
-      .iter()
-      .map(|(_, place)| *place)
-      .collect::<Vec<_>>();
     let opaque = site.opaque_operands(callee_body);
-    arg_places
-      .iter()
-      .filter(|(i, _)| opaque.contains(i))
-      .flat_map(|(i, arg)| {
-        let mut reachable = self
-          .place_info
-          .reachable_values(*arg, Mutability::Mut)
-          .iter()
-          .copied()
-          .collect::<Vec<_>>();
-        // Deterministic order.
-        reachable.sort_by_cached_key(|place| format!("{place:?}"));
-        reachable.into_iter().map(|mutated| Mutation {
-          mutated,
-          inputs: inputs.clone(),
-          kind: MutationKind::CallArgument { arg: *i },
-        })
-      })
-      .collect()
+    call_argument_writes(&self.place_info, args, |i| opaque.contains(&i)).mutations
   }
 
   /// The caller places written by a callee effect on `target`.
@@ -378,7 +351,9 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
           .filter(|reachable| *reachable != place)
           .collect::<SmallVec<[_; 4]>>();
         // Deterministic order.
-        reachable.sort_by_cached_key(|reachable| format!("{reachable:?}"));
+        reachable.sort_by(|p1, p2| {
+          cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
+        });
         targets.extend(reachable);
         targets
       }
