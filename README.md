@@ -6,6 +6,8 @@
 
 Flowistry is a tool that analyzes the [information flow](https://en.wikipedia.org/wiki/Information_flow_(information_theory)) of Rust programs. Flowistry understands whether it's possible for one piece of code to affect another. Flowistry integrates into the IDE to provide a "focus mode" which helps you focus on the code that's related to your current task.
 
+This fork adds editor-independent file analysis (`cargo flowistry file-focus`) and [cached callee summaries](docs/callee-summaries.md) for the opt-in `Recurse` context mode.
+
 For example, this GIF shows the focus mode when reading a function that unions two sets together:
 
 <kbd>
