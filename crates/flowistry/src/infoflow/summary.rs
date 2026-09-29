@@ -103,6 +103,8 @@ pub(crate) struct CalleeSummary {
   pub abi: CalleeAbi,
   /// The parameter places the callee may read.
   pub origins: Vec<SummaryInput>,
+  /// The origins the callee reads (possibly without writing anything).
+  pub reads: Vec<usize>,
   /// The origins that the unit parts of the return value depend on (e.g. the
   /// condition deciding between `Ok(())` and `Err(())`): the dependencies of the
   /// return value as a whole.
@@ -190,6 +192,7 @@ pub(crate) fn compute<'tcx>(
     abi,
     seeds,
     writes: RefCell::new(OriginMatrix::new(&domain)),
+    reads: RefCell::new(IndexSet::new(&domain)),
     domain,
   };
   let results = engine::iterate_to_fixpoint(tcx, body, location_domain, analysis);
@@ -255,6 +258,7 @@ pub(crate) fn compute<'tcx>(
   Ok(CalleeSummary {
     abi,
     origins,
+    reads: origin_indices(&analysis.reads.borrow()),
     whole_return_inputs: origin_indices(&whole_return),
     effects,
     opaque_operands,
@@ -277,6 +281,8 @@ struct SummaryAnalysis<'a, 'tcx> {
   /// The places behind pointer parameters written anywhere in the body, with the
   /// origins of the written values.
   writes: RefCell<OriginMatrix<'tcx>>,
+  /// The origins read anywhere in the body.
+  reads: RefCell<IndexSet<Origin>>,
 }
 
 impl<'tcx> SummaryAnalysis<'_, 'tcx> {
@@ -284,8 +290,34 @@ impl<'tcx> SummaryAnalysis<'_, 'tcx> {
     &self,
     state: &mut OriginMatrix<'tcx>,
     mutations: &[Mutation<'tcx>],
+    reads: &[Place<'tcx>],
     location: Location,
   ) {
+    // Everything the instruction reads: its explicit reads, the inputs of its
+    // mutations, and the conditions it depends on.
+    let mut inputs = reads.to_vec();
+    for mutation in mutations {
+      inputs.extend_from_slice(&mutation.inputs);
+    }
+    let body = self.flow.body;
+    for block in self
+      .flow
+      .control_dependencies
+      .dependent_on(location.block)
+      .into_iter()
+      .flat_map(|blocks| blocks.iter())
+    {
+      if let TerminatorKind::SwitchInt { discr, .. } =
+        &body.basic_blocks[block].terminator().kind
+      {
+        inputs.extend(discr.place());
+      }
+    }
+    self
+      .reads
+      .borrow_mut()
+      .union(&self.flow.deps_of_inputs(state, &inputs));
+
     // Locations are not origins: nothing seeds the dependencies of an instruction.
     self.flow.transfer(state, mutations, location, |_, _| {});
     let place_info = &self.flow.place_info;
@@ -324,7 +356,7 @@ impl<'tcx> Analysis<'tcx> for SummaryAnalysis<'_, 'tcx> {
     location: Location,
   ) {
     let mutations = self.flow.statement_mutations(statement, location);
-    self.apply(state, &mutations, location);
+    self.apply(state, &mutations, &[], location);
   }
 
   fn apply_primary_terminator_effect<'mir>(
@@ -334,7 +366,7 @@ impl<'tcx> Analysis<'tcx> for SummaryAnalysis<'_, 'tcx> {
     location: Location,
   ) -> TerminatorEdges<'mir, 'tcx> {
     let effects = self.flow.effects_at(terminator, location);
-    self.apply(state, &effects.mutations, location);
+    self.apply(state, &effects.mutations, &effects.reads, location);
     terminator.edges()
   }
 

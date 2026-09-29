@@ -85,6 +85,10 @@ pub struct FlowAnalysis<'a, 'tcx> {
   /// The effects of each terminator in `Recurse` mode (see
   /// [`FlowAnalysis::effects_at`]).
   pub(crate) call_effects: RefCell<HashMap<Location, Rc<CallEffects<'tcx>>>>,
+
+  /// The dependencies of what each terminator reads (see [`CallEffects::reads`]),
+  /// before its mutations, in `Recurse` mode.
+  pub(crate) call_reads: RefCell<HashMap<Location, LocationOrArgSet>>,
 }
 
 impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
@@ -120,6 +124,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       control_dependencies,
       session,
       call_effects: RefCell::default(),
+      call_reads: RefCell::default(),
     }
   }
 
@@ -355,6 +360,17 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
   ) -> TerminatorEdges<'mir, 'tcx> {
     if self.recurse() {
       let effects = self.effects_at(terminator, location);
+      // What the terminator reads may not flow into any of its mutations (e.g. a
+      // call returning `()`). Record it before the mutations change it.
+      let reads = self.deps_of_inputs(state, &effects.reads);
+      self
+        .call_reads
+        .borrow_mut()
+        .entry(location)
+        .and_modify(|prior| {
+          prior.union(&reads);
+        })
+        .or_insert(reads);
       self.transfer_function(state, &effects.mutations, location);
     } else {
       ModularMutationVisitor::new(&self.place_info, |_, mutations| {

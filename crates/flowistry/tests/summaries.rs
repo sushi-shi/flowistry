@@ -427,6 +427,173 @@ fn main() {
   );
 }
 
+// A borrow reads only its address: its contents are reached through aliases.
+
+#[test]
+fn separate_return_fields() {
+  check_recurse(
+    r#"
+struct State { a: i32, b: i32 }
+impl State { fn pair(&self) -> (i32, i32) { (self.a, self.b) } }
+fn main() {
+ let mut s = State { a: 0, b: 0 };
+ s.a = 17;
+ s.b = 91;
+ let pair = s.pair();
+ `(pair.0)`;
+}"#,
+    Direction::Backward,
+    &["s.a = 17"],
+    &["s.b = 91"],
+  );
+}
+
+#[test]
+fn untouched_receiver_field_forward() {
+  check_recurse(
+    r#"
+struct State { a: i32, b: i32 }
+impl State { fn update_b(&mut self, x: i32) { self.b = x; } }
+fn main() {
+  let mut s = State { a: 1, b: 2 };
+  `(s.a)` = 37;
+  s.update_b(73);
+  let after = s.b;
+}"#,
+    Direction::Forward,
+    &[],
+    &["s.update_b(73)", "after = s.b"],
+  );
+}
+
+#[test]
+fn field_effects_translate_through_nested_actual_projection() {
+  check_recurse(
+    r#"
+struct Inner { a: i32, b: i32 }
+struct Outer { inner: Inner, other: i32 }
+fn update(s: &mut Inner, x: i32) { s.b = x; }
+fn main() {
+ let mut s = Outer { inner: Inner { a: 0, b: 0 }, other: 0 };
+ s.inner.a = 13;
+ s.other = 97;
+ let value = 73;
+ update(&mut s.inner, value);
+ `(s.inner.b)`;
+}"#,
+    Direction::Backward,
+    &["value = 73"],
+    &["s.inner.a = 13", "s.other = 97"],
+  );
+}
+
+#[test]
+fn opaque_call_on_one_field_does_not_widen_receiver() {
+  check_recurse(
+    r#"
+struct State { a: i32, b: i32 }
+impl State { fn opaque(&mut self, f: fn(&mut i32)) { f(&mut self.b); } }
+fn main() {
+ let mut s = State { a: 0, b: 0 };
+ `(s.a)` = 17;
+ s.opaque(|b| *b = 9);
+}"#,
+    Direction::Forward,
+    &[],
+    &["s.opaque"],
+  );
+}
+
+#[test]
+fn nested_calls_keep_real_reads_and_exclude_siblings() {
+  check_recurse(
+    r#"
+struct State { a: i32, b: i32, c: i32 }
+impl State {
+ fn leaf(&mut self) { self.c = self.b; }
+ fn middle(&mut self) { self.leaf(); }
+ fn outer(&mut self) { self.middle(); }
+}
+fn main() {
+ let mut s = State { a: 0, b: 0, c: 0 };
+ s.a = 11;
+ s.b = 29;
+ s.outer();
+ `(s.c)`;
+}"#,
+    Direction::Backward,
+    &["s.b = 29", "s.outer()"],
+    &["s.a = 11"],
+  );
+}
+
+#[test]
+fn unit_return_still_reads_inputs() {
+  check_recurse(
+    r#"
+fn consume(x: &i32) { std::hint::black_box(*x); }
+fn main() {
+ let `(x)` = 23;
+ consume(&x);
+}"#,
+    Direction::Forward,
+    &["consume(&x)"],
+    &[],
+  );
+}
+
+#[test]
+fn reference_cast_to_raw_pointer_keeps_contents() {
+  check_recurse(
+    r#"
+fn main() {
+ let mut x = 0;
+ x = 41;
+ let r = &x;
+ let p = r as *const i32;
+ let v = unsafe { *p };
+ `(v)`;
+}"#,
+    Direction::Backward,
+    &["x = 41"],
+    &[],
+  );
+}
+
+#[test]
+fn reference_passed_to_opaque_call_keeps_contents() {
+  check_recurse(
+    r#"
+fn main() {
+ let mut v = vec![1];
+ v.push(41);
+ let r = &v;
+ let n = r.len();
+ `(n)`;
+}"#,
+    Direction::Backward,
+    &["v.push(41)"],
+    &[],
+  );
+}
+
+#[test]
+fn transmuted_reference_keeps_contents() {
+  check_recurse(
+    r#"
+fn main() {
+ let mut x = 0u32;
+ x = 41;
+ let r = &x;
+ let n: usize = unsafe { std::mem::transmute(r) };
+ `(n)`;
+}"#,
+    Direction::Backward,
+    &["x = 41"],
+    &[],
+  );
+}
+
 // Closures, called directly: their bodies take their arguments as a tuple (R1).
 
 #[test]

@@ -175,13 +175,26 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     let opaque_mutations = call_argument_writes(&self.place_info, args, |i| {
       summary.opaque_operands.contains(&i)
     })
-    .mutations;
+    .mutations
+    .into_iter()
+    .map(|mutation| Mutation {
+      // The callee may read through the references among the operands.
+      inputs: mutation
+        .inputs
+        .iter()
+        .flat_map(|input| self.reachable_contents(*input))
+        .collect(),
+      ..mutation
+    });
 
     let mutations = std::iter::once(whole_return)
       .chain(effect_mutations)
       .chain(opaque_mutations)
       .collect();
-    CallEffects { mutations }
+    CallEffects {
+      mutations,
+      reads: inputs_of(&summary.reads),
+    }
   }
 
   /// The caller places that stand for a parameter place read by the callee.
@@ -205,18 +218,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       // generic value), or the path to what it read was cut above a pointer.
       (Target::Exact(place), InputContents::Reachable)
       | (Target::Coarsened { place, .. }, _) => {
-        let mut places = self
-          .place_info
-          .reachable_values(place, Mutability::Not)
-          .iter()
-          .copied()
-          .filter(|reachable| *reachable != place)
-          .collect::<SmallVec<[_; 4]>>();
-        places.sort_by(|p1, p2| {
-          cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
-        });
-        places.insert(0, place);
-        places
+        self.reachable_contents(place).into_iter().collect()
       }
     }
   }
