@@ -26,6 +26,7 @@ mod decompose;
 mod focus;
 mod playground;
 mod plugin;
+mod positions;
 mod spans;
 
 pub use plugin::FlowistryPlugin;

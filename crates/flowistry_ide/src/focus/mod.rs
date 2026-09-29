@@ -112,7 +112,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
           .trim_leading_whitespace(source_map)
           .into_iter()
           .flatten()
-          .filter_map(|span| CharRange::from_span(span, source_map).ok())
+          .filter_map(|span| crate::positions::char_range(span, source_map).ok())
           .map(|range| table.index(range))
           .collect()
       }));
@@ -144,7 +144,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     direct_influence.sort_unstable();
     direct_influence.dedup();
 
-    let Ok(range) = CharRange::from_span(mir_span.span(), source_map) else {
+    let Ok(range) = crate::positions::char_range(mir_span.span(), source_map) else {
       continue;
     };
     slices.push(PlaceInfo {
@@ -159,8 +159,8 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     slices_timer.elapsed().as_secs_f64()
   );
 
-  let body_range = CharRange::from_span(spanner.body_span, source_map)?;
-  let ret_range = CharRange::from_span(spanner.ret_span, source_map)?;
+  let body_range = crate::positions::char_range(spanner.body_span, source_map)?;
+  let ret_range = crate::positions::char_range(spanner.ret_span, source_map)?;
   let mut containers = vec![body_range, ret_range];
 
   let hir_body = tcx.hir_body(body_id);
@@ -170,7 +170,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     .map(|param| param.span)
     .reduce(|s1, s2| s1.to(s2));
   if let Some(sp) = arg_span {
-    containers.push(CharRange::from_span(sp, source_map)?);
+    containers.push(crate::positions::char_range(sp, source_map)?);
   }
 
   Ok(FocusOutput {

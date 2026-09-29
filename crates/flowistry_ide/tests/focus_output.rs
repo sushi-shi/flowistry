@@ -15,14 +15,19 @@ const LIB: &str = r#"pub fn f(mut x: i32) -> i32 {
 "#;
 
 fn focus(line: usize, column: usize) -> Value {
-  let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("focus_output");
+  focus_source("focus_output", LIB, line, column)
+}
+
+/// Focuses at `line` and `column` in a crate whose `src/lib.rs` is `source`.
+fn focus_source(name: &str, source: &str, line: usize, column: usize) -> Value {
+  let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
   fs::create_dir_all(dir.join("src")).unwrap();
   fs::write(
     dir.join("Cargo.toml"),
     "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
   )
   .unwrap();
-  fs::write(dir.join("src/lib.rs"), LIB).unwrap();
+  fs::write(dir.join("src/lib.rs"), source).unwrap();
 
   let binary = Path::new(env!("CARGO_BIN_EXE_cargo-flowistry"));
   let path = format!(
@@ -98,4 +103,21 @@ fn places_refer_to_a_table_of_distinct_ranges() {
     }
   }
   assert_eq!(used.len(), table.len(), "the table has unused ranges");
+}
+
+/// Ranges count characters, not bytes: the two non-ASCII characters before `x` take
+/// 6 bytes but 2 columns.
+#[test]
+fn ranges_are_in_characters() {
+  let source = "pub fn f() -> usize {\n    let s = \"🦀é\"; let x = s.len();\n    x\n}\n";
+  let output = focus_source("characters", source, 1, 22);
+  let table = output["Ok"]["ranges"].as_array().unwrap();
+  let x = output["Ok"]["place_info"]
+    .as_array()
+    .unwrap()
+    .iter()
+    .map(|place| &table[place["range"].as_u64().unwrap() as usize])
+    .find(|range| range["start"]["line"] == 1 && range["start"]["column"] == 22)
+    .unwrap_or_else(|| panic!("no place at 1:22 in {output}"));
+  assert_eq!(x["end"]["column"], 23, "{x}");
 }

@@ -24,7 +24,7 @@ use rustc_utils::{
   source_map::{
     filename::Filename,
     find_bodies::find_enclosing_bodies,
-    range::{CharPos, CharRange, FunctionIdentifier, ToSpan},
+    range::{CharPos, CharRange, ToSpan},
   },
   timer::elapsed,
 };
@@ -152,16 +152,18 @@ impl RustcPlugin for FlowistryPlugin {
         end_column,
         ..
       } => {
-        let compute_target = || CharRange {
-          start: CharPos {
-            line: start_line,
-            column: start_column,
-          },
-          end: CharPos {
-            line: end_line,
-            column: end_column,
-          },
-          filename: Filename::intern(&file),
+        let compute_target = || {
+          crate::positions::Chars(CharRange {
+            start: CharPos {
+              line: start_line,
+              column: start_column,
+            },
+            end: CharPos {
+              line: end_line,
+              column: end_column,
+            },
+            filename: Filename::intern(&file),
+          })
         };
         postprocess(run(
           crate::playground::playground,
@@ -186,7 +188,7 @@ impl RustcPlugin for FlowistryPlugin {
             filename: Filename::intern(&file),
           };
           debug!("eyo WTF {range:?} {file}");
-          FunctionIdentifier::Range(range)
+          crate::positions::Chars(range)
         };
         postprocess(run(crate::focus::focus, compute_target, &compiler_args))
       }
