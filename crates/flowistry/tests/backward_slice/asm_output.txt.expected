@@ -1,0 +1,11 @@
+// Issue #46: outputs of inline assembly depend on its inputs.
+pub unsafe fn load(p: *const usize) -> `[usize]` {
+  let ret: usize;
+  std::arch::asm!(
+    "/* {ret} {p} */",
+    p = in(reg) p,
+    ret = lateout(reg) ret,
+    options(nostack)
+  );
+  `[ret]`
+}

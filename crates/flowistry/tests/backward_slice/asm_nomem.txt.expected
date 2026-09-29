@@ -1,0 +1,11 @@
+// With `nomem`, inline assembly neither reads nor writes memory behind its inputs.
+fn main() {
+  let mut x = 0usize;
+  let p = &mut x as *mut usize;
+  unsafe { *p = 7; }
+  let ret: usize;
+  unsafe {
+    std::arch::asm!("/* {r} {p} */", p = in(reg) p, r = lateout(reg) ret, options(nomem, nostack));
+  }
+  `[ret;]`
+}
