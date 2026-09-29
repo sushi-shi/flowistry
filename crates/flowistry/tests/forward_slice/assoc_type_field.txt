@@ -1,0 +1,14 @@
+trait Tr {
+  type A;
+}
+struct X;
+impl Tr for X {
+  type A = i32;
+}
+struct S<T: Tr> {
+  f: T::A,
+}
+fn foo(s: S<X>, y: i32) {
+  let t = (`(s)`, y);
+  let u = t.1;
+}

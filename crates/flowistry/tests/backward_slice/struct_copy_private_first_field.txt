@@ -1,0 +1,15 @@
+mod m {
+  pub struct S {
+    a: i32,
+    pub b: i32,
+  }
+  pub fn mk(a: i32, b: i32) -> S {
+    S { a, b }
+  }
+}
+fn main() {
+  let x = 1;
+  let y = m::mk(0, x);
+  let z = y;
+  `(z.b)`;
+}

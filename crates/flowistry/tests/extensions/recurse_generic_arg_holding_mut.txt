@@ -1,0 +1,17 @@
+/* recurse: generic parameter instantiated with a &mut */
+trait Set {
+  fn set(&mut self);
+}
+impl Set for &mut i32 {
+  fn set(&mut self) {
+    **self = 1;
+  }
+}
+fn g<T: Set>(mut t: T) {
+  t.set();
+}
+fn main() {
+  let mut x = 0;
+  g(&mut x);
+  `(x)`;
+}

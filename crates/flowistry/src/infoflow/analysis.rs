@@ -24,11 +24,12 @@ use smallvec::SmallVec;
 
 use super::{
   FlowResults,
+  callsite::FallbackReason,
   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
 };
 use crate::{
-  extensions::{ContextMode, MutabilityMode, is_extension_active},
-  mir::placeinfo::PlaceInfo,
+  extensions::{ContextMode, MutabilityMode, REACHED_LIBRARY},
+  mir::placeinfo::{NormPlace, PlaceInfo},
 };
 
 /// Represents the information flows at a given instruction. See [`FlowResults`] for a high-level explanation of this datatype.
@@ -37,7 +38,9 @@ use crate::{
 /// we use the bit-set data structures in [`rustc_index::bit_set`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_index/bit_set/index.html).
 /// However instead of using a bit-set directly, we use the [`indexical`] crate to map between raw indices and the objects they represent.
 ///
-/// The [`IndexMatrix`] maps from a [`Place`] to a [`LocationOrArgSet`] via the [`IndexMatrix::row_set`] method. The [`LocationOrArgSet`] is an
+/// The [`IndexMatrix`] maps from a [`NormPlace`] to a [`LocationOrArgSet`] via the [`IndexMatrix::row_set`] method. Rows are keyed by
+/// normalized places (see [`PlaceInfo::normalize`]), never by raw [`Place`]s: use [`PlaceInfo::normalize`] to compute the key of a place.
+/// The [`LocationOrArgSet`] is an
 /// [`IndexSet`](indexical::IndexSet) of locations (or arguments, see note below), which wraps a
 /// [`rustc_index::bit_set::HybridBitSet`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_index/bit_set/enum.HybridBitSet.html) and
 /// has roughly the same API. The [`indexical`] crate has a concept of an [`IndexedDomain`](indexical::IndexedDomain) to represent the mapping from
@@ -56,7 +59,7 @@ use crate::{
 /// information flow analysis: an instruction `bb[0]: _2 = _1` (where `_1` is an argument) would set $\Theta(\verb|_2|) = \Theta(\verb|_1|) \cup \\{\verb|bb0\[0\]|\\}\$.
 /// However, $\Theta(\verb|_1|)$ would be empty, so it would be imposible to determine that `_2` depends on `_1`. To solve this issue, we
 /// enrich the domain of locations with arguments, using the [`LocationOrArg`] type. Any dependency can be on *either* a location or an argument.
-pub type FlowDomain<'tcx> = IndexMatrix<Place<'tcx>, LocationOrArg>;
+pub type FlowDomain<'tcx> = IndexMatrix<NormPlace<'tcx>, LocationOrArg>;
 
 /// Data structure that holds context for performing the information flow analysis.
 pub struct FlowAnalysis<'a, 'tcx> {
@@ -197,11 +200,13 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       }
     }
 
-    let ignore_mut =
-      is_extension_active(|mode| mode.mutability_mode == MutabilityMode::IgnoreMut);
+    let ignore_mut = match self.place_info.mode().mutability_mode {
+      MutabilityMode::IgnoreMut => true,
+      MutabilityMode::DistinguishMut => false,
+    };
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
       // Clear sub-places of mutated place (if sound to do so)
-      if matches!(mt.status, MutationStatus::Definitely)
+      if mt.status() == MutationStatus::Definitely
         && self.place_info.aliases(mt.mutated).len() == 1
       {
         for sub in self.place_info.children(mt.mutated).iter() {
@@ -265,6 +270,7 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     location: Location,
   ) {
     ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+      debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
       self.transfer_function(state, mutations, location)
     })
     .visit_statement(statement, location);
@@ -277,13 +283,28 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     location: Location,
   ) -> TerminatorEdges<'mir, 'tcx> {
     if matches!(terminator.kind, TerminatorKind::Call { .. })
-      && is_extension_active(|mode| mode.context_mode == ContextMode::Recurse)
-      && self.recurse_into_call(state, &terminator.kind, location)
+      && self.place_info.mode().context_mode == ContextMode::Recurse
     {
-      return terminator.edges();
+      match self.recurse_into_call(&terminator.kind) {
+        Ok(mutations) => {
+          self.transfer_function(state, mutations, location);
+          return terminator.edges();
+        }
+        Err(reason) => {
+          debug!("  Not recursing into call: {reason:?}");
+          if reason == FallbackReason::NotLocal {
+            REACHED_LIBRARY.get(|reached_library| {
+              if let Some(reached_library) = reached_library {
+                *reached_library.borrow_mut() = true;
+              }
+            });
+          }
+        }
+      }
     }
 
     ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+      debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
       self.transfer_function(state, mutations, location)
     })
     .visit_terminator(terminator, location);
@@ -298,4 +319,25 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     _return_places: CallReturnPlaces<'_, 'tcx>,
   ) {
   }
+}
+
+/// Whether no two definite writes of a batch overlap.
+///
+/// `transfer_function` applies a batch sequentially, and a definite write clears the
+/// place it writes, so overlapping definite writes would depend on their order. The
+/// modular approximation never produces them (callee effects are ordered instead).
+fn definite_writes_disjoint<'tcx>(mutations: &[Mutation<'tcx>]) -> bool {
+  let definite = mutations
+    .iter()
+    .filter(|mt| mt.status() == MutationStatus::Definitely)
+    .map(|mt| mt.mutated)
+    .collect::<SmallVec<[_; 8]>>();
+  let is_prefix = |a: &Place<'tcx>, b: &Place<'tcx>| {
+    a.local == b.local && b.projection.starts_with(a.projection)
+  };
+  definite.iter().enumerate().all(|(i, a)| {
+    definite[i + 1 ..]
+      .iter()
+      .all(|b| !is_prefix(a, b) && !is_prefix(b, a))
+  })
 }

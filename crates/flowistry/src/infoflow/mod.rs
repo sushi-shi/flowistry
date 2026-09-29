@@ -15,9 +15,13 @@ pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
   dependencies::{Direction, compute_dependencies, compute_dependency_spans},
 };
-use crate::mir::{engine, placeinfo::PlaceInfo};
+use crate::{
+  extensions::EvalMode,
+  mir::{engine, placeinfo::PlaceInfo, utils::MAX_ARG_POINTER_DEPTH},
+};
 
 mod analysis;
+mod callsite;
 mod dependencies;
 pub mod mutation;
 mod recursive;
@@ -27,6 +31,7 @@ mod recursive;
 /// Using the metavariables in [the paper](https://arxiv.org/abs/2111.13662): for each
 /// [`LocationOrArg`](rustc_utils::mir::location_or_arg::LocationOrArg) $\ell$ in a [`Body`](rustc_middle::mir::Body) $f$,
 /// this type contains a [`FlowDomain`] $\Theta_\ell$ that maps from a [`Place`](rustc_middle::mir::Place) $p$
+/// (stored in normal form as a [`NormPlace`](crate::mir::placeinfo::NormPlace))
 /// to a [`LocationOrArgSet`](rustc_utils::mir::location_or_arg::index::LocationOrArgSet) $\kappa$. The domain of $\Theta_\ell$
 /// is all places that have been defined up to $\ell$. For each place, $\Theta_\ell(p)$ contains the set of locations
 /// (or arguments) that could influence the value of that place, i.e. the place's dependencies.
@@ -76,17 +81,38 @@ thread_local! {
 /// function.
 ///
 /// See [`FlowResults`] for an explanation of how to use the return value.
+///
+/// The analysis runs with the ambient [`EvalMode`] (see [`EvalMode::from_ambient`]),
+/// which is read once at entry. Use [`compute_flow_with_mode`] to pass it explicitly.
 pub fn compute_flow<'a, 'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+) -> FlowResults<'a, 'tcx> {
+  compute_flow_with_mode(tcx, body_id, body_with_facts, EvalMode::from_ambient())
+}
+
+/// Computes information flow for a MIR body with an explicit [`EvalMode`].
+///
+/// See [`compute_flow`] for details. The mode is also used for every callee analyzed
+/// in [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse).
+pub fn compute_flow_with_mode<'a, 'tcx>(
+  tcx: TyCtxt<'tcx>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+  mode: EvalMode,
 ) -> FlowResults<'a, 'tcx> {
   BODY_STACK.with(|body_stack| {
     body_stack.borrow_mut().push(body_id);
     debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
 
     let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
-    let place_info = PlaceInfo::build(tcx, def_id, body_with_facts);
+    let place_info = PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, mode);
+    if log::log_enabled!(log::Level::Debug) && place_info.arg_pointers_truncated() {
+      debug!(
+        "Arguments hold pointers nested deeper than {MAX_ARG_POINTER_DEPTH} projections; the loans behind them are ignored"
+      );
+    }
     let location_domain = place_info.location_domain().clone();
 
     let body = &body_with_facts.body;

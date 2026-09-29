@@ -1,0 +1,10 @@
+/* recurse: Fn closure passed to a local function */
+fn apply<F: Fn() -> i32>(f: F) -> i32 {
+  f()
+}
+fn main() {
+  let x = 1;
+  let y = 2;
+  let r = apply(|| x);
+  `(r)`;
+}

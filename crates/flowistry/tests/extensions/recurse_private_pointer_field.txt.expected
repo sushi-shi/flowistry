@@ -1,0 +1,18 @@
+/* recurse: callee writes through a private pointer field */
+mod m {
+  pub struct W<'a> {
+    p: &'a mut i32,
+  }
+  pub fn new(p: &mut i32) -> W<'_> {
+    W { p }
+  }
+  pub fn set(w: &mut W<'_>) {
+    *w.p = 5;
+  }
+}
+fn main() {
+  `[let mut x = 1;]`
+  let mut w = m::new(&mut x);
+  m::set(&mut w);
+  `[x;]`
+}
