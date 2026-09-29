@@ -297,14 +297,16 @@ def backend_env(bin_dir, target_dir):
 def crash_signature(stderr):
     """A short, stable description of a panic/ICE, suitable for grouping."""
     lines = stderr.splitlines()
+    # An ICE's panic payload is often just `Box<dyn Any>`; the ICE line itself
+    # names the actual cause, so prefer it.
+    for line in lines:
+        if "internal compiler error" in line:
+            return line.strip()
     for i, line in enumerate(lines):
         if "panicked at" in line:
             loc = line.split("panicked at", 1)[1].strip().rstrip(":")
             msg = lines[i + 1].strip() if i + 1 < len(lines) else ""
             return f"panicked at {loc}: {msg}"
-    for line in lines:
-        if "internal compiler error" in line:
-            return line.strip()
     return "no decodable response: " + last_lines(stderr, 2)
 
 
