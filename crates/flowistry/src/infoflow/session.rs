@@ -82,7 +82,8 @@ impl<'tcx> AnalysisSession<'tcx> {
     self.stats.borrow().clone()
   }
 
-  pub(crate) fn tcx(&self) -> TyCtxt<'tcx> {
+  /// The type context of this session.
+  pub fn tcx(&self) -> TyCtxt<'tcx> {
     self.tcx
   }
 

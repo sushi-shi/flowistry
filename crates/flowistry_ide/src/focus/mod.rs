@@ -1,7 +1,10 @@
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, rc::Rc, time::Instant};
 
 use anyhow::Result;
-use flowistry::infoflow;
+use flowistry::{
+  extensions::EvalMode,
+  infoflow::{self, AnalysisSession},
+};
 use itertools::Itertools;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
@@ -18,6 +21,8 @@ use serde::Serialize;
 
 mod direct_influence;
 mod simple_args;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Serialize)]
 pub struct PlaceInfo {
@@ -34,10 +39,20 @@ pub struct FocusOutput {
 }
 
 pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
+  let session = AnalysisSession::new(tcx, EvalMode::from_ambient());
+  focus_with_session(&session, body_id)
+}
+
+/// Like [`focus`], sharing the callee summaries of `session` (and in its mode).
+pub(crate) fn focus_with_session<'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_id: BodyId,
+) -> Result<FocusOutput> {
+  let tcx = session.tcx();
   let def_id = tcx.hir_body_owner_def_id(body_id);
   let body_with_facts = get_body_with_borrowck_facts(tcx, def_id);
   let body = &body_with_facts.body;
-  let results = &infoflow::compute_flow(tcx, body_id, body_with_facts);
+  let results = &infoflow::compute_flow_with_session(session, body_id, body_with_facts);
 
   let source_map = tcx.sess.source_map();
   let spanner = {
@@ -76,7 +91,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
 
   let direct = {
     block_timer!("focus: direct influence");
-    direct_influence::DirectInfluence::build(body, &results.analysis.place_info)
+    direct_influence::DirectInfluence::build(&results.analysis)
   };
 
   let slices_timer = Instant::now();
