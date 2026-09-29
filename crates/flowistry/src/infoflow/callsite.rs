@@ -11,6 +11,7 @@
 use std::cmp::Ordering;
 
 use rustc_abi::{FieldIdx, VariantIdx};
+use rustc_data_structures::fx::FxHashSet;
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{
@@ -421,20 +422,18 @@ impl<'a, 'tcx> CallSite<'a, 'tcx> {
   }
 
   /// The caller operands passed to callee parameters whose type is opaque to the
-  /// callee (a type parameter, an alias or a trait object, possibly nested): the
-  /// callee's analysis cannot see pointers hidden in them.
+  /// callee (it contains a type parameter, an alias or a trait object, possibly
+  /// nested in generic arguments or in fields of ADTs): the callee's analysis cannot
+  /// see pointers hidden in them.
   pub fn opaque_operands(&self, callee_body: &Body<'tcx>) -> SmallVec<[usize; 4]> {
     let mut operands = callee_body
       .args_iter()
       .filter(|local| {
-        callee_body.local_decls[*local].ty.walk().any(|arg| {
-          arg.as_type().is_some_and(|ty| {
-            matches!(
-              ty.kind(),
-              TyKind::Param(_) | TyKind::Alias(..) | TyKind::Dynamic(..)
-            )
-          })
-        })
+        contains_opaque_ty(
+          self.tcx,
+          callee_body.local_decls[*local].ty,
+          &mut FxHashSet::default(),
+        )
       })
       .filter_map(|local| self.abi.arg_pos(local).map(ArgPos::operand))
       .collect::<SmallVec<[usize; 4]>>();
@@ -579,6 +578,33 @@ impl<'a, 'tcx> CallSite<'a, 'tcx> {
       }
     }
   }
+}
+
+/// Whether `ty` contains a type parameter, an alias or a trait object, in its generic
+/// arguments or, transitively, in the fields of the ADTs it contains (instantiated with
+/// their arguments).
+///
+/// `visited` holds the types already visited by this query: visiting one again
+/// answers `false`, which is exact because the query stops at the first opaque type,
+/// and terminates on recursive types.
+fn contains_opaque_ty<'tcx>(
+  tcx: TyCtxt<'tcx>,
+  ty: Ty<'tcx>,
+  visited: &mut FxHashSet<Ty<'tcx>>,
+) -> bool {
+  if !visited.insert(ty) {
+    return false;
+  }
+  ty.walk()
+    .filter_map(|arg| arg.as_type())
+    .any(|inner| match inner.kind() {
+      TyKind::Param(_) | TyKind::Alias(..) | TyKind::Dynamic(..) => true,
+      TyKind::Adt(adt_def, args) => adt_def.all_fields().any(|field| {
+        let field_ty = field.ty(tcx, args);
+        contains_opaque_ty(tcx, field_ty, visited)
+      }),
+      _ => false,
+    })
 }
 
 /// A total order on places that depends only on their structure: the local, then the
@@ -895,6 +921,33 @@ fn caller(a: i32) {
       let x = exact(site.translate(&path(EffectRoot::Arg(ArgPos::Plain(0)), &[])));
       assert_eq!(x.ty(caller_body.local_decls(), tcx).ty, tcx.types.i32);
     }
+  }
+
+  #[test]
+  fn opaque_types_through_fields() {
+    let input = r#"
+trait Tr {}
+struct H<'a> { b: Box<dyn Tr + 'a> }
+struct Nested<'a> { h: Option<H<'a>> }
+struct List { next: Option<Box<List>>, v: i32 }
+struct Gen<T> { t: T }
+fn t(a: H<'_>, b: Nested<'_>, c: List, d: (i32, &mut i32), e: Gen<i32>) {}
+"#;
+    test_utils::compile_crate(input, &[], check_opaque_types);
+  }
+
+  fn check_opaque_types<'tcx>(tcx: TyCtxt<'tcx>) {
+    let (_, t) = test_utils::body_named(tcx, "t");
+    let opaque = t
+      .body
+      .args_iter()
+      .map(|local| {
+        contains_opaque_ty(tcx, t.body.local_decls[local].ty, &mut FxHashSet::default())
+      })
+      .collect::<Vec<_>>();
+    // A trait object in a field, also nested; not a recursive list, a tuple, or a
+    // generic struct instantiated with a concrete type.
+    assert_eq!(opaque, vec![true, true, false, false, false]);
   }
 
   #[test]
