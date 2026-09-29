@@ -1,10 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
-// use indexical::impls::RustcIndexMatrix as IndexMatrix;
-use indexical::bitset::rustc::IndexMatrix;
+use indexical::{
+  IndexedValue,
+  bitset::rustc::{IndexMatrix, IndexSet},
+};
 use log::{debug, trace};
 use rustc_data_structures::fx::FxHashMap as HashMap;
-use rustc_hir::{BodyId, def_id::DefId};
+use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{visit::Visitor, *},
   ty::TyCtxt,
@@ -23,16 +25,16 @@ use rustc_utils::{
 use smallvec::SmallVec;
 
 use super::{
-  FlowResults,
-  callsite::FallbackReason,
+  AnalysisSession,
+  effects::CallEffects,
   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
 };
 use crate::{
-  extensions::{ContextMode, MutabilityMode, REACHED_LIBRARY},
+  extensions::{ContextMode, MutabilityMode},
   mir::placeinfo::{NormPlace, PlaceInfo},
 };
 
-/// Represents the information flows at a given instruction. See [`FlowResults`] for a high-level explanation of this datatype.
+/// Represents the information flows at a given instruction. See [`FlowResults`](super::FlowResults) for a high-level explanation of this datatype.
 ///
 /// `FlowDomain` represents $\Theta$ that maps from places $p$ to dependencies $\kappa$. To efficiently represent $\kappa$, a set of locations,
 /// we use the bit-set data structures in [`rustc_index::bit_set`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_index/bit_set/index.html).
@@ -76,18 +78,38 @@ pub struct FlowAnalysis<'a, 'tcx> {
   pub place_info: PlaceInfo<'a, 'tcx>,
 
   pub(crate) control_dependencies: ControlDependencies<BasicBlock>,
-  pub(crate) recurse_cache: RefCell<HashMap<BodyId, FlowResults<'a, 'tcx>>>,
+
+  /// The session providing callee summaries, with the same mode as `place_info`.
+  pub(crate) session: Rc<AnalysisSession<'tcx>>,
+
+  /// The effects of each terminator in `Recurse` mode (see
+  /// [`FlowAnalysis::effects_at`]).
+  pub(crate) call_effects: RefCell<HashMap<Location, Rc<CallEffects<'tcx>>>>,
 }
 
 impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
-  /// Constructs (but does not execute) a new FlowAnalysis.
+  /// Constructs (but does not execute) a new FlowAnalysis, with a new
+  /// [`AnalysisSession`] in the mode of `place_info`.
   pub fn new(
     tcx: TyCtxt<'tcx>,
     def_id: DefId,
     body: &'a Body<'tcx>,
     place_info: PlaceInfo<'a, 'tcx>,
   ) -> Self {
-    let recurse_cache = RefCell::new(HashMap::default());
+    let session = AnalysisSession::new(tcx, place_info.mode());
+    Self::with_session(tcx, def_id, body, place_info, session)
+  }
+
+  /// Constructs a new FlowAnalysis that shares the callee summaries of `session`,
+  /// whose mode must be the mode of `place_info`.
+  pub(crate) fn with_session(
+    tcx: TyCtxt<'tcx>,
+    def_id: DefId,
+    body: &'a Body<'tcx>,
+    place_info: PlaceInfo<'a, 'tcx>,
+    session: Rc<AnalysisSession<'tcx>>,
+  ) -> Self {
+    assert_eq!(session.mode(), place_info.mode());
     let control_dependencies = body.control_dependencies();
     debug!("Control dependencies: {control_dependencies:?}");
     FlowAnalysis {
@@ -96,7 +118,8 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       body,
       place_info,
       control_dependencies,
-      recurse_cache,
+      session,
+      call_effects: RefCell::default(),
     }
   }
 
@@ -144,35 +167,92 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     deps
   }
 
+  /// The union of the rows of `state` that influence each of `inputs`.
+  pub(crate) fn deps_of_inputs<C: IndexedValue + 'static>(
+    &self,
+    state: &IndexMatrix<NormPlace<'tcx>, C>,
+    inputs: &[Place<'tcx>],
+  ) -> IndexSet<C> {
+    let mut deps = IndexSet::new(state.col_domain());
+    for input in inputs {
+      for relevant in self.influences(*input) {
+        deps.union(state.row_set(&self.place_info.normalize(relevant)));
+      }
+    }
+    deps
+  }
+
+  /// The places written by a mutation of `mutated`: its aliases, except those behind
+  /// a shared reference (unless mutability is ignored).
+  pub(crate) fn written_aliases(
+    &self,
+    mutated: Place<'tcx>,
+  ) -> SmallVec<[Place<'tcx>; 8]> {
+    let ignore_mut = match self.place_info.mode().mutability_mode {
+      MutabilityMode::IgnoreMut => true,
+      MutabilityMode::DistinguishMut => false,
+    };
+    self
+      .place_info
+      .aliases(mutated)
+      .iter()
+      .filter(|alias| {
+        // Remove any conflicts that aren't actually mutable, e.g. if x : &T ends up
+        // as an alias of y: &mut T. See test function_lifetime_alias_mut for an example.
+        let has_immut = alias.iter_projections().any(|(sub_place, _)| {
+          let ty = sub_place.ty(self.body.local_decls(), self.tcx).ty;
+          matches!(ty.ref_mutability(), Some(Mutability::Not))
+        });
+        !has_immut || ignore_mut
+      })
+      .copied()
+      .collect()
+  }
+
   // This function expects *ALL* the mutations that occur within a given [`Location`] at once.
   pub(crate) fn transfer_function(
     &self,
     state: &mut FlowDomain<'tcx>,
-    mutations: Vec<Mutation<'tcx>>,
+    mutations: &[Mutation<'tcx>],
     location: Location,
   ) {
+    self.transfer(state, mutations, location, |location, deps| {
+      deps.insert(location);
+    });
+  }
+
+  /// Applies the mutations of `location` to a state whose rows are sets of `C`.
+  ///
+  /// `seed` adds what an instruction contributes to the dependencies of the values
+  /// it writes by itself: its location, in a [`FlowDomain`]. It is applied to the
+  /// location of the mutations and to the terminators they are control-dependent on.
+  ///
+  /// This function expects *all* the mutations of a location at once.
+  pub(crate) fn transfer<C: IndexedValue + std::fmt::Debug + 'static>(
+    &self,
+    state: &mut IndexMatrix<NormPlace<'tcx>, C>,
+    mutations: &[Mutation<'tcx>],
+    location: Location,
+    seed: impl Fn(Location, &mut IndexSet<C>),
+  ) {
     debug!("  Applying mutations {mutations:?}");
-    let location_domain = self.location_domain();
 
     // Initialize dependencies to include current location of mutation.
     let mut all_deps = {
-      let mut deps = LocationOrArgSet::new(location_domain);
-      deps.insert(location);
+      let mut deps = IndexSet::new(state.col_domain());
+      seed(location, &mut deps);
       vec![deps; mutations.len()]
     };
 
     // Add every influence on `input` to `deps`.
-    let add_deps = |state: &FlowDomain<'tcx>,
-                    input,
-                    target_deps: &mut LocationOrArgSet| {
-      for relevant in self.influences(input) {
-        let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
-        trace!(
-          "    For relevant {relevant:?} for input {input:?} adding deps {relevant_deps:?}"
-        );
-        target_deps.union(relevant_deps);
-      }
-    };
+    let add_deps =
+      |state: &IndexMatrix<NormPlace<'tcx>, C>, input, target_deps: &mut IndexSet<C>| {
+        for relevant in self.influences(input) {
+          let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
+          trace!("    For relevant {relevant:?} for input {input:?}");
+          target_deps.union(relevant_deps);
+        }
+      };
 
     // Register every explicitly provided input as an input.
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
@@ -186,7 +266,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     let body = self.body;
     for block in controlled_by.into_iter().flat_map(|set| set.iter()) {
       for deps in &mut all_deps {
-        deps.insert(body.terminator_loc(block));
+        seed(body.terminator_loc(block), deps);
       }
 
       // Include dependencies of the switch's operand.
@@ -200,10 +280,6 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       }
     }
 
-    let ignore_mut = match self.place_info.mode().mutability_mode {
-      MutabilityMode::IgnoreMut => true,
-      MutabilityMode::DistinguishMut => false,
-    };
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
       // Clear sub-places of mutated place (if sound to do so)
       if mt.status() == MutationStatus::Definitely
@@ -217,27 +293,21 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       // Add deps of mutated to include provenance of mutated pointers
       add_deps(state, mt.mutated, deps);
 
-      let mutable_aliases = self
-        .place_info
-        .aliases(mt.mutated)
-        .iter()
-        .filter(|alias| {
-          // Remove any conflicts that aren't actually mutable, e.g. if x : &T ends up
-          // as an alias of y: &mut T. See test function_lifetime_alias_mut for an example.
-          let has_immut = alias.iter_projections().any(|(sub_place, _)| {
-            let ty = sub_place.ty(body.local_decls(), self.tcx).ty;
-            matches!(ty.ref_mutability(), Some(Mutability::Not))
-          });
-          !has_immut || ignore_mut
-        })
-        .collect::<SmallVec<[_; 8]>>();
+      let mutable_aliases = self.written_aliases(mt.mutated);
 
       debug!("  Mutated places: {mutable_aliases:?}");
       debug!("    with deps {deps:?}");
 
       for alias in mutable_aliases {
-        state.union_into_row(self.place_info.normalize(*alias), deps);
+        state.union_into_row(self.place_info.normalize(alias), deps);
       }
+    }
+  }
+
+  fn recurse(&self) -> bool {
+    match self.place_info.mode().context_mode {
+      ContextMode::Recurse => true,
+      ContextMode::SigOnly => false,
     }
   }
 }
@@ -269,11 +339,12 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     statement: &Statement<'tcx>,
     location: Location,
   ) {
-    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
-      debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
-      self.transfer_function(state, mutations, location)
-    })
-    .visit_statement(statement, location);
+    let mutations = self.statement_mutations(statement, location);
+    if mutations.is_empty() {
+      return;
+    }
+    debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
+    self.transfer_function(state, &mutations, location);
   }
 
   fn apply_primary_terminator_effect<'mir>(
@@ -282,32 +353,16 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
     terminator: &'mir Terminator<'tcx>,
     location: Location,
   ) -> TerminatorEdges<'mir, 'tcx> {
-    if matches!(terminator.kind, TerminatorKind::Call { .. })
-      && self.place_info.mode().context_mode == ContextMode::Recurse
-    {
-      match self.recurse_into_call(&terminator.kind) {
-        Ok(mutations) => {
-          self.transfer_function(state, mutations, location);
-          return terminator.edges();
-        }
-        Err(reason) => {
-          debug!("  Not recursing into call: {reason:?}");
-          if reason == FallbackReason::NotLocal {
-            REACHED_LIBRARY.get(|reached_library| {
-              if let Some(reached_library) = reached_library {
-                *reached_library.borrow_mut() = true;
-              }
-            });
-          }
-        }
-      }
+    if self.recurse() {
+      let effects = self.effects_at(terminator, location);
+      self.transfer_function(state, &effects.mutations, location);
+    } else {
+      ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+        debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
+        self.transfer_function(state, &mutations, location)
+      })
+      .visit_terminator(terminator, location);
     }
-
-    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
-      debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
-      self.transfer_function(state, mutations, location)
-    })
-    .visit_terminator(terminator, location);
 
     terminator.edges()
   }
