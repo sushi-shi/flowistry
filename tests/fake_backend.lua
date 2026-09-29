@@ -53,6 +53,28 @@ elseif action == "focus" then
 else
   io.stderr:write("unexpected fixture command: " .. tostring(action)); os.exit(1)
 end
+if vim.env.FLOWISTRY_TEST_RANGE_TABLE then
+  -- The backend's range table: each distinct range once, referred to by 0-based index.
+  local function tabulate(focus)
+    local distinct, indices = {}, {}
+    local function index(range)
+      local key = vim.json.encode(range)
+      if not indices[key] then distinct[#distinct + 1], indices[key] = range, #distinct end
+      return indices[key]
+    end
+    for _, place in ipairs(focus.place_info) do
+      place.range = index(place.range)
+      for _, field in ipairs({ "ranges", "slice", "direct_influence", "maybe_slice" }) do
+        if place[field] then place[field] = vim.tbl_map(index, place[field]) end
+      end
+    end
+    focus.ranges = distinct
+  end
+  if result.Ok and result.Ok.place_info then tabulate(result.Ok) end
+  for _, body in ipairs(result.Ok and result.Ok.bodies or {}) do
+    if type(body.focus) == "table" and body.focus.Ok then tabulate(body.focus.Ok) end
+  end
+end
 local encoded = vim.json.encode(result)
 if vim.env.FLOWISTRY_TEST_MODE == "json" then encoded = "not json" end
 local gzip = vim.system({ "gzip", "-c" }, { stdin = encoded }):wait()

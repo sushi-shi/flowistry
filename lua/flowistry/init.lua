@@ -172,15 +172,33 @@ local function prepare_focus(state, value)
   local source_id = value.containers[1] and value.containers[1].filename
   local convert = ranges.converter(state.buf, state.context.root, source_id)
   local result = { containers = ranges.convert_list(value.containers, convert), places = {} }
+  -- Newer backends send each distinct range once, in `ranges`, and places refer to them
+  -- by 0-based index. Convert each once; converted ranges are shared, never mutated.
+  local place_range, place_list = convert, function(items) return ranges.convert_list(items, convert) end
+  if value.ranges ~= nil then
+    assert(type(value.ranges) == "table" and vim.islist(value.ranges), "Invalid range table")
+    local converted = {}
+    for i, range in ipairs(value.ranges) do converted[i - 1] = convert(range) or false end
+    place_range = function(index)
+      assert(type(index) == "number" and converted[index] ~= nil, "Invalid range index")
+      return converted[index] or nil
+    end
+    place_list = function(indices)
+      assert(type(indices) == "table" and vim.islist(indices), "Expected a list of range indices")
+      local list = {}
+      for _, index in ipairs(indices) do list[#list + 1] = place_range(index) end
+      return list
+    end
+  end
   for _, place in ipairs(value.place_info) do
-    local range = convert(place.range)
+    local range = place_range(place.range)
     if range then
       result.places[#result.places + 1] = {
         range = range,
-        ranges = ranges.convert_list(place.ranges, convert),
-        slice = ranges.convert_list(place.slice, convert),
-        direct_influence = ranges.convert_list(place.direct_influence, convert),
-        maybe_slice = ranges.convert_list(place.maybe_slice or {}, convert),
+        ranges = place_list(place.ranges),
+        slice = place_list(place.slice),
+        direct_influence = place_list(place.direct_influence),
+        maybe_slice = place_list(place.maybe_slice or {}),
       }
     end
   end

@@ -404,6 +404,18 @@ local function run()
   check(vim.bo.buftype == "nofile" and not vim.bo.modifiable, "error log opens a readonly scratch buffer")
   vim.cmd.close()
 
+  local listed
+  for _, tabulated in ipairs({ false, true }) do
+    setup(tabulated and { FLOWISTRY_TEST_RANGE_TABLE = "1" } or nil)
+    move(2, 8)
+    flow.enable()
+    await(function() return flow.status() == "active" end, "focus completes, range table: " .. tostring(tabulated))
+    check(#marks() > 0, "focus highlights, range table: " .. tostring(tabulated))
+    if tabulated then equal(marks(), listed, "a range table renders the same highlights as range lists") end
+    listed = marks()
+    flow.disable()
+  end
+
   setup({ FLOWISTRY_TEST_DELAY = "250" })
   local before_edit = #calls()
   flow.enable()
