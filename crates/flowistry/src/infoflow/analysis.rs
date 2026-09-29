@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+  cell::{Cell, RefCell},
+  rc::Rc,
+};
 
 // use indexical::impls::RustcIndexMatrix as IndexMatrix;
 use indexical::bitset::rustc::IndexMatrix;
@@ -77,6 +80,14 @@ pub struct FlowAnalysis<'a, 'tcx> {
 
   pub(crate) control_dependencies: ControlDependencies<BasicBlock>,
   pub(crate) recurse_cache: RefCell<HashMap<BodyId, FlowResults<'a, 'tcx>>>,
+  pub(crate) counters: TransferCounters,
+}
+
+/// Counters of the transfer function, see [`FlowStats`](super::FlowStats).
+#[derive(Default)]
+pub(crate) struct TransferCounters {
+  pub(crate) transfers: Cell<usize>,
+  pub(crate) mutations: Cell<usize>,
 }
 
 impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
@@ -97,6 +108,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       place_info,
       control_dependencies,
       recurse_cache,
+      counters: TransferCounters::default(),
     }
   }
 
@@ -152,6 +164,11 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     location: Location,
   ) {
     debug!("  Applying mutations {mutations:?}");
+    let counters = &self.counters;
+    counters.transfers.set(counters.transfers.get() + 1);
+    counters
+      .mutations
+      .set(counters.mutations.get() + mutations.len());
     let location_domain = self.location_domain();
 
     // Initialize dependencies to include current location of mutation.

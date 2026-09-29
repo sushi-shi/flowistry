@@ -37,6 +37,17 @@ pub struct AnalysisResults<'tcx, A: Analysis<'tcx>> {
   pub analysis: A,
   location_domain: Rc<LocationOrArgDomain>,
   state: IndexVec<LocationOrArgIndex, Rc<A::Domain>>,
+  engine_stats: EngineStats,
+}
+
+/// Counters of one run of [`iterate_to_fixpoint`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct EngineStats {
+  /// How many times the analysis applied the effect of a statement or terminator,
+  /// i.e. how many locations the worklist visited, counting revisits.
+  pub location_visits: usize,
+  /// How many joins of a location's state into a successor's state changed the successor.
+  pub changed_joins: usize,
 }
 
 impl<'tcx, A: Analysis<'tcx>> AnalysisResults<'tcx, A> {
@@ -44,6 +55,11 @@ impl<'tcx, A: Analysis<'tcx>> AnalysisResults<'tcx, A> {
   /// at a given [`Location`].
   pub fn state_at(&self, location: Location) -> &A::Domain {
     &self.state[location.to_index(&self.location_domain)]
+  }
+
+  /// Counters of the fixpoint iteration that computed these results.
+  pub fn engine_stats(&self) -> EngineStats {
+    self.engine_stats
   }
 }
 
@@ -79,10 +95,12 @@ pub fn iterate_to_fixpoint<'tcx, A: Analysis<'tcx>>(
     }
   }
 
+  let mut engine_stats = EngineStats::default();
   while let Some(loc_index) = dirty_queue.pop() {
     let LocationOrArg::Location(location) = *location_domain.value(loc_index) else {
       unreachable!()
     };
+    engine_stats.location_visits += 1;
     let next_locs = match body.stmt_at(location) {
       Either::Left(statement) => {
         analysis.apply_primary_statement_effect(
@@ -114,6 +132,7 @@ pub fn iterate_to_fixpoint<'tcx, A: Analysis<'tcx>>(
       let (cur_state, next_state) = state.pick2_mut(loc_index, next_loc_index);
       let changed = next_state.join(cur_state);
       if changed {
+        engine_stats.changed_joins += 1;
         dirty_queue.insert(next_loc_index);
       }
     }
@@ -125,5 +144,6 @@ pub fn iterate_to_fixpoint<'tcx, A: Analysis<'tcx>>(
     analysis,
     location_domain,
     state,
+    engine_stats,
   }
 }

@@ -77,6 +77,14 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     direct_influence::DirectInfluence::build(body, &results.analysis.place_info)
   };
 
+  // The place queries of the whole request on this body, including the dependency
+  // computation (the analysis logs its own counters when it finishes).
+  if log::log_enabled!(target: "flowistry::stats", log::Level::Info) {
+    for (name, value) in results.analysis.place_info.cache_stats().counters() {
+      log::info!(target: "flowistry::stats", "stat focus.{name} = {value}");
+    }
+  }
+
   let slices_timer = Instant::now();
   // The same spans (and direct-influence locations) recur across the places of a body,
   // so convert each once instead of once per place.
