@@ -184,6 +184,7 @@ impl RustcPlugin for FlowistryPlugin {
           crate::playground::playground,
           compute_target,
           &compiler_args,
+          None,
         ))
       }
       Focus {
@@ -192,11 +193,15 @@ impl RustcPlugin for FlowistryPlugin {
         pos_column,
         ..
       } => {
+        let cpos = CharPos {
+          line: pos_line,
+          column: pos_column,
+        };
+        // Without recursion into callees, the focus analyzes only the body at the
+        // position, so only its typeck root needs borrowck facts.
+        let borrowck_scope =
+          (eval_mode.context_mode == ContextMode::SigOnly).then(|| (file.clone(), cpos));
         let compute_target = || {
-          let cpos = CharPos {
-            line: pos_line,
-            column: pos_column,
-          };
           let range = CharRange {
             start: cpos,
             end: cpos,
@@ -205,7 +210,12 @@ impl RustcPlugin for FlowistryPlugin {
           debug!("eyo WTF {range:?} {file}");
           FunctionIdentifier::Range(range)
         };
-        postprocess(run(crate::focus::focus, compute_target, &compiler_args))
+        postprocess(run(
+          crate::focus::focus,
+          compute_target,
+          &compiler_args,
+          borrowck_scope,
+        ))
       }
       Decompose {
         file: _file,
@@ -221,6 +231,7 @@ impl RustcPlugin for FlowistryPlugin {
               crate::decompose::decompose,
               id,
               &compiler_args,
+              None,
             ))
           } else {
             panic!("Flowistry must be built with the decompose feature")
@@ -282,10 +293,14 @@ pub fn run_with_callbacks(
     .map_err(|_| FlowistryError::BuildError)
 }
 
+/// Runs `analysis` on the body at the target. With `borrowck_scope` (a file and a
+/// position in it), borrowck facts are only collected for the typeck roots enclosing
+/// the position, see [`crate::scoped_borrowck`]; the analysis must not need others.
 fn run<A: FlowistryAnalysis, T: ToSpan>(
   analysis: A,
   compute_target: impl FnOnce() -> T + Send,
   args: &[String],
+  borrowck_scope: Option<(String, CharPos)>,
 ) -> FlowistryResult<A::Output> {
   let mut callbacks = FlowistryCallbacks {
     analysis: Some(analysis),
@@ -293,6 +308,7 @@ fn run<A: FlowistryAnalysis, T: ToSpan>(
     output: None,
     rustc_start: Instant::now(),
     eval_mode: EVAL_MODE.copied(),
+    borrowck_scope,
   };
 
   info!("Starting rustc analysis...");
@@ -342,6 +358,7 @@ struct FlowistryCallbacks<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> {
   output: Option<anyhow::Result<A::Output>>,
   rustc_start: Instant,
   eval_mode: Option<EvalMode>,
+  borrowck_scope: Option<(String, CharPos)>,
 }
 
 impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
@@ -349,7 +366,11 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
 {
   fn config(&mut self, config: &mut rustc_interface::Config) {
     borrowck_facts::enable_mir_simplification();
-    config.override_queries = Some(borrowck_facts::override_queries);
+    if let Some((file, position)) = self.borrowck_scope.take() {
+      crate::scoped_borrowck::configure(file, Some(position));
+    }
+    // Without a configured scope, facts are collected for every body.
+    config.override_queries = Some(crate::scoped_borrowck::override_queries);
   }
 
   fn after_analysis<'tcx>(
@@ -358,6 +379,11 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
     tcx: TyCtxt<'tcx>,
   ) -> rustc_driver::Compilation {
     elapsed("rustc", self.rustc_start);
+    log::info!(
+      target: "flowistry::stats",
+      "stat borrowck_facts.roots = {}",
+      crate::scoped_borrowck::collected_roots()
+    );
     fluid_set!(EVAL_MODE, self.eval_mode.unwrap_or_default());
 
     let mut analysis = self.analysis.take().unwrap();
