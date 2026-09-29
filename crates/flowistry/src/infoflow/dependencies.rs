@@ -2,11 +2,15 @@ use std::{cell::RefCell, iter};
 
 use either::Either;
 use log::{debug, trace};
+use rustc_index::IndexVec;
 use rustc_middle::mir::*;
 use rustc_span::Span;
 use rustc_utils::{
   OperandExt, SpanExt, block_timer,
-  mir::location_or_arg::{LocationOrArg, index::LocationOrArgSet},
+  mir::location_or_arg::{
+    LocationOrArg,
+    index::{LocationOrArgDomain, LocationOrArgIndex, LocationOrArgSet},
+  },
   source_map::spanner::{EnclosingHirSpans, Spanner},
 };
 
@@ -32,6 +36,8 @@ pub enum Direction {
 #[derive(Debug, Clone)]
 struct TargetDeps {
   all_forward: Vec<LocationOrArgSet>,
+  /// The location of each sub-target, which its set in `all_forward` contains.
+  pivots: Vec<LocationOrArg>,
 }
 
 impl TargetDeps {
@@ -85,12 +91,65 @@ impl TargetDeps {
       .iter()
       .map(|_| TargetDeps {
         all_forward: Vec::new(),
+        pivots: Vec::new(),
       })
       .collect::<Vec<_>>();
-    for ((i, ..), deps) in iter::zip(sub_targets, forward) {
+    for ((i, _, location), deps) in iter::zip(sub_targets, forward) {
       all_target_deps[i].all_forward.push(deps.unwrap());
+      all_target_deps[i].pivots.push(location);
     }
     all_target_deps
+  }
+}
+
+/// The sub-targets of all targets, by the location of the sub-target.
+///
+/// A set of dependencies contains a sub-target's forward set only if it contains the
+/// sub-target's location (the forward set always does), so only the sub-targets of
+/// the locations in the set need the full inclusion test.
+struct ForwardIndex {
+  /// `(target, sub-target)` pairs by location.
+  by_location: IndexVec<LocationOrArgIndex, Vec<(u32, u32)>>,
+  /// The locations with sub-targets.
+  locations: Vec<LocationOrArgIndex>,
+}
+
+impl ForwardIndex {
+  fn new(all_target_deps: &[TargetDeps], domain: &LocationOrArgDomain) -> Self {
+    let mut by_location = IndexVec::from_elem_n(Vec::new(), domain.len());
+    for (i, target_deps) in all_target_deps.iter().enumerate() {
+      for (j, pivot) in target_deps.pivots.iter().enumerate() {
+        by_location[domain.index(pivot)].push((i as u32, j as u32));
+      }
+    }
+    let locations = by_location
+      .iter_enumerated()
+      .filter(|(_, sub_targets)| !sub_targets.is_empty())
+      .map(|(location, _)| location)
+      .collect();
+    ForwardIndex {
+      by_location,
+      locations,
+    }
+  }
+
+  /// Calls `f` with the sub-targets whose location is in `deps`.
+  fn candidates(&self, deps: &LocationOrArgSet, mut f: impl FnMut(u32, u32)) {
+    let mut visit = |location: LocationOrArgIndex| {
+      for (i, j) in &self.by_location[location] {
+        f(*i, *j);
+      }
+    };
+    // Either enumerate the set, or test the locations that have sub-targets.
+    if deps.count() <= self.locations.len() {
+      deps.indices().for_each(visit);
+    } else {
+      for location in &self.locations {
+        if deps.contains(*location) {
+          visit(*location);
+        }
+      }
+    }
   }
 }
 
@@ -157,21 +216,19 @@ pub fn compute_dependencies<'tcx>(
       }
     }
 
+    let index = ForwardIndex::new(&all_target_deps, location_domain);
     results.for_each_state(|location, state| {
       let check = |place| {
         let deps = deps(state, aliases, place);
-
-        for (target_deps, outputs) in
-          iter::zip(&all_target_deps, &mut *outputs.borrow_mut())
-        {
-          if target_deps
-            .all_forward
-            .iter()
-            .any(|fwd| deps.contains_all(fwd))
+        let mut outputs = outputs.borrow_mut();
+        index.candidates(deps, |i, j| {
+          let outputs = &mut outputs[i as usize];
+          if !outputs.contains(location)
+            && deps.contains_all(&all_target_deps[i as usize].all_forward[j as usize])
           {
             outputs.insert(location);
           }
-        }
+        });
       };
 
       match body.stmt_at(location) {
