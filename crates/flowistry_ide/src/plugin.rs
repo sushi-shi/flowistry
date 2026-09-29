@@ -227,6 +227,7 @@ fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
     },
   };
 
+  let serialize_timer = Instant::now();
   // serde_json writes token by token. Without a buffer every tiny write goes through
   // the compressor, which dominated the run time for large focus outputs.
   let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
@@ -237,6 +238,10 @@ fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
     .unwrap_or_else(|e| panic!("{}", e.error()))
     .finish()
     .unwrap();
+  log::info!(
+    "output: serialize and compress took {:.4}s",
+    serialize_timer.elapsed().as_secs_f64()
+  );
   print!(
     "{}",
     base64::engine::general_purpose::STANDARD.encode(buffer)

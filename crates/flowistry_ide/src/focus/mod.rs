@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyhow::Result;
 use flowistry::infoflow::{self, Direction};
 use itertools::Itertools;
@@ -5,7 +7,7 @@ use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 use rustc_utils::{
-  SpanExt,
+  SpanExt, block_timer,
   mir::borrowck_facts::get_body_with_borrowck_facts,
   source_map::{
     range::CharRange,
@@ -37,7 +39,10 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
   let results = &infoflow::compute_flow(tcx, body_id, body_with_facts);
 
   let source_map = tcx.sess.source_map();
-  let spanner = Spanner::new(tcx, body_id, body);
+  let spanner = {
+    block_timer!("focus: span tree");
+    Spanner::new(tcx, body_id, body)
+  };
 
   let grouped_spans = spanner
     .mir_span_tree
@@ -62,12 +67,17 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     .map(|(_, target)| target.clone())
     .collect();
 
-  let relevant =
-    infoflow::compute_dependency_spans(results, targets, Direction::Both, &spanner);
+  let relevant = {
+    block_timer!("focus: dependency spans");
+    infoflow::compute_dependency_spans(results, targets, Direction::Both, &spanner)
+  };
 
-  let direct =
-    direct_influence::DirectInfluence::build(body, &results.analysis.place_info);
+  let direct = {
+    block_timer!("focus: direct influence");
+    direct_influence::DirectInfluence::build(body, &results.analysis.place_info)
+  };
 
+  let slices_timer = Instant::now();
   let slices = grouped_spans
     .iter()
     .zip(relevant)
@@ -103,6 +113,10 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
       })
     })
     .collect::<Vec<_>>();
+  log::info!(
+    "focus: slice ranges took {:.4}s",
+    slices_timer.elapsed().as_secs_f64()
+  );
 
   let body_range = CharRange::from_span(spanner.body_span, source_map)?;
   let ret_range = CharRange::from_span(spanner.ret_span, source_map)?;
