@@ -29,7 +29,10 @@ use crate::{
     FlowDomain,
     mutation::{CalleeEffect, Mutation, MutationKind, Precision, call_argument_writes},
   },
-  mir::utils::{self, ErasedTy},
+  mir::{
+    bitset::IndexSetExt,
+    utils::{self, ErasedTy},
+  },
 };
 
 /// The state of a callee at its exits (the join of its states at every `return`).
@@ -73,7 +76,7 @@ impl<'tcx> CalleeExitState<'tcx> {
   /// one dependency was written. FIXME: a row written with only its own argument as
   /// a dependency is considered unwritten.
   fn written_in_callee(&self, row: CalleeRow<'tcx>) -> bool {
-    self.deps(row).len() > 1
+    self.deps(row).count() > 1
   }
 }
 
@@ -260,7 +263,7 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
       let row_deps = exit.deps(row);
       translated
         .iter()
-        .filter(|(source, ..)| row_deps.is_superset(exit.deps(*source)))
+        .filter(|(source, ..)| row_deps.contains_all(exit.deps(*source)))
         .map(|(_, _, source)| source.place())
         .collect()
     };

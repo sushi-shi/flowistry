@@ -11,7 +11,10 @@ use rustc_utils::{
 };
 
 use super::{FlowDomain, FlowResults, mutation::ModularMutationVisitor};
-use crate::{infoflow::mutation::Mutation, mir::placeinfo::PlaceInfo};
+use crate::{
+  infoflow::mutation::Mutation,
+  mir::{bitset::IndexSetExt, placeinfo::PlaceInfo},
+};
 
 /// Which way to look for dependencies
 #[derive(Clone, Copy, Debug)]
@@ -136,7 +139,7 @@ pub fn compute_dependencies<'tcx>(
         if target_deps
           .all_forward
           .iter()
-          .any(|fwd| fwd.len() == 1 && fwd.contains(location))
+          .any(|fwd| fwd.count() == 1 && fwd.contains(location))
         {
           outputs.insert(location);
         }
@@ -154,7 +157,7 @@ pub fn compute_dependencies<'tcx>(
           if target_deps
             .all_forward
             .iter()
-            .any(|fwd| deps.is_superset(fwd))
+            .any(|fwd| deps.contains_all(fwd))
           {
             outputs.insert(location);
           }

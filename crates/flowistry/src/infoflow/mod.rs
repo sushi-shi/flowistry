@@ -18,6 +18,7 @@ pub use self::{
 use crate::{
   extensions::EvalMode,
   mir::{
+    bitset::IndexSetExt,
     engine,
     placeinfo::{PlaceCacheStats, PlaceInfo},
     utils::MAX_ARG_POINTER_DEPTH,
@@ -147,7 +148,7 @@ impl<'tcx> FlowResults<'_, 'tcx> {
     for loc in body.all_locations() {
       for (_, locations) in self.state_at(loc).rows() {
         stats.rows += 1;
-        stats.row_entries += locations.len();
+        stats.row_entries += locations.count();
       }
     }
     stats
