@@ -131,17 +131,18 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
     // point (consecutively) for each constraint that holds everywhere: millions of
     // facts in large bodies. Without a selector, which may depend on the point, only
     // one fact of each run is needed.
+    // The facts are compared before their regions are converted: the conversion is a
+    // call into rustc_borrowck, which is not inlined.
     let mut subset_base = Vec::new();
     let mut previous = None;
     for &(r1, r2, point) in &input_facts.subset_base {
-      let pair = (RegionVid::from(r1), RegionVid::from(r2));
       match constraint_selector {
-        None if previous == Some(pair) => continue,
-        None => previous = Some(pair),
-        Some(selector) if !selector(pair.0, pair.1, point) => continue,
+        None if previous == Some((r1, r2)) => continue,
+        None => previous = Some((r1, r2)),
+        Some(selector) if !selector(r1.into(), r2.into(), point) => continue,
         Some(_) => {}
       }
-      subset_base.push(pair);
+      subset_base.push((RegionVid::from(r1), RegionVid::from(r2)));
     }
 
     let all_pointers = body
