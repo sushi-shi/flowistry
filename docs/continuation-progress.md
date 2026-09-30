@@ -95,7 +95,7 @@ Do not delete active source/build inputs or preserved experiment work.
    as passing. The corrected full run uses `file-cache-resolved.{log,json}` and
    `file-cache-resolved-checkpoints/`. It encountered two legacy decoder failures
    at just's `src/unindent.rs:49:23`; both compiler commands exited successfully.
-   The [filename-table fix](file-focus-identities.md) resolves the foreign macro
+   The [#50 filename-table fix](file-focus-identities.md) resolves the foreign macro
    identity and passes 124 process-level cases at `76d775628`. Preserve the
    legacy run and its raw outcomes; the final cache corpus must use the new binary.
    See [file-cache-comparison.md](file-cache-comparison.md).
@@ -138,4 +138,4 @@ Do not delete active source/build inputs or preserved experiment work.
    corpus runs and their separate prepared roots; do not start a third heavy run.
    Steps 9–12 remain unimplemented.
    Finish all final gates in step 13. Current continuation PR order is #41 → #42 →
-   #43 → #44 → #45 → #46 → #47 → #48 → #49; nothing has been merged.
+   #43 → #44 → #45 → #46 → #47 → #48 → #49 → #50; nothing has been merged.
