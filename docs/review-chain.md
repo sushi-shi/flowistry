@@ -139,4 +139,9 @@ summary/output comparison and final performance gates remain pending.
 [#50](https://github.com/sushi-shi/flowistry/pull/50) adds explicit filename mappings
 for file-focus and portable file identities in the result index. The foreign-macro
 regression and all 124 process-level validation cases pass; corpus gates continue.
+[#51](https://github.com/sushi-shi/flowistry/pull/51) adds the project worker
+foundation: explicit Cargo targets, portable inventories, stable body selection,
+shared-index filling and serialized Cargo launchers. Its 137 process cases pass;
+the public coordinator, streaming, priorities, cancellation and resource limits
+remain the next feature-9 increment.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
