@@ -207,6 +207,7 @@ impl Selection {
 
 struct Inventory {
   output: Option<FlowistryResult<Value>>,
+  mode: flowistry::extensions::EvalMode,
 }
 
 /// Cargo remains responsible for workspace and target identity. Editors never
@@ -268,10 +269,20 @@ impl rustc_driver::Callbacks for Inventory {
   ) -> rustc_driver::Compilation {
     let source_map = tcx.sess.source_map();
     let mut bodies = Vec::new();
+    let mut expanded = std::collections::BTreeMap::new();
+    let cache_enabled = crate::cache::store_root().is_some();
     for (span, id) in find_bodies(tcx) {
       let def = tcx.hir_body_owner_def_id(id);
       let identity = format!("{:?}", tcx.def_path_hash(def.to_def_id()));
       let name = tcx.def_path_str(def);
+      expanded.insert(
+        identity.clone(),
+        if cache_enabled {
+          crate::cache::expanded_body(tcx, def)
+        } else {
+          String::new()
+        },
+      );
       let result = (|| -> anyhow::Result<Value> {
         let file = source_map.lookup_source_file(span.lo());
         let FileName::Real(file_name) = &file.name else {
@@ -295,6 +306,20 @@ impl rustc_driver::Callbacks for Inventory {
       });
     }
     bodies.sort_by_key(|body| body["identity"].as_str().unwrap_or_default().to_owned());
+    let mode = self.mode;
+    let plan = crate::save_plan::inventory(
+      &if cache_enabled {
+        crate::cache::context(tcx)
+      } else {
+        String::new()
+      },
+      &format!("{mode:?}"),
+      mode.context_mode == flowistry::extensions::ContextMode::Recurse,
+      &expanded,
+    );
+    for body in &mut bodies {
+      body["save_plan"] = plan[body["identity"].as_str().unwrap()].clone();
+    }
     self.output = Some(Ok(json!({"schema": 1, "bodies": bodies})));
     if tcx.dcx().has_errors().is_none() {
       if crate::plugin::postprocess(self.output.take().unwrap()).is_ok() {
@@ -307,7 +332,12 @@ impl rustc_driver::Callbacks for Inventory {
 }
 
 pub(crate) fn discover(args: &[String]) -> FlowistryResult<Value> {
-  let mut callbacks = Inventory { output: None };
+  let mut callbacks = Inventory {
+    output: None,
+    mode: flowistry::extensions::EVAL_MODE
+      .copied()
+      .unwrap_or_default(),
+  };
   crate::plugin::run_with_callbacks(args, &mut callbacks)?;
   callbacks.output.unwrap_or_else(|| {
     Err(FlowistryError::AnalysisError {

@@ -22,6 +22,9 @@ pub(crate) struct Options {
   cursor_column: Option<u64>,
   #[arg(long)]
   priority_file: Vec<PathBuf>,
+  /// Saved files follow the cursor body and precede affected callers elsewhere.
+  #[arg(long)]
+  saved_file: Vec<PathBuf>,
   #[arg(long)]
   priority_body: Vec<String>,
   /// Per-worker memory cap including Cargo and compiler descendants (Linux/systemd).
@@ -362,6 +365,11 @@ mod linux {
       .filter_map(canonical)
       .collect::<Vec<_>>();
     let cursor_file = options.cursor_file.as_ref().and_then(canonical);
+    let saved = options
+      .saved_file
+      .iter()
+      .filter_map(canonical)
+      .collect::<Vec<_>>();
     let cursor = options.cursor_line.zip(options.cursor_column);
     let bounds = bodies
       .iter()
@@ -409,14 +417,23 @@ mod linux {
       let priority =
         if cursor_file.as_deref() == Some(&file) && bounds == Some((start, end)) {
           (0, 0)
+        } else if let Some(index) = saved.iter().position(|name| *name == file) {
+          (1, index)
         } else if let Some(index) =
           options.priority_body.iter().position(|id| *id == identity)
         {
-          (1, index)
-        } else if let Some(index) = files.iter().position(|name| *name == file) {
           (2, index)
-        } else {
+        } else if !saved.is_empty()
+          && matches!(
+            body["save_plan"]["status"].as_str(),
+            Some("affected" | "changed" | "unknown")
+          )
+        {
           (3, 0)
+        } else if let Some(index) = files.iter().position(|name| *name == file) {
+          (4, index)
+        } else {
+          (5, 0)
         };
       (priority, file, start, end, identity)
     });
@@ -623,6 +640,7 @@ mod linux {
         cursor_line: None,
         cursor_column: None,
         priority_file: vec![],
+        saved_file: vec![],
         priority_body: vec![],
         memory_mib: 1024,
         timeout_seconds: 60,

@@ -477,7 +477,7 @@ function M.setup(opts)
         if state.buf == args.buf or inside_root(name, root)
           or (args.event == "BufFilePost" and previous_name and inside_root(previous_name, root)) then
           invalidate(state, args.event ~= "BufReadPost" and args.event ~= "BufFilePost")
-          background:invalidate(root)
+          background:invalidate(root, args.event == "BufWritePost" and name or nil)
           if name:match("Cargo%.toml$") or name:match("Cargo%.lock$") then
             state.context = nil
             background:rediscover(root)

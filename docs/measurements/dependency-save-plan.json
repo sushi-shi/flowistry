@@ -1,0 +1,908 @@
+{
+  "build": {
+    "binaries": {
+      "cargo-flowistry": "e077b5903d07e6073ed0167c9ca94fd9386db4811eb31f17e7a30baed698ddfb",
+      "flowistry-driver": "66ec2b2c3bb83001b3c61cf359e6957ffe41c87c4a49266945440408e8c0b418"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T14:21:43.074225+00:00",
+    "revision": "fc4d659fe77821b8fb50d5a99935f3fb35d18297",
+    "rustflags": "",
+    "tree": "f42c0d31d299fc30044f9ea7bb103eaaeb01888e"
+  },
+  "checks": {
+    "background_process_assertions": 23,
+    "frontend_assertions": 242,
+    "python_harness_tests": 55,
+    "scheduler_assertions": 38,
+    "stream_assertions": 21,
+    "workspace_log": "/home/sheep/Projects/flowistry/target/continuation-validation/save-plan-workspace-v1.log",
+    "workspace_log_sha256": "99ef1315d294dd8845a058c3312cd00a19338816be996b11242f43c6e7684360",
+    "workspace_tests": 164
+  },
+  "harness": {
+    "nvim/tests/background_scheduler.lua": "e0dde7f4ce96c8ff89d09cf6091ba9032de710a6135c9da9a496de1de2d7ae52",
+    "scripts/incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+    "scripts/incremental_projects.py": "d791bf5710732cf7cfe0716d2052a5bfeb643c44114f2deb132bb29355f8694b",
+    "scripts/incremental_races.py": "a247abfb9b25498cf3e883d16c84fbd9319101148dce88335f37eae53ef90463",
+    "scripts/test-incremental-matrix.py": "3a03345a47d474bea7a8f583751a0c46c2570070b5d26fce252599dbd0daa826",
+    "scripts/test-project-coordinator.py": "9e14d4579f1db505dd3a2e5fbbe6e2068ca942177cdd76d7237715cc629cc730",
+    "scripts/test-project-workers.py": "86dfcf26fe2449e58d980c504822a54dc26e6049cdfe489b5432c945fcc67649",
+    "scripts/test-save-plan.py": "37a2d5498ad5e941aa4876d4c8e24ea453dbcc4cb2225142dba8e5bca58edf94"
+  },
+  "limitations": [
+    "This scheduling increment is not the full feature-11 acceptance gate.",
+    "Broader editor input invalidation, actual save latency distributions and rustc-incremental reuse experiments remain pending.",
+    "Inventory/writer overhead and large-project budgets have not yet been measured on a quiet machine.",
+    "Final-tip corpus and package gates remain separate; concurrent coordinator corpus runs use the older project-coordinator-v1 executable."
+  ],
+  "reports": {
+    "save-plan-coordinator-v1": {
+      "cases": [
+        {
+          "case": "SigOnly-lib",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-bin",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-lib",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-bin",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "priorities",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "type-error-isolation",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "sigterm",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "cancel-file",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "timeout",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "oom",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "sigterm-tree",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "sigkill-tree",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "edit-during-run",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "closed-output",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "backpressure-cancel",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "no-user-systemd",
+          "mode": null,
+          "passed": true
+        }
+      ],
+      "log_sha256": "2ad2644c32da72d4ffb0b61922a5fb7d4d7c00db3531f66a2c48eecc5fb71cc2",
+      "passed": 16,
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/save-plan-coordinator-v1.json",
+      "sha256": "ba84c25dbf93cd2a05a1c6eeced5a663e7e449354d4833df08516477a52eb0f9"
+    },
+    "save-plan-final-v1": {
+      "cases": [
+        {
+          "case": "SigOnly-observations-across-workers",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-callee-edit-and-public-order",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-corrupt-observation-recovery",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-declaration-and-revert",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-observations-across-workers",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-callee-edit-and-public-order",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-corrupt-observation-recovery",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-declaration-and-revert",
+          "mode": null,
+          "passed": true
+        }
+      ],
+      "log_sha256": "c5ec200b4127bfde6b2d63cb4e105a76932e4db8b4924d7397151ce5b52226e3",
+      "passed": 8,
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/save-plan-final-v1.json",
+      "records": [
+        {
+          "case": "SigOnly-observations-across-workers",
+          "detail": {
+            "cursor": {
+              "reason": "matching-expanded-body",
+              "status": "unchanged-input-hint",
+              "validated": false
+            },
+            "helper::callee": {
+              "reason": "matching-expanded-body",
+              "status": "unchanged-input-hint",
+              "validated": false
+            },
+            "open::unrelated": {
+              "reason": "matching-expanded-body",
+              "status": "unchanged-input-hint",
+              "validated": false
+            },
+            "selected": {
+              "reason": "matching-expanded-body",
+              "status": "unchanged-input-hint",
+              "validated": false
+            }
+          },
+          "passed": true
+        },
+        {
+          "case": "SigOnly-callee-edit-and-public-order",
+          "detail": {
+            "cache_off_equal": [
+              "cursor",
+              "helper::callee",
+              "open::unrelated",
+              "selected"
+            ],
+            "hints": {
+              "cursor": {
+                "reason": "matching-expanded-body",
+                "status": "unchanged-input-hint",
+                "validated": false
+              },
+              "helper::callee": {
+                "reason": "expanded-body-changed",
+                "status": "changed",
+                "validated": false
+              },
+              "open::unrelated": {
+                "reason": "matching-expanded-body",
+                "status": "unchanged-input-hint",
+                "validated": false
+              },
+              "selected": {
+                "reason": "matching-expanded-body",
+                "status": "unchanged-input-hint",
+                "validated": false
+              }
+            },
+            "order": [
+              "cursor",
+              "helper::callee",
+              "open::unrelated",
+              "selected"
+            ],
+            "work": {
+              "cursor": {
+                "compiler_invocations": 1,
+                "solver_invocations": 0,
+                "summary_hits": 0
+              },
+              "helper::callee": {
+                "compiler_invocations": 1,
+                "solver_invocations": 1,
+                "summary_hits": 0
+              },
+              "open::unrelated": {
+                "compiler_invocations": 1,
+                "solver_invocations": 0,
+                "summary_hits": 0
+              },
+              "selected": {
+                "compiler_invocations": 1,
+                "solver_invocations": 0,
+                "summary_hits": 0
+              }
+            }
+          },
+          "passed": true
+        },
+        {
+          "case": "SigOnly-corrupt-observation-recovery",
+          "detail": {
+            "corrupt_records": 4,
+            "recovered": true
+          },
+          "passed": true
+        },
+        {
+          "case": "SigOnly-declaration-and-revert",
+          "detail": {
+            "declaration_fallback": 4,
+            "revert_recovered": true
+          },
+          "passed": true
+        },
+        {
+          "case": "Recurse-observations-across-workers",
+          "detail": {
+            "cursor": {
+              "reason": "matching-expanded-body",
+              "status": "unchanged-input-hint",
+              "validated": false
+            },
+            "helper::callee": {
+              "reason": "matching-expanded-body",
+              "status": "unchanged-input-hint",
+              "validated": false
+            },
+            "open::unrelated": {
+              "reason": "matching-expanded-body",
+              "status": "unchanged-input-hint",
+              "validated": false
+            },
+            "selected": {
+              "reason": "matching-expanded-body",
+              "status": "unchanged-input-hint",
+              "validated": false
+            }
+          },
+          "passed": true
+        },
+        {
+          "case": "Recurse-callee-edit-and-public-order",
+          "detail": {
+            "cache_off_equal": [
+              "cursor",
+              "helper::callee",
+              "selected",
+              "open::unrelated"
+            ],
+            "hints": {
+              "cursor": {
+                "reason": "matching-expanded-body",
+                "status": "unchanged-input-hint",
+                "validated": false
+              },
+              "helper::callee": {
+                "reason": "expanded-body-changed",
+                "status": "changed",
+                "validated": false
+              },
+              "open::unrelated": {
+                "reason": "matching-expanded-body",
+                "status": "unchanged-input-hint",
+                "validated": false
+              },
+              "selected": {
+                "reason": "previous-resolved-callee-changed-or-unknown",
+                "status": "affected",
+                "validated": false
+              }
+            },
+            "order": [
+              "cursor",
+              "helper::callee",
+              "selected",
+              "open::unrelated"
+            ],
+            "work": {
+              "cursor": {
+                "compiler_invocations": 1,
+                "solver_invocations": 0,
+                "summary_hits": 0
+              },
+              "helper::callee": {
+                "compiler_invocations": 1,
+                "solver_invocations": 1,
+                "summary_hits": 0
+              },
+              "open::unrelated": {
+                "compiler_invocations": 1,
+                "solver_invocations": 0,
+                "summary_hits": 0
+              },
+              "selected": {
+                "compiler_invocations": 1,
+                "solver_invocations": 2,
+                "summary_hits": 0
+              }
+            }
+          },
+          "passed": true
+        },
+        {
+          "case": "Recurse-corrupt-observation-recovery",
+          "detail": {
+            "corrupt_records": 4,
+            "recovered": true
+          },
+          "passed": true
+        },
+        {
+          "case": "Recurse-declaration-and-revert",
+          "detail": {
+            "declaration_fallback": 4,
+            "revert_recovered": true
+          },
+          "passed": true
+        }
+      ],
+      "sha256": "0c395295e0d87fa2a5680d85c4035c98900c04cc5e3f8cc4f26b58f0bf0e43a4"
+    },
+    "save-plan-matrix-v1": {
+      "cases": [
+        {
+          "case": "unchanged-save",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "leading-layout",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "interior-layout",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "unicode-comment",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "body-comment",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "rustfmt",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "literal",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "restored-mtime",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "control-flow",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "callee",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "unrelated-body",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "recursive-cycle",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "signature",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "field-type",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "trait-callee",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "trait-resolution",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "file-move",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "module-add",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "module-remove",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "feature",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "cfg",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "cargo-config",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "dependency",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "build-input",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "build-script",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "include",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "environment",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "proc-macro",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "compile-error",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "closure",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "corrupt-and-partial-writes",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "save-during-compile",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "two-quick-saves",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "cancel-during-compile",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "concurrent-refresh",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "error-recovery",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "undo",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "unchanged-save",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "leading-layout",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "interior-layout",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "unicode-comment",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "body-comment",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "rustfmt",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "literal",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "restored-mtime",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "control-flow",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "callee",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "unrelated-body",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "recursive-cycle",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "signature",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "field-type",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "trait-callee",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "trait-resolution",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "file-move",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "module-add",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "module-remove",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "feature",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "cfg",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "cargo-config",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "dependency",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "build-input",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "build-script",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "include",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "environment",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "proc-macro",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "compile-error",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "closure",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "corrupt-and-partial-writes",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "save-during-compile",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "two-quick-saves",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "cancel-during-compile",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "concurrent-refresh",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "error-recovery",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "undo",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "either-layout",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "either-body",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "either-layout",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "either-body",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "smallvec-layout",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "smallvec-body",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "smallvec-callee",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "smallvec-layout",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "smallvec-body",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "smallvec-callee",
+          "mode": "Recurse",
+          "passed": true
+        }
+      ],
+      "log_sha256": "9532c5e730a64a9997d999424a34268815f7067f5f52c4338e6f2c8654abe2a5",
+      "passed": 84,
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/save-plan-matrix-v1.json",
+      "sha256": "6e24d81ddd1885633b58c9dec3ef22a44972ffa2219eea4fd0d0134fb9a66126"
+    },
+    "save-plan-workers-v1": {
+      "cases": [
+        {
+          "case": "project-targets",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-lib-custom_library",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-bin-custom-binary",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-bin-file-focus",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-features",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "SigOnly-errors",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-lib-custom_library",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-bin-custom-binary",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-bin-file-focus",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-features",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "Recurse-errors",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "invalid-target",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "missing-selection",
+          "mode": null,
+          "passed": true
+        },
+        {
+          "case": "launcher-lock",
+          "mode": null,
+          "passed": true
+        }
+      ],
+      "log_sha256": "da8e389b7c631c4176c958bbe758557641d8e2467cbefc4adc12afdf83b6a077",
+      "passed": 14,
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/save-plan-workers-v1.json",
+      "sha256": "4f3901f5cfb04fb8721c4990f4223f8de507018551abd8c8bd797ed0138bafd7"
+    }
+  },
+  "schema": 1
+}
