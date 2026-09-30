@@ -1,6 +1,7 @@
 # Streaming project coordinator
 
-The public command builds on the portable inventory/body workers and shared
+Draft [#54](https://github.com/sushi-shi/flowistry/pull/54) adds the public command
+on top of the portable inventory/body workers and shared
 validated result store from #51, after the combined backend/editor stack in #53.
 
 ```sh

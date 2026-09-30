@@ -10,8 +10,8 @@ constructor fields, comment colors, parameter-type selection and rustfmt-save
 redraw. [Source-selection evidence](source-selection.md) includes the actual
 gameplay constructor. These fixes do not complete the remaining milestones.
 The coordinator work in `/tmp/flowistry-project-coordinator` now contains #53
-through an ordinary integration merge. Its next PR targets that latest monorepo
-tip; see [the coordinator notes](project-coordinator.md).
+through an ordinary integration merge. [Draft #54](https://github.com/sushi-shi/flowistry/pull/54)
+targets that monorepo tip; see [the coordinator notes](project-coordinator.md).
 The editor now lives under `nvim/` in this repository; backend and editor changes
 share one package source, lock file, CI suite and PR chain. See
 [neovim-monorepo.md](neovim-monorepo.md).
