@@ -97,6 +97,11 @@ The immutable `project-coordinator-v1/` build at `2fae9dd12` passes all 16 publi
 coordinator scenarios and all 13 existing worker scenarios. The IDE all-targets
 suite passes 38 tests, and the Python harness suite passes 55 regressions.
 [The compact report](measurements/project-coordinator.json) records exact build
-and harness hashes, case outcomes and raw-report checksums. Two full corpus runs
-now compare cache-off analysis with refresh and warm reuse, using separate
-prepared corpus roots and two 6 GiB workers each. They remain in progress.
+and harness hashes, case outcomes and raw-report checksums. The full cache-off/refresh corpus has now passed all 2,880 locked selections
+in both modes, with no output differences or status changes. The
+[coverage report](measurements/coordinator-cache-refresh-complete.json) retains
+build/manifest provenance and the raw report checksum. Its 2,832 analyzed misses
+per side exclude 48 successful selections without an analyzed body. The separate
+warm-cache corpus remains running. These runs use 6 GiB per request and two
+workers; timings collected under host load do not establish performance gates,
+and later stack changes still require final-tip validation.

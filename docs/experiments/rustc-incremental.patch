@@ -1,0 +1,80 @@
+diff --git a/crates/flowistry_ide/src/file_focus.rs b/crates/flowistry_ide/src/file_focus.rs
+index eafa62b3a..9dba6cbf7 100644
+--- a/crates/flowistry_ide/src/file_focus.rs
++++ b/crates/flowistry_ide/src/file_focus.rs
+@@ -201,7 +201,8 @@ impl rustc_driver::Callbacks for Callbacks {
+       })
+     })());
+     crate::fast_cache::record_inputs(tcx, identities);
+-    if tcx.dcx().has_errors().is_none() {
++    if tcx.dcx().has_errors().is_none() && !crate::plugin::experiment_stop() {
++      crate::plugin::experiment_finalize(tcx);
+       if crate::plugin::postprocess(self.output.take().unwrap()).is_ok() {
+         use std::io::Write;
+         std::io::stdout().flush().unwrap();
+diff --git a/crates/flowistry_ide/src/lib.rs b/crates/flowistry_ide/src/lib.rs
+index 7085a35c6..568f89543 100644
+--- a/crates/flowistry_ide/src/lib.rs
++++ b/crates/flowistry_ide/src/lib.rs
+@@ -13,6 +13,7 @@ extern crate rustc_driver;
+ extern crate rustc_errors;
+ extern crate rustc_hir;
+ extern crate rustc_hir_pretty;
++extern crate rustc_incremental;
+ extern crate rustc_index;
+ extern crate rustc_interface;
+ extern crate rustc_lexer;
+diff --git a/crates/flowistry_ide/src/plugin.rs b/crates/flowistry_ide/src/plugin.rs
+index 40828790a..eb14b457a 100644
+--- a/crates/flowistry_ide/src/plugin.rs
++++ b/crates/flowistry_ide/src/plugin.rs
+@@ -497,6 +497,15 @@ pub fn run_with_callbacks(
+     }
+   }
+   let mut args = kept;
++  let experiment = std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL").unwrap_or_default();
++  if matches!(experiment.as_str(), "retain" | "stop" | "finish") {
++    let directory = std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL_DIR")
++      .expect("isolated incremental directory");
++    args.extend(["-C".into(), format!("incremental={directory}")]);
++    if std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL_STATS").as_deref() == Ok("1") {
++      args.push("-Zincremental-info".into());
++    }
++  }
+   args.extend(
+     "-Z identify-regions -Z mir-opt-level=0 -A warnings -Z maximal-hir-to-mir-coverage"
+       .split(' ')
+@@ -504,10 +513,23 @@ pub fn run_with_callbacks(
+   );
+ 
+   log::info!(target: "flowistry::audit", "audit compiler");
++  log::info!(target: "flowistry::audit", "audit incremental experiment={experiment}");
+   rustc_driver::catch_fatal_errors(move || rustc_driver::run_compiler(&args, callbacks))
+     .map_err(|_| FlowistryError::BuildError)
+ }
+ 
++pub(crate) fn experiment_finalize(tcx: TyCtxt<'_>) {
++  if std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL").as_deref() == Ok("finish") {
++    let hash = tcx.crate_hash(rustc_hir::def_id::LOCAL_CRATE);
++    tcx.finish();
++    rustc_incremental::finalize_session_directory(tcx.sess, Some(hash));
++  }
++}
++
++pub(crate) fn experiment_stop() -> bool {
++  std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL").as_deref() == Ok("stop")
++}
++
+ fn run<A: FlowistryAnalysis, T: ToSpan>(
+   analysis: A,
+   compute_target: impl FnOnce() -> T + Send,
+@@ -614,7 +636,8 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
+     // Without errors, write the output and exit: tearing down the compiler (freeing
+     // its arenas and source files) takes longer than analyzing most bodies. With
+     // errors, the driver reports them and fails the request as before.
+-    if tcx.dcx().has_errors().is_none() {
++    if tcx.dcx().has_errors().is_none() && !experiment_stop() {
++      experiment_finalize(tcx);
+       let output =
+         self
+           .output
