@@ -1,24 +1,46 @@
 local M = {}
+local uv = vim.uv or vim.loop
 
 -- Each operation owns a cancellable chain of subprocesses. Never invoke a shell.
 local function operation()
   local op = { cancelled = false }
   function op:cancel()
     self.cancelled = true
-    if self.process then pcall(self.process.kill, self.process, 15) end
+    if self.terminate then self.terminate() end
   end
   function op:run(argv, opts, callback)
     if self.cancelled then return end
-    local ok, process = pcall(vim.system, argv, opts, function(result)
+    -- Cargo, the snapshot launcher and rustc are one foreground job. Give it
+    -- a private process group so cancellation also releases descendant locks.
+    local grouped = uv.os_uname().sysname ~= "Windows_NT"
+    opts = vim.tbl_extend("force", opts, { detach = grouped })
+    local timeout = opts.timeout
+    opts.timeout = nil -- vim.system's timeout only kills the immediate process.
+    local process, timer, finished, timed_out
+    local function terminate()
+      if finished or not process then return end
+      if grouped then pcall(uv.kill, -process.pid, 9)
+      else pcall(process.kill, process, 9) end
+    end
+    self.terminate = terminate
+    local ok, spawned = pcall(vim.system, argv, opts, function(result)
+      finished = true
+      if timer then timer:stop(); timer:close(); timer = nil end
+      if timed_out then result.code = 124 end
       vim.schedule(function()
         if not self.cancelled then callback(result) end
       end)
     end)
     if ok then
+      process = spawned
       self.process = process
+      if timeout and not finished then
+        timer = vim.defer_fn(function() timer = nil; timed_out = true; terminate() end, timeout)
+      end
     else
+      finished = true
       vim.schedule(function()
-        if not self.cancelled then callback({ code = -1, stderr = tostring(process), stdout = "" }) end
+        if not self.cancelled then callback({ code = -1, stderr = tostring(spawned), stdout = "" }) end
       end)
     end
   end
