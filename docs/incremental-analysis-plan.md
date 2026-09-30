@@ -1,5 +1,10 @@
 # Plan: background project analysis and fast incremental re-analysis
 
+Status 2026-09-30: the Phase 1 persistent-cache port is implemented in backend #2
+at the end of the [review chain](review-chain.md), with cross-process and editor
+validation passing. Phase 0 measurements and later background/project work remain
+pending. The plan below retains the design and decision criteria.
+
 Status: plan only. Implementation starts after the engine perf work lands and the
 Phase 0 measurements confirm it is worth it (see "Gate").
 
