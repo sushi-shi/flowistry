@@ -2,9 +2,11 @@
 
 Feature 9 is in progress. The first increment provides compiler-discovered body
 inventories and explicitly targeted, independently restartable body requests.
-The public `cargo flowistry project` scheduler, stream, priorities, cancellation
-and resource limits are not implemented yet. These worker commands alone do not
-establish the project's resource or performance acceptance gates.
+The next increment implements the public scheduler, stream, priorities,
+cancellation and resource limits on top of #53; see
+[the coordinator protocol and bounds](project-coordinator.md). Neither the worker
+foundation nor focused coordinator tests establish the project's large-project
+resource or performance acceptance gates.
 
 ## Worker boundary
 
@@ -65,6 +67,6 @@ suite and all 54 Python regressions pass. The worker tests include a target name
 hashes and references the durable full reports/logs. No project throughput or
 resource-limit claim is made from these small fixtures.
 
-The next increment adds the project coordinator with explicit stream selection, cursor/file/body
-priorities, bounded worker lifetime, cancellation of descendants and resumable
-cache filling. Full project/corpus/resource/latency acceptance remains open.
+The coordinator adds explicit stream selection, cursor/file/body priorities,
+bounded worker lifetime, cancellation of descendants and resumable cache filling.
+Full project/corpus/resource/latency acceptance remains open.

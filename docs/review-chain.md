@@ -140,8 +140,9 @@ disk budget. Its 16 new publication cases and all 84 edit cases pass; project an
 editor integration remain later features.
 [#49](https://github.com/sushi-shi/flowistry/pull/49) persists portable callee
 summaries using shared semantic fingerprints and dependency snapshots with reverse
-edges. Its 18 summary, 84 edit and 16 publication cases pass; the full Recurse
-summary/output comparison and final performance gates remain pending.
+edges. Its 18 summary, 84 edit and 16 publication cases pass. The full Recurse
+summary/output gate now passes all 1,440 selections and 18,008 structural summary
+checks; final-tip and performance gates remain pending.
 [#50](https://github.com/sushi-shi/flowistry/pull/50) adds explicit filename mappings
 for file-focus and portable file identities in the result index. The foreign-macro
 regression and all 124 process-level validation cases pass; corpus gates continue.
@@ -153,6 +154,14 @@ remain the next feature-9 increment.
 [#52](https://github.com/sushi-shi/flowistry/pull/52) follows #51 with the reported
 constructor highlight refinement and compiler-derived comment/type selection
 metadata. Review it with [nvim#5](https://github.com/sushi-shi/flowistry.nvim/pull/5).
-The coordinator WIP must continue from the Neovim migration tip when resumed. See
+See
 [source-selection.md](source-selection.md) for validation and conservative limits.
+[#53](https://github.com/sushi-shi/flowistry/pull/53) imports the editor into
+`nvim/` and binds both packages to one source tree. Its paired-package CI passes.
+[#54](https://github.com/sushi-shi/flowistry/pull/54) follows #53 with the public
+project coordinator: streaming outcomes, cursor/file/body priorities, per-body
+Linux/systemd memory/time bounds, resumable reuse, and descendant cancellation.
+Its 16 coordinator and 13 worker scenarios pass, alongside 38 IDE tests and 55
+Python regressions. Full cache corpus runs and large-project measurements remain
+acceptance gates; see [the coordinator evidence](project-coordinator.md).
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

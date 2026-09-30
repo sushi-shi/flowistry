@@ -9,23 +9,24 @@ The live highlighting report was addressed after #51 in
 constructor fields, comment colors, parameter-type selection and rustfmt-save
 redraw. [Source-selection evidence](source-selection.md) includes the actual
 gameplay constructor. These fixes do not complete the remaining milestones.
-The coordinator remains uncommitted WIP in `/tmp/flowistry-project-coordinator`;
-preserve it and bring it onto the Neovim migration tip before its next PR.
+The coordinator work in `/tmp/flowistry-project-coordinator` now contains #53
+through an ordinary integration merge. [Draft #54](https://github.com/sushi-shi/flowistry/pull/54)
+targets that monorepo tip; see [the coordinator notes](project-coordinator.md).
 The editor now lives under `nvim/` in this repository; backend and editor changes
 share one package source, lock file, CI suite and PR chain. See
 [neovim-monorepo.md](neovim-monorepo.md).
 
 | Step | State | Evidence / next gate |
 |---|---|---|
-| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Full #17/integrated coverage: 2,827 equal successful pairs, 48 paired benign selections and five reference-OOM/integrated-success outcomes; see [combined-corpus-results.md](combined-corpus-results.md). Independent reference coverage is complete but five checks remain resource-limited. Full file-focus/cache comparison now running. |
+| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Full #17/integrated coverage: 2,827 equal successful pairs, 48 paired benign selections and five reference-OOM/integrated-success outcomes; see [combined-corpus-results.md](combined-corpus-results.md). Independent reference coverage is complete but five checks remain resource-limited. The legacy file-cache run completed with 2,878 equal successes and two decoder failures; the filename-fixed final-tip gate remains. |
 | 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Full Recurse equality passed, [#43](https://github.com/sushi-shi/flowistry/pull/43); acceptance pending | 1,416 equal successful pairs and 24 matching benign selections cover all locked Recurse positions. 107 core tests pass with engine-diff/shadow-eager. Full reference and quiet stress performance gates remain; see [recurse-row-groups.md](recurse-row-groups.md). |
 | 4. Seed rows | Full corpus equality passed, [#44](https://github.com/sushi-shi/flowistry/pull/44); acceptance pending | All 2,880 locked selections agree: 2,832 successful pairs and 48 matching benign selections. 108 core tests pass; enhanced reference and quiet seed-construction/stress measurements remain. See [seed-row-experiment.md](seed-row-experiment.md). |
 | 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
 | 6. Edit/concurrency harness | Implemented in [#47](https://github.com/sushi-shi/flowistry/pull/47); release gates pending | 84 serial, concurrency, recovery and real-project cases pass; 47 harness regressions pass. See [edit-concurrency-validation.md](edit-concurrency-validation.md). Add versioned-publication/background cases as those features land; full corpus gates remain required. |
 | 7. Shared result index | Implemented in [#48](https://github.com/sushi-shi/flowistry/pull/48); final integration gates pending | Existing caches now share a publication lock and disk budget. Compiler-derived body index, revision/generation envelopes, cancellation, source-hash checks and interrupted-write recovery pass 16 new cases, plus all 84 edit cases. See [versioned-result-index.md](versioned-result-index.md). |
-| 8. Persisted summaries | Implemented in [#49](https://github.com/sushi-shi/flowistry/pull/49); full corpus gates pending | Portable schema, shared disk adapter/fingerprints and dependency/reverse snapshots pass 18 summary cases, all 84 edit cases, all 16 publication cases, workspace tests and 52 harness regressions at `9da7aba9f`. Full Recurse logical-summary/output comparison and quiet measurements remain. See [persisted-summary-progress.md](persisted-summary-progress.md). |
-| 9. Project command | Worker foundation in [#51](https://github.com/sushi-shi/flowistry/pull/51); coordinator pending | Explicit package/target selection, portable compiler inventories and body workers pass 137 process cases at `4b4915382`, plus IDE tests and 54 Python regressions. Public streaming, priorities, cancellation and bounded workers remain. See [project-analysis-progress.md](project-analysis-progress.md). |
+| 8. Persisted summaries | Implemented in [#49](https://github.com/sushi-shi/flowistry/pull/49); full corpus gates pending | Portable schema, shared disk adapter/fingerprints and dependency/reverse snapshots pass 18 summary cases, all 84 edit cases, all 16 publication cases, workspace tests and 52 harness regressions at `9da7aba9f`. Full Recurse gate passed: 1,440 equal outputs and 18,008 structurally verified summary hits. Quiet measurements and final-tip gates remain. See [persisted-summary-progress.md](persisted-summary-progress.md). |
+| 9. Project command | Worker foundation in [#51](https://github.com/sushi-shi/flowistry/pull/51); coordinator pending | Explicit package/target selection, portable compiler inventories and body workers pass 137 process cases at `4b4915382`, plus IDE tests and 54 Python regressions. The coordinator now implements streaming, priorities, cancellation and bounded workers above #53; focused validation and large-project acceptance are recorded separately. See [project-analysis-progress.md](project-analysis-progress.md). |
 | 10. Neovim background work | Pending | Continue under nvim/ after the monorepo migration; foreground priority and a shared backend package. |
 | 11. Incremental saves | Pending | Dependency-aware recomputation and rapid-save handling. |
 | 12. Layout reuse | Pending | Proven-safe cases only, compiler fallback otherwise. |
@@ -154,3 +155,36 @@ Do not delete active source/build inputs or preserved experiment work.
    remain unimplemented, as do steps 10–12.
    Finish all final gates in step 13. Current continuation PR order is #41 → #42 →
    #43 → #44 → #45 → #46 → #47 → #48 → #49 → #50 → #51; nothing has been merged.
+
+## Completed corpus runs and latest-stack continuation (2026-09-30)
+
+Both previously active corpus jobs are terminal; their prepared roots are no
+longer reserved by those jobs. Exact locked coverage, source/build manifests and
+raw-report hashes are preserved in
+[the legacy cache report](measurements/file-cache-resolved-complete.json) and
+[the persisted-summary report](measurements/summary-corpus-complete.json).
+The former has 2,878 matching successes and two zero-exit legacy decoder failures
+at just unindent.rs:49:23 (both modes), retained under their raw crash labels.
+The latter passes all 1,440 Recurse requests and all 18,008 summary-hit structural
+checks. Neither run supplies quiet performance evidence or final-tip validation.
+
+Current continuation code starts from #53 in `feat/project-coordinator`, preserving
+the earlier WIP commit and merging `refactor/neovim-monorepo` normally. #53's paired
+package CI passed. No PR was merged and no history was force-pushed. The earlier
+'active run' descriptions above are historical; these terminal reports supersede
+them. Step 9's large-project/performance gates and steps 10–13 remain unfinished.
+
+The next candidate is frozen as `project-coordinator-v1/` at `2fae9dd12`.
+All 16 public coordinator and 13 worker scenarios pass, including kernel-backed
+OOM handling, setsid descendant cancellation, superseded saves and blocked output.
+The IDE suite passes 38 tests and the Python suite 55. See
+[the exact candidate evidence](measurements/project-coordinator.json).
+Two new heavy runs use this immutable candidate and the metadata-aware comparator:
+`coordinator-cache-refresh.{log,json}` with the engine prepared corpus, and
+`coordinator-cache-warm.{log,json}` with h19. Each covers all locked selections in
+both modes with cache-off as its oracle and has its own `-stores/` and
+`-checkpoints/` namespace. They use two jobs and a 6 GiB per-request cap; do not
+start a third heavy harness or write to either prepared corpus while they run.
+Summary verification mode is disabled for these ordinary cache gates. Retained
+harness snapshots are `coordinator-cache-harness.py` and
+`coordinator-cache-checkpoint.py` under the validation root.

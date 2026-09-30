@@ -55,6 +55,8 @@ pub struct FlowistryPluginArgs {
 
 #[derive(Subcommand, Serialize, Deserialize)]
 enum FlowistryCommand {
+  /// Stream all bodies of an explicit target using bounded, restartable workers.
+  Project(crate::project_coordinator::Options),
   /// Enumerate compiler-discovered bodies for the explicitly selected target.
   #[command(hide = true)]
   ProjectBodies {
@@ -132,6 +134,7 @@ pub fn replay_request() -> Option<(String, PathBuf)> {
     | RustcVersion
     | ResultIndex { .. }
     | CancelResults { .. }
+    | Project(..)
     | ProjectBodies { .. }
     | BodyFocus { .. } => return None,
   };
@@ -152,6 +155,41 @@ pub(crate) fn selected_package() -> Option<String> {
     .ok()?
     .selection
     .package
+}
+
+pub(crate) fn project_request() -> Option<std::process::ExitCode> {
+  if !env::args().any(|arg| arg == "project") {
+    return None;
+  }
+  let args = FlowistryPluginArgs::try_parse_from(env::args().skip(1)).ok()?;
+  let FlowistryCommand::Project(options) = args.command else {
+    return None;
+  };
+  if args.selection.package.is_none() {
+    eprintln!(
+      "flowistry project: explicit --package, --target-kind and --target-name are required"
+    );
+    return Some(std::process::ExitCode::from(2));
+  }
+  let mode = EvalMode {
+    context_mode: args.context_mode.unwrap_or(ContextMode::SigOnly),
+    mutability_mode: args
+      .mutability_mode
+      .unwrap_or(MutabilityMode::DistinguishMut),
+    pointer_mode: args.pointer_mode.unwrap_or(PointerMode::Precise),
+  };
+  let mut prefix = vec!["flowistry".to_owned()];
+  args.selection.append_args(&mut prefix);
+  prefix.extend([
+    "--context-mode".into(),
+    format!("{:?}", mode.context_mode),
+    "--mutability-mode".into(),
+    format!("{:?}", mode.mutability_mode),
+    "--pointer-mode".into(),
+    format!("{:?}", mode.pointer_mode),
+  ]);
+  let selection = serde_json::json!({"target":args.selection,"mode":format!("{mode:?}")});
+  Some(crate::project_coordinator::run(options, prefix, selection))
 }
 
 pub(crate) fn cache_command_index(args: &[String]) -> Option<usize> {

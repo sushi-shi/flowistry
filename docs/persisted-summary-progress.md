@@ -118,6 +118,13 @@ Detailed reports are `summary-store-tests-v2.json`, `summary-edit-matrix-v2.json
 and `summary-publication-v2.json` under `target/continuation-validation`; logs
 are preserved in `summary-store-v2-evidence/`.
 
-The full Recurse persisted/fresh summary comparison remains pending, followed by
-final combined-chain gates and quiet performance measurements. Complete these
-before declaring step 8 accepted. Project/background analysis remains later work.
+The full Recurse persisted/fresh comparison has passed at filename-fixed backend
+`76d775628`: all 24 locked entries and 1,440 selections produced equal successful
+responses. All 18,008 persistent summary hits were recomputed and matched their
+complete logical summaries; each comparison invoked the compiler, so response
+replay could not bypass this check. Exact coverage, manifests and report checksum
+are in [the completed corpus report](measurements/summary-corpus-complete.json).
+The raw `summary-corpus.json` and checkpoints remain under the validation root.
+Verification deliberately recomputes loaded summaries; its loaded-machine timings
+are not performance evidence. Final-tip gates and quiet measurements remain
+required before declaring step 8 accepted.
