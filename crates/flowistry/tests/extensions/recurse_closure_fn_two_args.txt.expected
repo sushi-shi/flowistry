@@ -1,7 +1,7 @@
 /* recurse: Fn closure called with two arguments */
 fn main() {
   `[let a = 1;]`
-  `[let b = 2;]`
+  let b = 2;
   `[let c = 3;]`
   `[let f = |x: i32, y: i32| x + c;]`
   `[let r = f(a, b);]`

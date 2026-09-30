@@ -49,6 +49,11 @@ impl<'tcx> ErasedTy<'tcx> {
   pub fn is_freeze(self, tcx: TyCtxt<'tcx>, typing_env: TypingEnv<'tcx>) -> bool {
     self.0.is_freeze(tcx, typing_env)
   }
+
+  /// Whether dropping a value of this type runs any code.
+  pub fn needs_drop(self, tcx: TyCtxt<'tcx>, typing_env: TypingEnv<'tcx>) -> bool {
+    self.0.needs_drop(tcx, typing_env)
+  }
 }
 
 /// Maximum number of projections of an argument's interior pointer for which the
