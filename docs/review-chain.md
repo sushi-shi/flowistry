@@ -114,4 +114,7 @@ resumable corpus validation and exact coverage auditing (draft while full gates 
 Then [#42](https://github.com/sushi-shi/flowistry/pull/42) adds interleaved performance
 samples, isolated replay/warmup controls and distribution reports (draft until
 the baseline measurements and budgets are complete).
+Next is [#43](https://github.com/sushi-shi/flowistry/pull/43), the Recurse row-group
+port with integration/reference fixes; its full corpus and performance gates are
+also pending.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

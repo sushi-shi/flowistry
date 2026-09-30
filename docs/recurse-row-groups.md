@@ -31,6 +31,13 @@ rows. The aggregate test compares every state with ungrouped analysis, with thre
 call groups and fewer stored rows. An additional regression checks equality in
 both operand orders.
 
+All 107 core unit/integration tests pass with `engine-diff,shadow-eager` after the
+integration fixes. The initial port also passed all-targets benchmark smoke tests.
+The normal release executables at `3199b4095` are archived with build provenance
+under `target/continuation-validation/row-groups/`, built in `target/review-cache`.
+This frozen candidate can be compared after the active baseline gates release a
+heavy-run slot; no extra corpus target directory was created.
+
 Before accepting the optimization: finish baseline gates, compare to the frozen
 integrated binary over the full Recurse corpus, run the enhanced reference build,
 and measure typical and stress instructions/RSS/stored rows. The historical
