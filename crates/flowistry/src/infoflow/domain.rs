@@ -18,6 +18,11 @@
 //! present if and only if they are non-empty. The `shadow-eager` feature checks this
 //! at run time: every state then also holds the eager matrix, and every operation
 //! compares both.
+//!
+//! Explicit rows are shared between states (copy on write): a join shares the rows it
+//! copies, and a row is only copied when it is written while shared. Consecutive
+//! locations mostly have the same rows, so this saves most copies and most of the
+//! memory of the states, and a join skips a shared row without comparing its bits.
 
 use std::{fmt, hash::Hash, rc::Rc};
 
@@ -25,13 +30,56 @@ use indexical::{IndexedDomain, IndexedValue, bitset::rustc::IndexSet};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_mir_dataflow::JoinSemiLattice;
 
+use crate::mir::bitset::IndexSetExt;
+
+/// A row value, shared between states until it is written.
+type Row<C> = Rc<IndexSet<C>>;
+
+/// Adds `from` to `row`, returning true if it changed. The row is copied first if it
+/// is shared and changes; if `from` contains it, the row becomes a share of `from`.
+fn union_row<C: IndexedValue + 'static>(row: &mut Row<C>, from: &Row<C>) -> bool {
+  if Rc::ptr_eq(row, from) || row.contains_all(from) {
+    false
+  } else {
+    if from.contains_all(row) {
+      *row = Rc::clone(from);
+    } else {
+      Rc::make_mut(row).union(from);
+    }
+    true
+  }
+}
+
+/// Adds `from` to `row`, returning true if it changed (copying the row if it is shared).
+fn union_set_into_row<C: IndexedValue + 'static>(
+  row: &mut Row<C>,
+  from: &IndexSet<C>,
+) -> bool {
+  if row.contains_all(from) {
+    false
+  } else {
+    Rc::make_mut(row).union(from);
+    true
+  }
+}
+
+/// Adds `col` to `row`, returning true if it changed (copying the row if it is shared).
+fn insert_into_row<C: IndexedValue + 'static>(row: &mut Row<C>, col: C::Index) -> bool {
+  if row.contains(col) {
+    false
+  } else {
+    Rc::make_mut(row).insert(col);
+    true
+  }
+}
+
 /// The rows seeded at the start of a body: each row with the single column it starts
 /// with. Shared by all the states of a body.
 pub struct SeedRows<R, C: IndexedValue + 'static> {
   columns: FxHashMap<R, C::Index>,
   /// For each seed column `c`, the set `{c}`.
-  singletons: FxHashMap<C::Index, IndexSet<C>>,
-  empty: IndexSet<C>,
+  singletons: FxHashMap<C::Index, Row<C>>,
+  empty: Row<C>,
   domain: Rc<IndexedDomain<C>>,
 }
 
@@ -58,13 +106,13 @@ where
       singletons.entry(col).or_insert_with(|| {
         let mut set = IndexSet::new(domain);
         set.insert(col);
-        set
+        Rc::new(set)
       });
     }
     SeedRows {
       columns,
       singletons,
-      empty: IndexSet::new(domain),
+      empty: Rc::new(IndexSet::new(domain)),
       domain: domain.clone(),
     }
   }
@@ -89,7 +137,7 @@ where
     self.columns.iter().map(|(row, col)| (row, *col))
   }
 
-  fn singleton(&self, col: C::Index) -> &IndexSet<C> {
+  fn singleton(&self, col: C::Index) -> &Row<C> {
     &self.singletons[&col]
   }
 }
@@ -99,7 +147,7 @@ where
 struct SeededRow<C: IndexedValue + 'static> {
   col: C::Index,
   /// The value, possibly empty (a tombstone).
-  set: IndexSet<C>,
+  set: Row<C>,
 }
 
 /// A sparse matrix from rows `R` to sets of columns `C`, whose seeded rows (see
@@ -112,7 +160,7 @@ pub struct LazyMatrix<R, C: IndexedValue + 'static> {
   /// Whether the seeds are part of the value of this matrix.
   seeded: bool,
   /// Explicit rows that are not seeded. Never empty.
-  plain: FxHashMap<R, IndexSet<C>>,
+  plain: FxHashMap<R, Row<C>>,
   /// Explicit rows that are seeded; empty rows are tombstones.
   seeded_rows: FxHashMap<R, SeededRow<C>>,
   seeds: Rc<SeedRows<R, C>>,
@@ -140,7 +188,7 @@ where
   /// Adds the seed of every seeded row to its value.
   pub fn seed(&mut self) {
     for row in self.seeded_rows.values_mut() {
-      row.set.insert(row.col);
+      insert_into_row(&mut row.set, row.col);
     }
     self.seeded = true;
   }
@@ -174,7 +222,7 @@ where
     }
   }
 
-  fn implicit(&self, col: C::Index) -> &IndexSet<C> {
+  fn implicit(&self, col: C::Index) -> &Row<C> {
     if self.seeded {
       self.seeds.singleton(col)
     } else {
@@ -190,23 +238,22 @@ where
     let checked_row = row.clone();
 
     let changed = if let Some(set) = self.plain.get_mut(&row) {
-      set.union_changed(from)
+      union_set_into_row(set, from)
     } else {
       match self.seeds.column(&row) {
         None => {
-          let mut set = IndexSet::new(&self.seeds.domain);
-          let changed = set.union_changed(from);
+          let changed = !from.inner().is_empty();
           if changed {
-            self.plain.insert(row, set);
+            self.plain.insert(row, Rc::new(from.clone()));
           }
           changed
         }
         Some(col) => {
           if let Some(explicit) = self.seeded_rows.get_mut(&row) {
-            explicit.set.union_changed(from)
+            union_set_into_row(&mut explicit.set, from)
           } else {
-            let mut set = self.implicit(col).clone();
-            let changed = set.union_changed(from);
+            let mut set = Rc::clone(self.implicit(col));
+            let changed = union_set_into_row(&mut set, from);
             if changed {
               self.seeded_rows.insert(row, SeededRow { col, set });
             }
@@ -237,7 +284,7 @@ where
     {
       if self.seeded {
         // Without an explicit value, the row would take its seed.
-        let set = IndexSet::new(&self.seeds.domain);
+        let set = Rc::clone(&self.seeds.empty);
         self.seeded_rows.insert(row.clone(), SeededRow { col, set });
       } else {
         self.seeded_rows.remove(row);
@@ -250,12 +297,14 @@ where
 
   /// The rows with a non-empty value, and their values.
   pub fn rows(&self) -> impl Iterator<Item = (&R, &IndexSet<C>)> {
-    let plain = self.plain.iter().filter(|(_, set)| !set.inner().is_empty());
+    let plain = (self.plain.iter())
+      .filter(|(_, set)| !set.inner().is_empty())
+      .map(|(key, set)| (key, &**set));
     let explicit = self
       .seeded_rows
       .iter()
       .filter(|(_, row)| !row.set.inner().is_empty())
-      .map(|(key, row)| (key, &row.set));
+      .map(|(key, row)| (key, &*row.set));
     let implicit = self
       .seeded
       .then(|| {
@@ -263,7 +312,7 @@ where
           .seeds
           .iter()
           .filter(|(key, _)| !self.seeded_rows.contains_key(key))
-          .map(|(key, col)| (key, self.seeds.singleton(col)))
+          .map(|(key, col)| (key, &**self.seeds.singleton(col)))
       })
       .into_iter()
       .flatten();
@@ -299,10 +348,10 @@ where
 
     for (row, set) in &other.plain {
       match self.plain.get_mut(row) {
-        Some(own) => changed |= own.union_changed(set),
+        Some(own) => changed |= union_row(own, set),
         None => {
           // `set` is not empty.
-          self.plain.insert(row.clone(), set.clone());
+          self.plain.insert(row.clone(), Rc::clone(set));
           changed = true;
         }
       }
@@ -310,11 +359,11 @@ where
 
     for (row, explicit) in &other.seeded_rows {
       match self.seeded_rows.get_mut(row) {
-        Some(own) => changed |= own.set.union_changed(&explicit.set),
+        Some(own) => changed |= union_row(&mut own.set, &explicit.set),
         None => {
           // The row's value in `self` is implicit.
-          let mut set = self.implicit(explicit.col).clone();
-          let grew = set.union_changed(&explicit.set);
+          let mut set = Rc::clone(self.implicit(explicit.col));
+          let grew = union_row(&mut set, &explicit.set);
           // Store the result unless it is still the implicit value. A tombstone of
           // `other` must be stored if `self` is not seeded yet, since `self` may become
           // seeded below.
@@ -336,7 +385,7 @@ where
       // The seeded rows of `other` without an explicit value have their seed.
       for (row, own) in &mut self.seeded_rows {
         if !other.seeded_rows.contains_key(row) {
-          changed |= own.set.insert(own.col);
+          changed |= insert_into_row(&mut own.set, own.col);
         }
       }
       if !was_seeded {
@@ -645,6 +694,10 @@ mod test {
               states[i] = (Lazy::new(&seed_rows), Eager::new(&domain));
             }
           }
+        }
+        // Rows are shared between states: writing one state must not change another.
+        for (lazy, eager) in &states {
+          assert_same(lazy, eager, &format!("{what}: other states"));
         }
       }
     }
