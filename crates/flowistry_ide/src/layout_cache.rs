@@ -95,7 +95,11 @@ fn source_digest(text: &str) -> String {
   format!("{hash:?}")
 }
 
-pub(super) fn capture(entry: &Entry, verified: &Snapshot) -> Result<Proof, &'static str> {
+pub(super) fn capture(
+  entry: &Entry,
+  verified: &Snapshot,
+  local: &BTreeSet<PathBuf>,
+) -> Result<Proof, &'static str> {
   if entry.layout_blocked.is_some() {
     return Err("Cargo target has source observers");
   }
@@ -136,7 +140,7 @@ pub(super) fn capture(entry: &Entry, verified: &Snapshot) -> Result<Proof, &'sta
   }
   let mut sources = BTreeMap::new();
   let mut size = 0;
-  for (path, input) in verified {
+  for (path, input) in verified.iter().filter(|(path, _)| local.contains(*path)) {
     if path.extension().is_none_or(|e| e != "rs")
       || !entry.roots.iter().any(|root| path.starts_with(root))
     {

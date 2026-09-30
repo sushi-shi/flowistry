@@ -454,6 +454,7 @@ pub(crate) fn record_inputs(tcx: TyCtxt<'_>, bodies: Vec<BodyIdentity>) {
   }
   let mut files = BTreeSet::new();
   let mut verified_sources = BTreeMap::new();
+  let mut local_sources = BTreeSet::new();
   for file in tcx.sess.source_map().files().iter() {
     if let rustc_span::FileName::Real(name) = &file.name {
       if let Some(path) = name.local_path() {
@@ -474,6 +475,9 @@ pub(crate) fn record_inputs(tcx: TyCtxt<'_>, bodies: Vec<BodyIdentity>) {
               })
             })();
             if let Some(input) = verified {
+              if !file.is_imported() {
+                local_sources.insert(path.clone());
+              }
               verified_sources.insert(path.clone(), Some(input));
             } else {
               // The source on disk no longer matches the bytes rustc parsed.
@@ -535,6 +539,7 @@ pub(crate) fn record_inputs(tcx: TyCtxt<'_>, bodies: Vec<BodyIdentity>) {
   if let Ok(data) = serde_json::to_vec(&CompilerInputs {
     files: files.into_iter().collect(),
     verified_sources,
+    local_sources,
     provenance,
   }) {
     if data.len() as u64 <= LIMIT {
@@ -547,6 +552,7 @@ pub(crate) fn record_inputs(tcx: TyCtxt<'_>, bodies: Vec<BodyIdentity>) {
 struct CompilerInputs {
   files: Vec<PathBuf>,
   verified_sources: Snapshot,
+  local_sources: BTreeSet<PathBuf>,
   provenance: Provenance,
 }
 
@@ -1131,7 +1137,7 @@ fn cached_run() -> Option<ExitCode> {
     if entry.responses.len() > 128 {
       entry.responses.remove(0);
     }
-    entry.layout = layout::capture(&entry, &extra.verified_sources)
+    entry.layout = layout::capture(&entry, &extra.verified_sources, &extra.local_sources)
       .map_err(|reason| {
         log::debug!("layout ineligible: {reason}");
       })
