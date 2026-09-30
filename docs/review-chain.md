@@ -3,9 +3,10 @@
 State: 2026-09-30. Start with #14 and follow the table. Every backend PR targets
 the previous PR's branch; only #14 targets master. Nothing has been merged.
 The independent stacks have been integrated, including the formerly old-core #2.
-The [latest branch audit](measurements/review-chain-60.json) covers all 46 open
+The [historical branch audit](measurements/review-chain-60.json) covers 46
 PRs through #60: one chain, each base head an ancestor, every incremental diff
-nonempty, and the table below matching GitHub's branch order.
+nonempty, and the table below matching GitHub's branch order. PR #61 extends
+that chain directly above #60. The default branch `top` points to its tip.
 
 Use each PR's **Files changed** tab to review its incremental change. Existing
 commit ancestry is retained through merge commits, allowing normal pushes with
@@ -61,6 +62,7 @@ no history rewriting; the commit tab consequently includes historical branches.
 | 44 | [#58](https://github.com/sushi-shi/flowistry/pull/58) | Compiler incremental-state experiment, rejected on measured regressions. |
 | 45 | [#59](https://github.com/sushi-shi/flowistry/pull/59) | Proven-safe layout relocation before compiler startup, with conservative fallback. |
 | 46 | [#60](https://github.com/sushi-shi/flowistry/pull/60) | Guarded predecessor measurement queue and final reference-build evidence; acceptance pending. |
+| 47 | [#61](https://github.com/sushi-shi/flowistry/pull/61) | Visible gutter pins above letter tags and compact actual-error popups. |
 
 **Excluded:** [#27](https://github.com/sushi-shi/flowistry/pull/27) was closed as superseded by #33 with the owner’s approval. It is excluded from the
 review sequence; its branch and original discussion are retained. Closed #1/#4/#5 are historical predecessors of #15–#17.
@@ -225,5 +227,9 @@ Its 61 Python regressions and package CI at `8872856ed` pass; a small final
 engine/eager-reference smoke check agrees in both modes. Actual optimization
 measurements and full final reference coverage remain pending. See
 [the queue policy](acceptance-measurement-queue.md).
-This is the current tip of the unified backend/editor chain.
-Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
+[#61](https://github.com/sushi-shi/flowistry/pull/61) follows #60 with red gutter
+pins and small non-focusing error popups. Pins preserve underlying letter marks
+and follow source edits; error popups show the actual diagnostic and expire after
+five seconds. 460 frontend assertions and 30 configured CoC UI assertions pass.
+This is the current tip of the unified backend/editor chain; `top` points here.
+The broad acceptance plan remains paused. Track the remaining milestones in [continuation-progress.md](continuation-progress.md).
