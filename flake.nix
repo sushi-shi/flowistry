@@ -7,7 +7,7 @@
     fenix.url = "github:nix-community/fenix/5f7e7d793cb2553410f857554de86f277ebe2f71";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
     flowistry-src = {
-      url = "github:sushi-shi/flowistry/ad859be49003040aac7f6767db6798d971d0d4a2";
+      url = "github:sushi-shi/flowistry/2630ee356d8f606e22a205527b4eea67cdab66d0";
       flake = false;
     };
   };
@@ -29,7 +29,7 @@
           compilerLibraries = "${toolchain}/lib:${toolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/lib";
           backend = rustPlatform.buildRustPackage {
             pname = "flowistry-backend";
-            version = "0.5.44-ad859be";
+            version = "0.5.44-2630ee3";
             src = flowistry-src;
             cargoLock.lockFile = "${flowistry-src}/Cargo.lock";
             cargoBuildFlags = [ "-p" "flowistry_ide" ];
