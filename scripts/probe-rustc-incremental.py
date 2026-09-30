@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import statistics
 import subprocess
+import sys
 import time
 import tomllib
 
@@ -64,6 +65,8 @@ def main():
     parser.add_argument('--column', type=int, default=4)
     parser.add_argument('--kind', choices=['lib', 'bin'], action='append')
     args = parser.parse_args()
+    if args.repeat < 1:
+        parser.error('--repeat must be positive')
     files, provenance = FILES, None
     package, target = 'matrix_fixture', 'matrix_fixture'
     if args.project_source:
@@ -72,6 +75,8 @@ def main():
         files = {}
         for directory, dirs, names in os.walk(args.project_source):
             dirs[:] = [name for name in dirs if name not in ('target', '.git')]
+            if any((Path(directory) / name).is_symlink() for name in dirs):
+                parser.error('real probe requires a source tree without directory symlinks')
             for name in names:
                 path = Path(directory) / name
                 if path.is_symlink():
@@ -91,6 +96,11 @@ def main():
               'harness_sha256': file_digest(Path(__file__)), 'records': [],
               'load_start': os.getloadavg(), 'scope': 'isolated lib/bin fixtures, both modes; compiler reuse only',
               'source_provenance':provenance, 'position':[args.source, args.line, args.column],
+              'command':[sys.executable, *sys.argv], 'repeat':args.repeat,
+              'perf':{'path':str(args.perf), 'sha256':file_digest(args.perf)} if args.perf else None,
+              'host':{'cpu_count':os.cpu_count(), 'uname':list(os.uname())},
+              'controls':{'FLOWISTRY_CACHE':'off', 'FLOWISTRY_NO_REPLAY':'1', 'CARGO_INCREMENTAL':'0',
+                          'incremental_statistics':'cold/warm diagnostics only; disabled during measurement'},
               'performance_caveat': 'Loaded host: instruction counts are measured; wall time is not a quiet latency claim.'}
 
     def run(kind, mode, variant, stage, expected=None, feature=None):
