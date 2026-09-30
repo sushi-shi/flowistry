@@ -56,8 +56,15 @@ inventory, type-error isolation, invalid identities/files/targets and launch-loc
 ordering. The comparison uses the established range-table canonicalizer and
 preserves resolved foreign filenames.
 
-Final frozen-build evidence and the existing edit/publication/summary regression
-matrix will be recorded before publishing this increment. The next increment
-adds the project coordinator with explicit stream selection, cursor/file/body
+The frozen `project-workers-v2/` candidate at `4b4915382` passes all **137 process
+cases**: 13 worker scenarios, all 84 edit/concurrency/real-project cases, 16
+publication cases, 18 summary cases and six filename cases. The IDE all-targets
+suite and all 54 Python regressions pass. The worker tests include a target named
+`file-focus` to prove that an option's value cannot masquerade as the subcommand.
+[The compact report](measurements/project-workers.json) records build and harness
+hashes and references the durable full reports/logs. No project throughput or
+resource-limit claim is made from these small fixtures.
+
+The next increment adds the project coordinator with explicit stream selection, cursor/file/body
 priorities, bounded worker lifetime, cancellation of descendants and resumable
 cache filling. Full project/corpus/resource/latency acceptance remains open.
