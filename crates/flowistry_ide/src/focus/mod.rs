@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, time::Instant};
+use std::{rc::Rc, time::Instant};
 
 use anyhow::Result;
 use flowistry::{
