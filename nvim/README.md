@@ -36,6 +36,9 @@ Root flake outputs:
 - `.#backend` (also the default package): editor-independent Rust backend.
 - `.#toolchain`: matching Rust compiler.
 
+See [the everyday setup guide](doc/setup.md) for two-letter shortcuts, optional
+CoC settings without automatic builds, and manual build commands. **CoC is not
+required**: Flowistry works with built-in LSP, other clients, or no language server.
 See [NixOS and Home Manager setup](doc/nix.md) for installation. Linux packages
 exist for x86_64 and aarch64. [Callee analysis](doc/summaries.md) explains the
 optional `context_mode = "Recurse"` mode; signature-based analysis is the default.

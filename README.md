@@ -14,7 +14,8 @@ The [Neovim frontend](nvim/README.md) lives in this repository alongside the Rus
 backend. Run `nix run .#nvim -- /path/to/project/src/main.rs` from this checkout,
 or use `tools/flowistry` from your project's development shell. The plugin and
 backend are built and tested from the same source tree; no separate revision pin
-is needed. See [NixOS/Home Manager setup](nvim/doc/nix.md).
+is needed. See [everyday Neovim setup](nvim/doc/setup.md) for shortcuts and manual
+builds, or [NixOS/Home Manager installation](nvim/doc/nix.md). CoC is optional.
 
 For example, this GIF shows the focus mode when reading a function that unions two sets together:
 
