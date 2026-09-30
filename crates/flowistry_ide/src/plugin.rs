@@ -318,6 +318,7 @@ pub fn run_with_callbacks(
       .map(|s| s.to_owned()),
   );
 
+  log::info!(target: "flowistry::audit", "audit compiler");
   rustc_driver::catch_fatal_errors(move || rustc_driver::run_compiler(&args, callbacks))
     .map_err(|_| FlowistryError::BuildError)
 }

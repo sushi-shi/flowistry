@@ -200,6 +200,7 @@ pub(crate) fn compute<'tcx>(
     reads: RefCell::new(IndexSet::new(&domain)),
     domain,
   };
+  log::info!(target: "flowistry::audit", "audit solve summary {}", tcx.def_path_str(def_id));
   let results =
     engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis);
   let analysis = &results.analysis;
