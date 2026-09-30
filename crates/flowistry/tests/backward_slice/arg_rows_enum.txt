@@ -1,0 +1,9 @@
+fn f(o: Option<(i32, i32)>, d: i32) {
+  let r = match o {
+    Some((a, _)) => a,
+    None => d,
+  };
+  `(r)`;
+}
+
+fn main() {}
