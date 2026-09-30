@@ -204,6 +204,9 @@ fn check_engines<'tcx>(
 ) {
   let tcx = session.tcx();
   let def_id = results.analysis.def_id;
+  // Reference execution must not add cache hits or fallback counts to the
+  // production session being measured and tested.
+  let session = AnalysisSession::new(tcx, session.mode());
   let body = &body_with_facts.body;
   let place_info =
     PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, session.mode());
