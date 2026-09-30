@@ -10,7 +10,10 @@ use rustc_middle::{
 use rustc_span::Spanned;
 use rustc_utils::{OperandExt, mir::place::PlaceCollector};
 
-use super::callsite::cmp_places_structurally;
+use super::{
+  callsite::cmp_places_structurally,
+  interior::{InteriorMutation, interior_mutable_places},
+};
 use crate::mir::{
   placeinfo::PlaceInfo,
   utils::{self, AsyncHack},
@@ -58,6 +61,11 @@ pub enum MutationKind {
     operand: usize,
   },
 
+  /// A dropped value may be written by a destructor of the source code in its drop
+  /// glue, together with everything mutably reachable from it (in
+  /// [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse) only).
+  Destructor,
+
   /// An effect of a callee, translated from an analysis of the callee's body
   /// (see [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse)).
   CalleeEffect(CalleeEffect),
@@ -71,6 +79,10 @@ pub enum CalleeEffect {
 
   /// A write through a pointer passed as an argument.
   ArgPointee(Precision),
+
+  /// A write to the state shared through a handle passed by value as an argument,
+  /// e.g. through an `Rc<RefCell<T>>`: the handle stands for its pointee.
+  SharedState(Precision),
 }
 
 /// How precisely a callee effect is translated into a caller place.
@@ -91,15 +103,16 @@ impl MutationKind {
       MutationKind::Assign | MutationKind::CallReturn | MutationKind::AsmOutput => {
         MutationStatus::Definitely
       }
-      MutationKind::CallArgument { .. } | MutationKind::AsmMemory { .. } => {
-        MutationStatus::Possibly
-      }
+      MutationKind::CallArgument { .. }
+      | MutationKind::AsmMemory { .. }
+      | MutationKind::Destructor => MutationStatus::Possibly,
       MutationKind::CalleeEffect(effect) => match effect {
         CalleeEffect::Return(Precision::Exact) => MutationStatus::Definitely,
         // Several coarsened return effects can land on the same caller place, each
         // covering only a part of it: none of them overwrites the whole place.
         CalleeEffect::Return(Precision::Coarsened) => MutationStatus::Possibly,
-        CalleeEffect::ArgPointee(Precision::Exact | Precision::Coarsened) => {
+        CalleeEffect::ArgPointee(Precision::Exact | Precision::Coarsened)
+        | CalleeEffect::SharedState(Precision::Exact | Precision::Coarsened) => {
           MutationStatus::Possibly
         }
       },
@@ -293,7 +306,12 @@ where
         let CallArgumentWrites {
           inputs: arg_inputs,
           mutations: arg_mutations,
-        } = call_argument_writes(self.place_info, args, |_| true);
+        } = call_argument_writes(
+          self.place_info,
+          args,
+          |_| true,
+          InteriorMutation::of_call(tcx, self.place_info.def_id, func),
+        );
 
         let ret_is_unit = destination
           .ty(self.place_info.body.local_decls(), tcx)
@@ -419,7 +437,9 @@ pub(crate) struct CallArgumentWrites<'tcx> {
 
 /// Computes the modular approximation of the writes of a call with operands `args`
 /// through the operands whose index satisfies `operands`: the callee may write any
-/// place mutably reachable from them, with every operand as an input.
+/// place mutably reachable from them, and, unless `interior` says it does not, the
+/// interior-mutable state they give shared access to (see
+/// [`interior_mutable_places`]), with every operand as an input.
 ///
 /// Operands of the async [`Context`](std::task::Context) type are ignored (see
 /// [`AsyncHack`]). The writes are ordered deterministically (see
@@ -428,6 +448,7 @@ pub(crate) fn call_argument_writes<'tcx>(
   place_info: &PlaceInfo<'_, 'tcx>,
   args: &[Spanned<Operand<'tcx>>],
   operands: impl Fn(usize) -> bool,
+  interior: InteriorMutation,
 ) -> CallArgumentWrites<'tcx> {
   let async_hack = AsyncHack::new(place_info.tcx, place_info.body, place_info.def_id);
   let arg_places = utils::arg_places(args)
@@ -451,6 +472,12 @@ pub(crate) fn call_argument_writes<'tcx>(
       reachable.sort_by(|p1, p2| {
         cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
       });
+      match interior {
+        InteriorMutation::Possible => {
+          reachable.extend(interior_mutable_places(place_info, *arg))
+        }
+        InteriorMutation::None => {}
+      }
       let inputs = &inputs;
       reachable.into_iter().map(move |mutated| Mutation {
         mutated,
@@ -629,6 +656,8 @@ fn f(x: i32) { let u = U { b: x }; }
       (MutationKind::CalleeEffect(Return(Coarsened)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Exact)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Coarsened)), Possibly),
+      (MutationKind::CalleeEffect(SharedState(Exact)), Possibly),
+      (MutationKind::Destructor, Possibly),
     ];
     for (kind, status) in cases {
       assert_eq!(kind.status(), status, "{kind:?}");
