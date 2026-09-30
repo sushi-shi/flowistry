@@ -330,7 +330,7 @@ impl<'tcx> FocusCache<'tcx> {
   }
 }
 
-struct Source {
+pub(crate) struct Source {
   text: String,
   tokens: Vec<(usize, usize)>,
   range: CharRange,
@@ -342,6 +342,9 @@ impl Source {
     }
     let text = tcx.sess.source_map().span_to_snippet(span).ok()?;
     let range = crate::positions::char_range(span, tcx.sess.source_map()).ok()?;
+    Some(Self::from_text(text, range))
+  }
+  fn from_text(text: String, range: CharRange) -> Self {
     let mut offset = 0;
     let tokens = rustc_lexer::tokenize(&text, rustc_lexer::FrontmatterAllowed::No)
       .filter_map(|token| {
@@ -351,11 +354,33 @@ impl Source {
           .then_some((start, offset))
       })
       .collect();
-    Some(Self {
+    Self {
       text,
       tokens,
       range,
+    }
+  }
+  pub(crate) fn layout(text: String) -> Self {
+    let zero = CharPos { line: 0, column: 0 };
+    Self::from_text(text, CharRange {
+      start: zero,
+      end: zero,
+      filename: rustc_utils::source_map::filename::Filename::intern("<layout>"),
     })
+  }
+  pub(crate) fn relocate(
+    &self,
+    new: &Self,
+    start: CharPos,
+    end: CharPos,
+  ) -> Option<(CharPos, CharPos)> {
+    let anchor = self.capture(&CharRange {
+      start,
+      end,
+      filename: self.range.filename,
+    })?;
+    let range = new.restore(&anchor)?;
+    Some((range.start, range.end))
   }
   fn byte(&self, pos: CharPos) -> Option<usize> {
     let row = pos.line.checked_sub(self.range.start.line)?;

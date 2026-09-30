@@ -3,13 +3,19 @@
 Updated 2026-09-30 after taking over the latest Claude optimization session.
 The Neovim plugin has since moved into `nvim/`; see
 [the migration guide](neovim-monorepo.md) for the shared package and review chain.
-The latest continuation is [#58](https://github.com/sushi-shi/flowistry/pull/58),
-`experiment/rustc-incremental`, based directly on #57. Its compiler-state
-experiment is rejected on measured instruction regressions; the production
-code remains unchanged. The full coordinator cache-refresh corpus passed all
-2,880 comparisons. See [current progress](continuation-progress.md) for the
-remaining warm-cache run and all thirteen milestone gates. Earlier process
-and worktree descriptions below are historical.
+The latest continuation is [#59](https://github.com/sushi-shi/flowistry/pull/59),
+`feat/safe-layout-reuse` in `/tmp/flowistry-layout-reuse`, based directly on #58.
+Its final runtime is frozen at `3ddebc5e3` as `layout-reuse-v3`; focused tests and
+all five paired Nix checks pass. Eligible layout saves now relocate without
+compiler startup; source-sensitive cases fall back. #58's compiler-state
+experiment remains rejected on measured instruction regressions.
+
+Both coordinator-era full cache corpus runs passed all 2,880 comparisons each.
+Two new full runs now validate the layout candidate using separate engine/h19
+prepared roots; see [current progress](continuation-progress.md) for exact
+artifacts and process observations. Earlier process/worktree descriptions below
+are historical. The remaining work includes final/reference/resource gates,
+quiet performance measurements and actual budgets; the complete plan is active.
 
 Master remains `f8b5582b7` (#18); nothing was merged. The canonical review order
 is [docs/review-chain.md](review-chain.md), also linked from every active PR.

@@ -124,6 +124,7 @@
           '';
           nvim-cache = backendTest "flowistry-nvim-cache" ''
             nvim --headless -u NONE -i NONE -l tests/cache.lua
+            FLOWISTRY_TEST_RUSTFMT=${pkgs.rustfmt}/bin/rustfmt nvim --headless -u NONE -i NONE -l tests/layout_live.lua
             python3 ${./scripts/test-focus-cache.py} --backend "$FLOWISTRY_BACKEND_EXE"
             python3 ${./scripts/test-fast-cache.py} --backend "$FLOWISTRY_BACKEND_EXE"
           '';

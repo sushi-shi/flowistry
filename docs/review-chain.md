@@ -187,6 +187,12 @@ tests, fallback behavior and the remaining plan gates.
 compiler incremental-state experiment and completed cache-refresh corpus evidence.
 All 510 fresh-oracle comparisons pass, but every tested state-retention variant
 uses more instructions; no production compiler change is retained. Review the
-[decision and reproduction patch](rustc-incremental-experiment.md). This is the
-current tip of the unified chain.
+[decision and reproduction patch](rustc-incremental-experiment.md). The experiment preserves the production behavior from #57.
+[#59](https://github.com/sushi-shi/flowistry/pull/59) follows #58 with proven-safe
+layout reuse before compiler startup. It preserves the complete input snapshot,
+punctuation jointness and exact comment tokens, relocates response/index ranges,
+and falls back for source observers or unknown cases. Its 48 targeted cases,
+84 existing edit/concurrency cases, 16 publication cases, final IDE tests and all
+five paired package checks pass. See [eligibility and evidence](safe-layout-reuse.md).
+This is the current tip of the unified backend/editor chain.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
