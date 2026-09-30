@@ -19,9 +19,14 @@ Without `--crate`, the script runs the corpus in `scripts/smoke-corpus/`:
   regex-syntax, anyhow, bitflags, memchr), each pinned to an exact version and the
   sha256 of its `.crate` archive, with the optional dependencies pruned to build
   offline and the resulting `Cargo.lock`.
-- **Applications from git** (just, tokei, alacritty, niri, helix, bevy), each pinned to
-  a commit, analysing one package (`package`, e.g. `crates/bevy_ecs`). Their own
-  `Cargo.lock` pins dependencies; bevy has none, so one is stored in the corpus.
+- **Applications from git**, each pinned to a commit and analysing one package
+  (`package`): just, tokei, alacritty, niri, helix (`helix-term`), bevy (`crates/bevy_ecs`),
+  brains (`open/stratum-proxy`) and bosminer (`open/bosminer`, the Braiins OS miner), local_lru, cargo-inspect, biodiff, objdiff (`objdiff-cli`),
+  boxxy and sudo-rs. Their own `Cargo.lock` pins dependencies; for repositories without one
+  (bevy) a generated lock is stored in the corpus. Optional fields: `root` (the cargo
+  workspace's subdirectory, e.g. brains), `submodules` (check out git submodules, e.g. biodiff's
+  bundled WFA2), and `env` (build environment, e.g. `CFLAGS=-std=gnu17` for old C code that
+  gcc 15 rejects under C23, or `RUSTFLAGS=--cap-lints=warn` for old crates that deny warnings).
 - For every entry, the sampled positions (`positions.tsv`), so a change to the sampler
   does not change what is measured.
 
@@ -60,7 +65,7 @@ Useful options (see `--help` for all of them):
 
 | option | meaning |
 | --- | --- |
-| `--crate SPEC` | crate to test, repeatable: `NAME` (newest version in the registry), `NAME@VERSION`, or a path to a crate directory. Defaults to the locked corpus. |
+| `--crate SPEC` | crate to test, repeatable: a corpus entry name, or `NAME` (newest version in the registry), `NAME@VERSION`, or a path to a crate directory. Defaults to the locked corpus. |
 | `--positions N` | positions sampled per crate (default 60) |
 | `--seed S` | sampling seed (default 0); the same seed always picks the same positions |
 | `--modes M1,M2` | context modes (default `SigOnly,Recurse`) |
@@ -72,11 +77,42 @@ Useful options (see `--help` for all of them):
 | `--fetch` | download corpus sources and dependencies not available offline |
 | `--prepare-only` | prepare crates (and positions) without running the analysis |
 | `--bump` | with `--update-corpus`, move git entries to the current head of their ref |
-| `--phases` | record the backend's per-phase timers; adds a timing section (per-phase totals, and with `--compare` the ratio of totals and the geometric mean of per-run ratios). Use release builds. |
+| `--phases` | record the backend's per-phase timers and counters (`stat <name> = <n>` lines of the `flowistry::stats` log target); adds a timing section (per-phase totals, and with `--compare` the ratio of totals and the geometric mean of per-run ratios). Use release builds. |
 | `--repeat N` | run every position N times and keep the fastest, to reduce timing noise |
+| `--memory-limit SIZE` | run every focus request in a systemd user scope capped at `SIZE` (e.g. `6G`) without swap; a run killed at the cap is reported as `oom` |
+| `--budgets` | run only the stress positions of `scripts/smoke-corpus/budgets.tsv`, one crate at a time, and check each against its budget (see below) |
+| `--skip NAME` | leave a corpus entry out, repeatable |
 
-The exit status is 1 if any run crashed or timed out, or if the two backends
-disagree under `--compare`.
+The exit status is 1 if any run crashed, ran out of memory or timed out, if the two
+backends disagree under `--compare`, or if a run exceeds its budget under `--budgets`.
+
+### Memory
+
+Every run records its peak resident memory: the largest RSS among cargo and the
+compiler processes it waited for (`ru_maxrss` from `wait4`). A small wrapper process
+forks the run and measures it: a process forked by the harness itself would start with
+the harness's own peak RSS, which grows with the outputs it decodes. The report shows the
+largest per crate (`maxMB`), and the timing section the largest over all runs, with
+the geometric mean of per-run ratios under `--compare`.
+
+Some positions need a lot of memory (e.g. in `just`, see the budgets), so never run
+the full corpus without `--memory-limit`: the cap keeps a runaway analysis from
+exhausting the machine's memory. It needs `systemd-run` and a user session; the
+kernel kills the compiler when the scope reaches the cap.
+
+### Budgets
+
+`scripts/smoke-corpus/budgets.tsv` lists stress positions of the corpus, one per
+line: the entry name, the context mode, the file, the 0-based line and the column
+(as passed to `focus`), the maximum peak RSS in MiB and the maximum wall time in
+seconds. `--budgets` runs only these positions, one at a time, and a position is
+within its budget if it answers `{"Ok": ...}` within both limits. Budgets are
+measured values plus 30%; run them on an otherwise idle machine, with a release
+build and a memory cap:
+
+```sh
+python3 scripts/smoke-real-crates.py target/release --budgets --memory-limit 6G
+```
 
 ### Comparing two builds
 
@@ -87,9 +123,19 @@ python3 scripts/smoke-real-crates.py target/smoke-master/debug --compare target/
 ```
 
 `place_info` is emitted in hash-map order, so outputs are canonicalised before
-comparison: `ranges`, `slice` and `direct_influence` are sorted within each
-entry, and entries are sorted by their full JSON content. With that, a build
-compared against itself is stable.
+comparison: `ranges`, `slice`, `direct_influence` and `maybe_slice` are treated as
+sets within each entry, and entries are sorted by their full JSON content. The
+range-table protocol is resolved to source ranges before comparing, so table
+insertion order and repeated highlights cannot create false differences. Changes
+to actual ranges, the primary `range`, or the number of places remain visible.
+
+Unless `--keep-outputs` is given, outputs are not kept: each is decompressed and
+parsed one `place_info` entry at a time and reduced to a SHA-256 digest of its
+canonical form, and the digests are compared. Outputs can be hundreds of MB of JSON,
+which as parsed Python objects took the harness to over 16 GB.
+Range-table outputs retain their compact indices and expand one place at a time.
+Run the comparison regression tests with
+`python3 -m unittest discover -s scripts -p 'test_smoke_*.py'`.
 
 ## What it does
 
@@ -132,6 +178,8 @@ Each run is classified as:
   is no decodable response. The report groups crashes by panic location and
   message and prints a reproduction command (run it in the dev shell with the
   backend's bin dir on `PATH`; `--json` keeps the tail of stderr).
+- **oom**: the run was killed at the `--memory-limit` cap (the compiler was killed
+  by SIGKILL inside the capped scope).
 - **timeout**: the run exceeded `--timeout` seconds.
 
 Each run is a full compiler invocation of the crate plus the analysis of one
