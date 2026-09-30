@@ -1,0 +1,270 @@
+{
+  "coverage_complete": true,
+  "crates": [
+    {
+      "expected": 120,
+      "name": "itertools",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "either",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "smallvec",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "indexmap",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "hashbrown",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "serde_json",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "regex-syntax",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "anyhow",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "bitflags",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "memchr",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "just",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "tokei",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "alacritty",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "niri",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "helix",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "bevy",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "brains",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "local_lru",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "cargo-inspect",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "biodiff",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "objdiff",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "boxxy",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "sudo-rs",
+      "recorded": 120
+    },
+    {
+      "expected": 120,
+      "name": "bosminer",
+      "recorded": 120
+    }
+  ],
+  "output_differences": 0,
+  "paired_status_counts": {
+    "benign": 48,
+    "ok": 2832
+  },
+  "performance_acceptance": "pending quiet instruction/seed-construction/RSS stress measurements",
+  "required_modes": [
+    "SigOnly",
+    "Recurse"
+  ],
+  "schema": 1,
+  "source_report": {
+    "path": "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows-corpus.json",
+    "sha256": "4ac4840c81f8d3de00f418bd7603bdf5273001717f1d194380e38e04e70a9fa9"
+  },
+  "validation_manifest": {
+    "backends": {
+      "base": {
+        "cargo-flowistry": "2544eb901ce55857a512dbd1f705d0059ebe1f7e4e0375a7b25dc2ba836d3dc5",
+        "flowistry-driver": "bd0730941d7e96836e9540c45126571e54940ae7ddfbf547a7a02a9a789872ba"
+      },
+      "compare": {
+        "cargo-flowistry": "f756955a734bcb8ce6983d28faaccf2c1aa00189c379b93a125e157d5f4ea201",
+        "flowistry-driver": "f11d3e7ee35c7a056bef7688a45d8ec10065072db24aa0ff9936fe4b02079d6d"
+      }
+    },
+    "builds": {
+      "base": {
+        "binaries": {
+          "cargo-flowistry": "2544eb901ce55857a512dbd1f705d0059ebe1f7e4e0375a7b25dc2ba836d3dc5",
+          "flowistry-driver": "bd0730941d7e96836e9540c45126571e54940ae7ddfbf547a7a02a9a789872ba"
+        },
+        "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+        "cargo_encoded_rustflags": "",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "-p",
+          "flowistry_ide",
+          "-j",
+          "4"
+        ],
+        "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+        "features": "",
+        "profile": {},
+        "recorded_at": "2026-09-30T03:03:30.686931+00:00",
+        "revision": "3199b4095063d9fe7a7adbecd711630fe4a26f83",
+        "rustflags": "",
+        "tree": "26851da12f257cd8765a22741a986fddbc011aee"
+      },
+      "compare": {
+        "binaries": {
+          "cargo-flowistry": "f756955a734bcb8ce6983d28faaccf2c1aa00189c379b93a125e157d5f4ea201",
+          "flowistry-driver": "f11d3e7ee35c7a056bef7688a45d8ec10065072db24aa0ff9936fe4b02079d6d"
+        },
+        "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+        "cargo_encoded_rustflags": "",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "-p",
+          "flowistry_ide",
+          "-j",
+          "4"
+        ],
+        "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+        "features": "",
+        "profile": {},
+        "recorded_at": "2026-09-30T03:10:22.112084+00:00",
+        "revision": "f1163469c9f0e3d6f79cc71d59bb70dca573b936",
+        "rustflags": "",
+        "tree": "9cbb4e67704224cf97bd51b94c2f794f2ff131be"
+      }
+    },
+    "cache_dir": null,
+    "checkpoint_implementation": "5b0fbcdc51c14bb03aa7e51cdfbbad15b831804d842b81371e852aa9b02fadc8",
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "configuration_inputs": {
+      "/.cargo/config": null,
+      "/.cargo/config.toml": null,
+      "/home/sheep/.cargo/config": null,
+      "/home/sheep/.cargo/config.toml": null,
+      "/rust-toolchain": null,
+      "/rust-toolchain.toml": null,
+      "/tmp/.cargo/config": null,
+      "/tmp/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/rust-toolchain.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/rust-toolchain.toml": "704b46d5f5b659d1b649193366f9db98e2f1cd1570d6ce53526109131bcad831",
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/rust-toolchain.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/rust-toolchain.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/rust-toolchain.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/rust-toolchain.toml": null,
+      "/tmp/claude-1000/.cargo/config": null,
+      "/tmp/claude-1000/.cargo/config.toml": null,
+      "/tmp/claude-1000/rust-toolchain": null,
+      "/tmp/claude-1000/rust-toolchain.toml": null,
+      "/tmp/rust-toolchain": null,
+      "/tmp/rust-toolchain.toml": null
+    },
+    "corpus": "fef31dfe97db3c94748766e9c97edea7b39052d3436c69ab28a967c26f66fffd",
+    "environment_sha256": "4452fd8f4f42c99e775d6bfe726385179c293edefb2537db7c7d8420a9b9a990",
+    "harness": "889af7a25db997d87ff86dc54542a2cb57a398373fb2285acaeeeaea2c400276",
+    "measurement_settings": {
+      "cargo_replay": "inherit",
+      "warmup": 0
+    },
+    "schema": 1,
+    "settings": {
+      "base_cache": "inherit",
+      "budgets": null,
+      "command": "focus",
+      "compare_cache": "inherit",
+      "memory_limit": "6G",
+      "modes": [
+        "SigOnly",
+        "Recurse"
+      ],
+      "phases": false,
+      "repeat": 1,
+      "timeout": 600
+    },
+    "work_dir": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates"
+  }
+}

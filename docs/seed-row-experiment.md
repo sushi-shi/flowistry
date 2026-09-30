@@ -37,8 +37,19 @@ on this small case, not evidence of a general improvement. Raw samples and full
 provenance remain in `target/continuation-validation/seed-probe.json`, summarized
 in `seed-probe-summary.json`. Wall times are not quiet-host latency evidence.
 
-Pending: full corpus/reference checks and repeated normal-release measurements
+The full normal-release comparison against the row-group predecessor is complete:
+all 24 locked entries and 2,880 selections in both modes, with 2,832 equal
+successful pairs and 48 matching benign selections. There are no output differences,
+skips, missing positions or duplicate records. The manifest and detailed-report
+checksum are in [measurements/seed-rows-corpus.json](measurements/seed-rows-corpus.json).
+Raw evidence is `target/continuation-validation/seed-rows-corpus.{json,log}`.
+
+Loaded aggregate wall time was 2,183.71 → 2,181.15 seconds (geometric mean ratio
+1.003); peak RSS was 3,119 → 3,288 MiB. These observations do not establish a
+reproducible performance improvement.
+
+Pending: enhanced reference checks and repeated normal-release measurements
 against the row-group predecessor, including just's large argument type and peak
 memory. Retain this implementation only if those measurements establish a useful
 gain; otherwise record the rejected experiment. The current combined/reference
-corpus jobs occupy both heavy-run slots, so large comparisons are queued.
+corpus jobs occupy both heavy-run slots, so quiet measurements remain pending.

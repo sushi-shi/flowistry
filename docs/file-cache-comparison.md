@@ -31,3 +31,11 @@ checkpoint directory: `file-cache-resolved.{json,log}` and
 
 The initial warm run recorded 2,044 snapshot-validated responses and 836 compiler
 paths. These are correctness observations under load, not quiet latency claims.
+
+The corrected legacy run subsequently encountered a foreign macro-source index at
+`just`'s `src/unindent.rs:49:23`, in both modes. Its commands exited successfully,
+but the filename identity is absent from the legacy protocol. An isolated source
+copy reproduces this failure. The [filename-table fix](file-focus-identities.md)
+adds explicit identities and resolves the case while preserving every preexisting
+output field. The legacy run remains useful coverage evidence and is left running;
+its two raw `crash` classifications are retained with this protocol-error triage.

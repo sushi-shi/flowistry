@@ -1,7 +1,11 @@
 //! Editor-independent batch analysis: reuse one compiler session for a file.
+use std::collections::BTreeMap;
+
 use flowistry::extensions::{EVAL_MODE, EvalMode};
 use fluid_let::fluid_set;
+use rustc_index::Idx;
 use rustc_middle::ty::TyCtxt;
+use rustc_span::{FileName, RemapPathScopeComponents};
 use rustc_utils::{
   SpanExt,
   mir::borrowck_facts,
@@ -29,6 +33,38 @@ pub struct BodyOutput {
 pub struct FileOutput {
   bodies: Vec<BodyOutput>,
   cache: CacheStats,
+  /// Resolve response-local FilenameIndex values, including macro source files.
+  files: BTreeMap<usize, String>,
+}
+
+fn filenames(
+  tcx: TyCtxt<'_>,
+  bodies: &[BodyOutput],
+) -> anyhow::Result<BTreeMap<usize, String>> {
+  let mut files = BTreeMap::new();
+  for body in bodies {
+    let focus = body.focus.as_ref().and_then(|result| result.as_ref().ok());
+    let ranges = std::iter::once(&body.range).chain(
+      focus
+        .into_iter()
+        .flat_map(|output| output.ranges.iter().chain(output.containers.iter())),
+    );
+    for range in ranges {
+      if files.contains_key(&range.filename.index()) {
+        continue;
+      }
+      let file = range.filename.find_source_file(tcx.sess.source_map())?;
+      let FileName::Real(name) = &file.name else {
+        anyhow::bail!("unsupported range filename {:?}", file.name);
+      };
+      let path = name.path(RemapPathScopeComponents::DOCUMENTATION);
+      let path = path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("range filename is not UTF-8"))?;
+      files.insert(range.filename.index(), path.to_owned());
+    }
+  }
+  Ok(files)
 }
 
 #[derive(Serialize)]
@@ -93,7 +129,12 @@ impl rustc_driver::Callbacks for Callbacks {
         let Ok(range) = crate::positions::char_range(span, source_map) else {
           continue;
         };
-        identities.push(crate::fast_cache::BodyIdentity::new(tcx, id, &range));
+        identities.push(crate::fast_cache::BodyIdentity::new(
+          tcx,
+          id,
+          &range,
+          &self.filename,
+        ));
         let previous_hits = cache.hits.get();
         let focus = if self.position.is_none() || selected == Some(id) {
           Some(
@@ -118,8 +159,13 @@ impl rustc_driver::Callbacks for Callbacks {
           focus,
         });
       }
+      let files =
+        filenames(tcx, &bodies).map_err(|error| FlowistryError::AnalysisError {
+          error: error.to_string(),
+        })?;
       Ok(FileOutput {
         bodies,
+        files,
         cache: CacheStats {
           hits: cache.hits.get(),
           misses: cache.misses.get(),

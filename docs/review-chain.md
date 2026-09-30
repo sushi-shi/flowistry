@@ -136,4 +136,7 @@ editor integration remain later features.
 summaries using shared semantic fingerprints and dependency snapshots with reverse
 edges. Its 18 summary, 84 edit and 16 publication cases pass; the full Recurse
 summary/output comparison and final performance gates remain pending.
+[#50](https://github.com/sushi-shi/flowistry/pull/50) adds explicit filename mappings
+for file-focus and portable file identities in the result index. The foreign-macro
+regression and all 124 process-level validation cases pass; corpus gates continue.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
