@@ -97,8 +97,10 @@ def manifest(args, backends, corpus_dir, harness):
                      for name, directory in backends},
         'builds': {name: build_metadata(directory) for name, directory in backends},
         'settings': {key: getattr(args, key) for key in
-                     ('modes', 'timeout', 'memory_limit', 'phases', 'repeat', 'budgets')},
+                     ('modes', 'timeout', 'memory_limit', 'phases', 'repeat', 'budgets',
+                      'command', 'base_cache', 'compare_cache')},
         'work_dir': str(args.work_dir),
+        'cache_dir': str(args.cache_dir) if args.cache_dir else None,
     }
 
 

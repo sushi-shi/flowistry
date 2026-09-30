@@ -77,5 +77,45 @@ class CanonicalOutputTests(unittest.TestCase):
                          digest({"ranges": [], "place_info": [], "containers": []}))
 
 
+
+class FileFocusCanonicalTests(unittest.TestCase):
+    def setUp(self):
+        self.span = {'filename': 'test.rs', 'start': [1, 2], 'end': [1, 3]}
+        self.focus = {'place_info': [{'range': self.span, 'ranges': [self.span],
+                                     'slice': [self.span], 'direct_influence': [],
+                                     'maybe_slice': [self.span]}], 'containers': [self.span]}
+        self.output = {'bodies': [{'range': self.span, 'focus': {'Ok': self.focus}, 'cached': False},
+                                  {'range': dict(self.span, start=[5, 0]), 'focus': None, 'cached': None}],
+                       'cache': {'hits': 0, 'misses': 1}}
+
+    def test_cache_metadata_and_table_layout_do_not_change_semantics(self):
+        other = copy.deepcopy(self.output)
+        other['cache'] = {'hits': 1, 'misses': 0, 'validation': 'snapshot'}
+        other['bodies'][0]['cached'] = True
+        other['bodies'][0]['focus']['Ok'] = {
+            'ranges': [self.span], 'place_info': [{'range': 0, 'ranges': [0, 0],
+                                                'slice': [0], 'direct_influence': [], 'maybe_slice': [0]}],
+            'containers': [self.span]}
+        other['bodies'].reverse()
+        self.assertEqual(smoke.canonical(self.output), smoke.canonical(other))
+        a, b = digest(self.output), digest(other)
+        self.assertEqual(a['Ok'], b['Ok'])
+        self.assertEqual(a['cache']['misses'], 1)
+        self.assertEqual(b['cache']['validation'], 'snapshot')
+        self.assertEqual(a['Ok']['places'], 1)
+
+    def test_body_errors_and_changed_maybe_slices_are_visible(self):
+        changed = copy.deepcopy(self.output)
+        changed['bodies'][0]['focus'] = {'Err': 'analysis failed'}
+        self.assertNotEqual(digest(self.output)['Ok'], digest(changed)['Ok'])
+        changed = copy.deepcopy(self.output)
+        changed['bodies'][0]['focus']['Ok']['place_info'][0]['maybe_slice'] = []
+        self.assertNotEqual(digest(self.output)['Ok'], digest(changed)['Ok'])
+
+    def test_body_locations_are_not_discarded(self):
+        changed = copy.deepcopy(self.output)
+        changed['bodies'][0]['range']['filename'] = 'other.rs'
+        self.assertNotEqual(digest(self.output)['Ok'], digest(changed)['Ok'])
+
 if __name__ == "__main__":
     unittest.main()

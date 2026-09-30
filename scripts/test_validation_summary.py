@@ -55,6 +55,12 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(len(result['status_changes']), 1)
         self.assertTrue(result['needs_triage'])
 
+    def test_failed_warmup_is_not_hidden_by_successful_retry(self):
+        self.report['crates'][0]['records'][0]['compare']['warmup_status'] = 'crash'
+        result = summary.summarize(self.report, self.root)
+        self.assertTrue(result['needs_triage'])
+        self.assertEqual(len(result['failures']), 1)
+
     def test_skipped_entry_is_incomplete(self):
         self.report['crates'][0]['skipped'] = [('test', 'missing prerequisite')]
         self.report['crates'][0]['records'] = []

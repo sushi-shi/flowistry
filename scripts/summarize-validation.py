@@ -36,8 +36,9 @@ def summarize(report, corpus_dir):
     summary = {'schema': 1, 'checkpoint_id': report.get('checkpoint_id'),
                'validation_manifest': report.get('validation_manifest'),
                'crates': [], 'missing_entries': [], 'status_counts': {},
-               'output_differences': [], 'status_changes': [], 'failures': []}
+               'output_differences': [], 'status_changes': [], 'failures': [], 'cache_counts': {}}
     counts = {name: Counter() for name in names}
+    caches = {name: Counter() for name in names}
     for entry in entries:
         name = entry['name']
         if name not in by_name:
@@ -56,7 +57,12 @@ def summarize(report, corpus_dir):
             for backend in names:
                 result = rec[backend]
                 counts[backend][result['status']] += 1
-                if result['status'] not in ('ok', 'benign'):
+                cache = result.get('cache')
+                if isinstance(cache, dict):
+                    caches[backend]['hits'] += cache.get('hits', 0)
+                    caches[backend]['misses'] += cache.get('misses', 0)
+                    caches[backend]['snapshot_responses'] += cache.get('validation') == 'snapshot'
+                if result['status'] not in ('ok', 'benign') or result.get('warmup_status', 'ok') not in ('ok', 'benign'):
                     summary['failures'].append(dict(where, backend=backend, result=result))
             if len(names) == 2 and not rec.get('same', False):
                 results = {backend: rec[backend] for backend in names}
@@ -68,6 +74,7 @@ def summarize(report, corpus_dir):
                                   'duplicates': len(actual) - len(observed), 'skipped': crate['skipped'],
                                   'reused': sum(bool(r.get('checkpoint_reused')) for r in crate['records'])})
     summary['status_counts'] = {name: dict(value) for name, value in counts.items()}
+    summary['cache_counts'] = {name: dict(value) for name, value in caches.items()}
     summary['coverage_complete'] = not summary['missing_entries'] and all(
         not any(c[k] for k in ('missing', 'extra', 'duplicates', 'skipped')) for c in summary['crates'])
     summary['needs_triage'] = bool(summary['output_differences'] or summary['status_changes'] or summary['failures'])

@@ -244,3 +244,26 @@ status changes and all non-benign failures separately. Matching crashes are not 
 pass. The current inventory is 24 entries (10 registry crates and 14 git projects);
 older handoffs incorrectly called it 25. A subset report therefore fails full
 coverage even when its successful comparisons have no differences.
+
+### File-focus and cache modes
+
+`--command file-focus` compares the file response at each locked cursor position.
+The canonical digest resolves every nested range table, preserves body locations,
+errors and maybe-slices, and excludes only `cache` statistics and each body's
+`cached` flag. Cache telemetry remains a separate field in the report.
+
+For cache reuse checks, compare the same frozen binary with different policies:
+
+```sh
+python3 scripts/smoke-real-crates.py /path/to/integrated \
+  --compare /path/to/integrated --command file-focus \
+  --base-cache off --compare-cache warm --cache-dir /path/to/isolated-cache \
+  --work-dir /path/to/corpus --memory-limit 6G -j 2 --json /path/to/warm.json
+```
+
+`refresh` forces compiler-validated misses and writes fresh entries; `warm` primes
+each selected position before recording its next response; `on` permits ordinary
+reuse. Explicit reuse policies require `--cache-dir`, with separate directories
+per backend. Priming failures remain visible even if the subsequent request
+succeeds. The coverage audit totals hits, misses and snapshot responses separately:
+an equivalent response alone does not prove a cache hit.
