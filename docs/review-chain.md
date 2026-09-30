@@ -45,15 +45,16 @@ review sequence; its branch and original discussion are retained. Closed #1/#4/#
 ## Editor review order
 
 After backend #32, the range-table protocol requires an updated decoder. Review
-all four Neovim PRs after the backend chain:
+all five Neovim PRs after the backend chain:
 
 1. [nvim#1](https://github.com/sushi-shi/flowistry.nvim/pull/1): packaging and Nix integration.
 2. [nvim#2](https://github.com/sushi-shi/flowistry.nvim/pull/2): persistent-cache UI and lifecycle.
 3. [nvim#3](https://github.com/sushi-shi/flowistry.nvim/pull/3): maybe-slice tint.
 4. [nvim#4](https://github.com/sushi-shi/flowistry.nvim/pull/4): both inline and indexed range decoders, plus the integrated backend pin.
+5. [nvim#5](https://github.com/sushi-shi/flowistry.nvim/pull/5): preserve comment colors, optional parameter-type selection, and formatted-save redraw; pins backend #52.
 
 The first three editor PRs retain their historical compatible backend pins. The
-final editor PR pins backend #2's integrated tip. Review the backend wire-format
+fourth editor PR pins backend #2's integrated tip; #5 advances to #52. Review the backend wire-format
 change (#32) alongside nvim#4 before adopting the complete stack. VS Code's decoder
 is included directly in backend #32.
 
@@ -144,4 +145,9 @@ foundation: explicit Cargo targets, portable inventories, stable body selection,
 shared-index filling and serialized Cargo launchers. Its 137 process cases pass;
 the public coordinator, streaming, priorities, cancellation and resource limits
 remain the next feature-9 increment.
+[#52](https://github.com/sushi-shi/flowistry/pull/52) follows #51 with the reported
+constructor highlight refinement and compiler-derived comment/type selection
+metadata. Review it with [nvim#5](https://github.com/sushi-shi/flowistry.nvim/pull/5).
+The coordinator WIP must continue from #52 when resumed. See
+[source-selection.md](source-selection.md) for validation and conservative limits.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

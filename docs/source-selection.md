@@ -51,6 +51,11 @@ metadata-cache,live,save}.log`; actual-game result and checks are
 `/tmp/flowistry-source-selection-stalker.{out,log}` and
 `/tmp/flowistry-source-selection-stalker-check.json`.
 
-This is a bug-fix addition after project worker PR #51. The project coordinator
+Review [backend #52](https://github.com/sushi-shi/flowistry/pull/52) after project
+worker #51, and [editor #5](https://github.com/sushi-shi/flowistry.nvim/pull/5)
+after editor #4. The live session was updated with its cursor and pin preserved;
+the launcher now uses the paired candidate. `:Flow types` toggles the new behavior.
+
+The project coordinator
 remains separate WIP at `/tmp/flowistry-project-coordinator`; its uncommitted changes
 are preserved. The thirteen-step continuation plan remains unfinished.
