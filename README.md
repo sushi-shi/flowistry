@@ -10,6 +10,12 @@ This fork adds editor-independent file analysis (`cargo flowistry file-focus`), 
 
 [Persistent focus results](docs/persistent-cache.md) reuse completed analysis across sessions when the function and its compiler-resolved dependencies remain unchanged.
 
+The [Neovim frontend](nvim/README.md) lives in this repository alongside the Rust
+backend. Run `nix run .#nvim -- /path/to/project/src/main.rs` from this checkout,
+or use `tools/flowistry` from your project's development shell. The plugin and
+backend are built and tested from the same source tree; no separate revision pin
+is needed. See [NixOS/Home Manager setup](nvim/doc/nix.md).
+
 For example, this GIF shows the focus mode when reading a function that unions two sets together:
 
 <kbd>

@@ -18,9 +18,10 @@ use rustc_utils::{
     spanner::{EnclosingHirSpans, Spanner},
   },
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 mod direct_influence;
+mod source_selection;
 #[cfg(test)]
 mod tests;
 
@@ -43,6 +44,18 @@ pub struct FocusOutput {
   pub ranges: Vec<CharRange>,
   pub place_info: Vec<PlaceInfo>,
   pub containers: Vec<CharRange>,
+  /// Comment tokens, excluded from editor decorations. Indices into `ranges`.
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub comments: Vec<u32>,
+  /// Optional type-to-binding cursor aliases, using compiler-resolved parameters.
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub parameter_aliases: Vec<ParameterAlias>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParameterAlias {
+  pub range: u32,
+  pub target: u32,
 }
 
 /// Builds [`FocusOutput::ranges`].
@@ -239,10 +252,13 @@ pub(crate) fn focus_with_session<'tcx>(
     containers.push(crate::positions::char_range(sp, source_map)?);
   }
 
+  let (comments, parameter_aliases) = source_selection::collect(tcx, body_id, &mut table);
   Ok(FocusOutput {
     ranges: table.ranges,
     place_info: slices,
     containers,
+    comments,
+    parameter_aliases,
   })
 }
 

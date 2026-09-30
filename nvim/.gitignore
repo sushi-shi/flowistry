@@ -1,0 +1,6 @@
+/doc/tags
+/nvim.log
+/result*
+/_runtime/
+**/target/
+examples/demo/Cargo.lock

@@ -510,7 +510,7 @@ pub fn compute_focus_spans<'tcx>(
 
   // Argument provenance and MIR-to-source conversion do not depend on the
   // selected variable. Compute them once per function, rather than per slice.
-  let calls = body
+  let mut calls = body
     .all_locations()
     .filter_map(|location| {
       let Either::Right(Terminator {
@@ -539,7 +539,7 @@ pub fn compute_focus_spans<'tcx>(
       let inputs = args
         .iter()
         .filter_map(|arg| {
-          if !simple_args.contains(&arg.span) {
+          if !simple_args.calls.contains(&arg.span) {
             return None;
           }
           let place = arg.node.as_place()?;
@@ -557,6 +557,69 @@ pub fn compute_focus_spans<'tcx>(
       Some((LocationOrArg::Location(location), inputs))
     })
     .collect::<Vec<_>>();
+  // A MIR aggregate has one source range for the whole constructor. As with a
+  // forward-only call, remove plain fields whose incoming value is independent
+  // of the selection. Keep backward aggregates, effects, adjustments and macros
+  // intact. HIR field indices account for source fields written out of order.
+  calls.extend(body.all_locations().filter_map(|location| {
+    let Either::Left(statement) = body.stmt_at(location) else {
+      return None;
+    };
+    let StatementKind::Assign(assignment) = &statement.kind else {
+      return None;
+    };
+    let Rvalue::Aggregate(kind, operands) = &assignment.1 else {
+      return None;
+    };
+    let AggregateKind::Adt(_, _, _, _, None) = **kind else {
+      return None;
+    };
+    // Even a literal can depend on the selection through the branch that chose
+    // this constructor. Leave controlled aggregates conservative.
+    if results
+      .analysis
+      .control_dependencies
+      .dependent_on(location.block)
+      .is_some_and(|blocks| !blocks.is_empty())
+    {
+      return None;
+    }
+    let fields = simple_args.fields.get(&statement.source_info.span)?;
+    let incoming = if location.statement_index > 0 {
+      vec![Location {
+        statement_index: location.statement_index - 1,
+        ..location
+      }]
+    } else {
+      body.basic_blocks.predecessors()[location.block]
+        .iter()
+        .map(|block| body.terminator_loc(*block))
+        .collect()
+    };
+    if incoming.is_empty() {
+      return None;
+    }
+    let inputs = fields
+      .iter()
+      .filter_map(|(index, span)| {
+        let operand = operands.get(*index)?;
+        let mut deps = LocationOrArgSet::new(results.analysis.location_domain());
+        if let Some(place) = operand.as_place() {
+          for previous in &incoming {
+            deps.union(
+              &results
+                .analysis
+                .deps_for(&results.state_at(*previous), place),
+            );
+          }
+        } else if !matches!(operand, Operand::Constant(_)) {
+          return None;
+        }
+        Some((*span, deps))
+      })
+      .collect::<Vec<_>>();
+    Some((LocationOrArg::Location(location), inputs))
+  }));
   let (dependencies, excluded): (Vec<_>, Vec<_>) = forward
     .into_iter()
     .zip(backward)
@@ -584,7 +647,10 @@ pub fn compute_focus_spans<'tcx>(
     .into_iter()
     .zip(excluded)
     .map(|(spans, excluded)| {
-      spans.into_iter().flat_map(|span| span.subtract(excluded.clone())).collect()
+      spans
+        .into_iter()
+        .flat_map(|span| span.subtract(excluded.clone()))
+        .collect()
     })
     .collect()
 }

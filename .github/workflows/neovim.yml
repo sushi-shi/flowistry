@@ -1,0 +1,18 @@
+name: Neovim and backend integration
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  paired-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Test the plugin against this checkout's backend
+        run: nix flake check --print-build-logs

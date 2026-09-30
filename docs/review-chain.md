@@ -42,20 +42,26 @@ no history rewriting; the commit tab consequently includes historical branches.
 **Excluded:** [#27](https://github.com/sushi-shi/flowistry/pull/27) was closed as superseded by #33 with the owner’s approval. It is excluded from the
 review sequence; its branch and original discussion are retained. Closed #1/#4/#5 are historical predecessors of #15–#17.
 
-## Editor review order
+## Neovim migration and historical editor reviews
 
-After backend #32, the range-table protocol requires an updated decoder. Review
-all four Neovim PRs after the backend chain:
+The Neovim plugin now lives under `nvim/` in this repository.
+[Migration PR #53](https://github.com/sushi-shi/flowistry/pull/53) follows backend
+#52 and imports the complete editor history through `e2394b5`.
+All subsequent backend/editor changes use this one PR chain and root flake.
+See [the migration guide](neovim-monorepo.md).
+
+The old editor PRs are closed as superseded and remain useful historical reviews:
 
 1. [nvim#1](https://github.com/sushi-shi/flowistry.nvim/pull/1): packaging and Nix integration.
 2. [nvim#2](https://github.com/sushi-shi/flowistry.nvim/pull/2): persistent-cache UI and lifecycle.
 3. [nvim#3](https://github.com/sushi-shi/flowistry.nvim/pull/3): maybe-slice tint.
-4. [nvim#4](https://github.com/sushi-shi/flowistry.nvim/pull/4): both inline and indexed range decoders, plus the integrated backend pin.
+4. [nvim#4](https://github.com/sushi-shi/flowistry.nvim/pull/4): inline/indexed range decoders.
+5. [nvim#5](https://github.com/sushi-shi/flowistry.nvim/pull/5): comments, parameter types and formatted saves.
 
-The first three editor PRs retain their historical compatible backend pins. The
-final editor PR pins backend #2's integrated tip. Review the backend wire-format
-change (#32) alongside nvim#4 before adopting the complete stack. VS Code's decoder
-is included directly in backend #32.
+The imported source includes all five. Their old independent backend pins are
+removed; the root package binds `plugin` and `backend` from the same source tree.
+The backend range-table change (#32) and source-selection metadata (#52) can be
+reviewed alongside their consumers in `nvim/`.
 
 ## Validation performed during integration
 
@@ -144,4 +150,9 @@ foundation: explicit Cargo targets, portable inventories, stable body selection,
 shared-index filling and serialized Cargo launchers. Its 137 process cases pass;
 the public coordinator, streaming, priorities, cancellation and resource limits
 remain the next feature-9 increment.
+[#52](https://github.com/sushi-shi/flowistry/pull/52) follows #51 with the reported
+constructor highlight refinement and compiler-derived comment/type selection
+metadata. Review it with [nvim#5](https://github.com/sushi-shi/flowistry.nvim/pull/5).
+The coordinator WIP must continue from the Neovim migration tip when resumed. See
+[source-selection.md](source-selection.md) for validation and conservative limits.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
