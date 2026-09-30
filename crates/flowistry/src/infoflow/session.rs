@@ -1,7 +1,7 @@
 //! Callee summaries shared by the analyses of one compiler session.
 //!
-//! Nothing here outlives its [`TyCtxt`]: rustc identities and borrow-checker facts
-//! are only meaningful in the compiler session that produced them.
+//! Rustc identities and borrow-checker facts are meaningful only in this compiler
+//! session. An optional store exchanges audited portable summary payloads.
 
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc, time::Duration};
 
@@ -14,9 +14,10 @@ use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{mir::TerminatorKind, ty::TyCtxt};
 
 use super::{
-  callsite::FallbackReason,
+  callsite::{CalleeAbi, FallbackReason},
   recursive::resolve_callee,
   summary::{self, CalleeSummary},
+  summary_wire::PortableSummary,
 };
 use crate::{
   extensions::EvalMode,
@@ -30,10 +31,35 @@ pub struct SummaryStats {
   pub computations: usize,
   /// Summaries (or reasons why there is none) served from the cache.
   pub cache_hits: usize,
+  /// Summaries restored from a compiler-validated persistent store.
+  pub persistent_hits: usize,
+  /// Persistent lookups absent or rejected by structural validation.
+  pub persistent_misses: usize,
   /// How many call sites were analyzed with the modular approximation, by reason.
   pub fallbacks: BTreeMap<FallbackReason, usize>,
   /// Total time spent computing summaries (nested computations counted once).
   pub construction_time: Duration,
+}
+
+/// Compiler-aware storage supplied by the IDE layer. Implementations must key
+/// payloads by the current backend/compiler, mode, configuration, declaration
+/// context and resolved semantic dependency fingerprints. A body name alone is
+/// never a sufficient key. The session rebuilds call resolution and SCCs before
+/// consulting this interface; no saved compiler identity is trusted.
+pub trait SummaryStore<'tcx> {
+  /// Return a payload only after validating its key and integrity.
+  fn load(
+    &self,
+    session: &AnalysisSession<'tcx>,
+    callee: LocalDefId,
+  ) -> Option<PortableSummary>;
+  /// Store a completed summary (or fallback reason) without retaining rustc data.
+  fn save(
+    &self,
+    session: &AnalysisSession<'tcx>,
+    callee: LocalDefId,
+    payload: &PortableSummary,
+  );
 }
 
 /// State shared by the flow analyses of the bodies of one compiler session with one
@@ -58,11 +84,29 @@ pub struct AnalysisSession<'tcx> {
   /// The summaries being computed.
   active: RefCell<FxHashSet<LocalDefId>>,
   stats: RefCell<SummaryStats>,
+  store: Option<Rc<dyn SummaryStore<'tcx> + 'tcx>>,
 }
 
 impl<'tcx> AnalysisSession<'tcx> {
   /// Creates a session analyzing with `mode`.
   pub fn new(tcx: TyCtxt<'tcx>, mode: EvalMode) -> Rc<Self> {
+    Self::create(tcx, mode, None)
+  }
+
+  /// Creates a session using a compiler-validated portable summary store.
+  pub fn with_summary_store(
+    tcx: TyCtxt<'tcx>,
+    mode: EvalMode,
+    store: Rc<dyn SummaryStore<'tcx> + 'tcx>,
+  ) -> Rc<Self> {
+    Self::create(tcx, mode, Some(store))
+  }
+
+  fn create(
+    tcx: TyCtxt<'tcx>,
+    mode: EvalMode,
+    store: Option<Rc<dyn SummaryStore<'tcx> + 'tcx>>,
+  ) -> Rc<Self> {
     Rc::new(AnalysisSession {
       tcx,
       mode,
@@ -71,6 +115,7 @@ impl<'tcx> AnalysisSession<'tcx> {
       components: RefCell::default(),
       active: RefCell::default(),
       stats: RefCell::default(),
+      store,
     })
   }
 
@@ -102,6 +147,13 @@ impl<'tcx> AnalysisSession<'tcx> {
       }
     }
     seen.into_iter().collect()
+  }
+
+  /// Current compiler-resolved direct local callees. Consumers must translate
+  /// these session-local IDs into stable identities before persisting edges.
+  pub fn direct_dependencies(&self, root: LocalDefId) -> Vec<LocalDefId> {
+    self.explore(root);
+    self.graph.borrow()[&root].clone()
   }
 
   pub(crate) fn record_fallback(&self, reason: FallbackReason) {
@@ -186,6 +238,21 @@ impl<'tcx> AnalysisSession<'tcx> {
       self.stats.borrow_mut().cache_hits += 1;
       return summary.clone();
     }
+    // Always rebuild the current resolved graph, including recursive components.
+    // A disk hit must not bypass the recursion policy or install saved DefIds.
+    let abi = self.store.as_ref().map(|_| {
+      self.explore(callee);
+      CalleeAbi::of_body(self.tcx, callee.to_def_id(), &self.body(callee).body)
+    });
+    if let (Some(store), Some(abi)) = (&self.store, abi) {
+      if let Some(summary) = store.load(self, callee).and_then(|wire| wire.restore(abi)) {
+        self.stats.borrow_mut().persistent_hits += 1;
+        self.summaries.borrow_mut().insert(callee, summary.clone());
+        log::info!(target: "flowistry::audit", "audit summary-hit {}", self.tcx.def_path_str(callee));
+        return summary;
+      }
+      self.stats.borrow_mut().persistent_misses += 1;
+    }
     // Recursive calls are not summarized (see `same_component`), so a summary never
     // depends on itself.
     assert!(
@@ -203,10 +270,17 @@ impl<'tcx> AnalysisSession<'tcx> {
       summary.as_ref().map(|_| ())
     );
     self.summaries.borrow_mut().insert(callee, summary.clone());
-    let mut stats = self.stats.borrow_mut();
-    stats.computations += 1;
-    // Nested computations already added their time.
-    stats.construction_time = nested_before + elapsed;
+    {
+      let mut stats = self.stats.borrow_mut();
+      stats.computations += 1;
+      // Nested computations already added their time.
+      stats.construction_time = nested_before + elapsed;
+    }
+    if let (Some(store), Some(abi)) = (&self.store, abi) {
+      if let Some(wire) = PortableSummary::capture(abi, &summary) {
+        store.save(self, callee, &wire);
+      }
+    }
     summary
   }
 }
@@ -214,7 +288,7 @@ impl<'tcx> AnalysisSession<'tcx> {
 impl Drop for AnalysisSession<'_> {
   fn drop(&mut self) {
     let stats = self.stats.get_mut();
-    if stats.computations > 0 {
+    if stats.computations > 0 || stats.persistent_hits > 0 {
       log::info!("Callee summaries: {stats:?}");
     }
   }

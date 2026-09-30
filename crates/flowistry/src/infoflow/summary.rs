@@ -51,7 +51,7 @@ indexical::define_index_type! {
 type OriginMatrix<'tcx> = IndexMatrix<NormPlace<'tcx>, Origin>;
 
 /// How a caller provides a parameter place that the callee may read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum InputContents {
   /// The place is a reference: the callee reads its value, the address. Whatever
   /// the callee reads behind it is an origin of its own.
@@ -62,14 +62,16 @@ pub(crate) enum InputContents {
 }
 
 /// A parameter place that the callee may read, see [`Origin`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SummaryInput {
   pub path: EffectPath,
   pub contents: InputContents,
 }
 
 /// Where a callee effect lands in the caller.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+  Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub(crate) enum EffectKind {
   /// (A part of) the return place, i.e. the call destination.
   Return,
@@ -92,7 +94,7 @@ impl EffectKind {
 }
 
 /// A write of the callee that its callers observe.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SummaryEffect {
   pub kind: EffectKind,
   pub path: EffectPath,
@@ -102,7 +104,7 @@ pub(crate) struct SummaryEffect {
 }
 
 /// What a function may do to the places its callers can observe.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct CalleeSummary {
   /// How the callee's parameters correspond to call operands.
   pub abi: CalleeAbi,

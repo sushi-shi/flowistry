@@ -28,7 +28,18 @@ use crate::mir::placeinfo::NormPlace;
 
 /// Why a call is analyzed with the modular approximation instead of with a summary of
 /// the callee.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+  Debug,
+  Clone,
+  Copy,
+  PartialEq,
+  Eq,
+  Hash,
+  PartialOrd,
+  Ord,
+  serde::Serialize,
+  serde::Deserialize,
+)]
 #[non_exhaustive]
 pub enum FallbackReason {
   /// The called function is not a constant (e.g. a function pointer).
@@ -65,7 +76,18 @@ pub enum FallbackReason {
 }
 
 /// An operation that a callee summary cannot account for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+  Debug,
+  Clone,
+  Copy,
+  PartialEq,
+  Eq,
+  Hash,
+  PartialOrd,
+  Ord,
+  serde::Serialize,
+  serde::Deserialize,
+)]
 #[non_exhaustive]
 pub enum UnsupportedOp {
   /// A raw pointer, which carries no loans that would connect a write through it

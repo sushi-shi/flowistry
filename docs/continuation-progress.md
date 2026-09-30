@@ -12,7 +12,7 @@ complete merely because tooling or a subset of its tests passes.
 | 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
 | 6. Edit/concurrency harness | Implemented in [#47](https://github.com/sushi-shi/flowistry/pull/47); release gates pending | 84 serial, concurrency, recovery and real-project cases pass; 47 harness regressions pass. See [edit-concurrency-validation.md](edit-concurrency-validation.md). Add versioned-publication/background cases as those features land; full corpus gates remain required. |
 | 7. Shared result index | Implemented in [#48](https://github.com/sushi-shi/flowistry/pull/48); final integration gates pending | Existing caches now share a publication lock and disk budget. Compiler-derived body index, revision/generation envelopes, cancellation, source-hash checks and interrupted-write recovery pass 16 new cases, plus all 84 edit cases. See [versioned-result-index.md](versioned-result-index.md). |
-| 8. Persisted summaries | Pending | Portable schema, dependency graph and invalidation. |
+| 8. Persisted summaries | In progress | Portable schema and compiler-session storage interface implemented; four new core regressions include JSON reuse across fresh compiler sessions and invalid-schema recovery. Disk adapter, shared fingerprints and persisted dependency/reverse graph pending. See [persisted-summary-progress.md](persisted-summary-progress.md). |
 | 9. Project command | Pending | Streaming, priorities and bounded workers. |
 | 10. Neovim background work | Pending | Continue after editor #4; foreground priority and compatible pin. |
 | 11. Incremental saves | Pending | Dependency-aware recomputation and rapid-save handling. |
@@ -118,6 +118,8 @@ Do not delete active source/build inputs or preserved experiment work.
    16 publication cases, the same 84 edit cases, and legacy cache regressions.
    Reports are `result-index-final.json` and `index-edit-matrix-final.json`.
    Continue with persisted summaries, project command, Neovim background work,
-   saves and safe relocation (steps 8–12). Those features remain unimplemented.
+   saves and safe relocation (steps 8–12). Step 8's portable core boundary is
+   implemented; its production disk adapter and invalidation gates remain pending.
+   Steps 9–12 remain unimplemented.
    Finish all final gates in step 13. Current continuation PR order is #41 → #42 →
    #43 → #44 → #45 → #46 → #47 → #48; nothing has been merged.
