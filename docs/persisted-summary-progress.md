@@ -89,9 +89,35 @@ smoke tests also pass with `engine-diff,shadow-eager`, including the final chang
 that avoids lookup preparation when no store is configured; see
 `/tmp/flowistry-summary-core-reference-tests.log`.
 
-The connected adapter passes the workspace all-targets suite, including shared
-budget checks across all four namespaces and reverse-edge integrity tests.
-The cross-process harness is `scripts/test-summary-cache.py`; its results are
-still pending. Callee edits must invalidate affected Recurse callers; SigOnly
-must retain ordinary callee-body independence. Finish the edit matrix and
-Recurse corpus before declaring step 8 complete.
+The connected adapter is frozen at `9da7aba9f` in
+`target/continuation-validation/summary-store-v2/`, with exact compiler, flags
+and binary hashes. It passes the workspace all-targets suite, all 52 Python
+harness regressions, all 84 edit/concurrency/real-project cases and all 16
+versioned-publication cases. The latter include supersession, cancellation,
+external-input races and interrupted-write recovery with the new namespaces.
+
+`scripts/test-summary-cache.py` passes 18 cross-process cases in both modes.
+Its Recurse caller edit reused `middle`, `independent`, `opaque` and `cycle_a`
+without any summary computation. Editing `leaf::select` recomputed only that
+callee and `middle`; the independent and recursive callees were reused. Editing
+the recursive component recomputed `cycle_a`, while other summaries were reused.
+Ordinary callee edits did not rerun the SigOnly solver. Declaration changes
+invalidated conservatively, corrupt/wrong-key records recovered, and refresh
+recomputed all summaries. Verification mode recomputed and matched all five
+loaded summaries, including the unsupported-body fallback.
+
+The disk-budget cases remained below 128 KiB across all four namespaces:
+121,499 bytes in SigOnly and 130,851 bytes in Recurse. Reverse edges were checked
+against current direct edges, including the mutual cycle. These are correctness
+tests under load, not quiet latency measurements. A real harness probe also
+confirmed that corpus reports distinguish loaded, computed and verified summaries.
+
+The compact [evidence report](measurements/persisted-summaries.json) retains
+source/build provenance, harness hashes, case outcomes and full-report checksums.
+Detailed reports are `summary-store-tests-v2.json`, `summary-edit-matrix-v2.json`
+and `summary-publication-v2.json` under `target/continuation-validation`; logs
+are preserved in `summary-store-v2-evidence/`.
+
+The full Recurse persisted/fresh summary comparison remains pending, followed by
+final combined-chain gates and quiet performance measurements. Complete these
+before declaring step 8 accepted. Project/background analysis remains later work.
