@@ -19,6 +19,7 @@ engine-diff = ["flowistry/engine-diff"]
 flowistry = {version = "0.5.44", path = "../flowistry"}
 anyhow = "1"
 log = "0.4"
+libc = "0.2"
 fluid-let = "1.0"
 cfg-if = "1.0"
 itertools = "0.10"

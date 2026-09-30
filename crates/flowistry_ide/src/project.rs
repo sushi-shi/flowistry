@@ -28,6 +28,25 @@ pub(crate) struct Selection {
 }
 
 impl Selection {
+  pub(crate) fn append_args(&self, args: &mut Vec<String>) {
+    for (flag, value) in [
+      ("--package", &self.package),
+      ("--target-kind", &self.target_kind),
+      ("--target-name", &self.target_name),
+      ("--features", &self.features),
+    ] {
+      if let Some(value) = value {
+        args.extend([flag.into(), value.clone()]);
+      }
+    }
+    if self.all_features {
+      args.push("--all-features".into());
+    }
+    if self.no_default_features {
+      args.push("--no-default-features".into());
+    }
+  }
+
   fn metadata(&self) -> anyhow::Result<Value> {
     let output = Command::new("cargo")
       .args([

@@ -1078,6 +1078,12 @@ fn cached_run() -> Option<ExitCode> {
 }
 
 pub fn run() -> ExitCode {
+  if let Some(code) = crate::project_process::internal() {
+    return code;
+  }
+  if let Some(code) = crate::plugin::project_request() {
+    return code;
+  }
   if env::var_os(CHILD).is_none() {
     if let Some(code) = cached_run() {
       return code;

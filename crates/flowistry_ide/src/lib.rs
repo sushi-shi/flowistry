@@ -32,6 +32,8 @@ mod playground;
 mod plugin;
 mod positions;
 mod project;
+mod project_coordinator;
+mod project_process;
 mod replay;
 mod result_store;
 mod spans;
