@@ -64,6 +64,42 @@ class CheckpointTests(unittest.TestCase):
         (source / 'main.rs').write_text('fn main() { panic!() }')
         self.assertNotEqual(before, tree_digest(source))
 
+    def test_internal_directory_aliases_track_target_changes(self):
+        source = self.root / 'source'
+        (source / 'assets').mkdir(parents=True)
+        (source / 'examples').mkdir()
+        item = source / 'assets' / 'input.txt'
+        item.write_text('one')
+        (source / 'examples' / 'assets').symlink_to('../assets', target_is_directory=True)
+        before = tree_digest(source)
+        item.write_text('two')
+        self.assertNotEqual(before, tree_digest(source))
+        (source / 'loop').symlink_to('.', target_is_directory=True)
+        self.assertIsInstance(tree_digest(source), str)
+
+    def test_source_directory_named_target_is_not_a_build_cache(self):
+        source = self.root / 'source'
+        (source / 'src' / 'target').mkdir(parents=True)
+        item = source / 'src' / 'target' / 'mod.rs'
+        item.write_text('one')
+        before = tree_digest(source)
+        item.write_text('two')
+        self.assertNotEqual(before, tree_digest(source))
+
+    def test_external_directory_alias_is_rejected(self):
+        source = self.root / 'source'
+        source.mkdir()
+        (source / 'external').symlink_to(self.root, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'outside source'):
+            tree_digest(source)
+
+    def test_harness_exception_becomes_an_explicit_failed_entry(self):
+        with patch.object(smoke, 'smoke_crate', side_effect=ValueError('bad source')):
+            report = smoke.checked_smoke_crate({'name': 'test'}, None, None, None)
+        self.assertEqual(report['name'], 'test')
+        self.assertIn('harness failure', report['skipped'][0][1])
+        self.assertEqual(report['records'], [])
+
     def test_paired_runs_resume_without_losing_differences_or_digests(self):
         source = self.root / 'source'
         source.mkdir()

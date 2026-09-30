@@ -292,15 +292,21 @@ def strip_dev_only(sections):
         sections.append(["[workspace]", []])
 
 
-def memory_scope(memory_limit):
+def memory_scope(memory_limit, environment=None):
     """The command prefix that runs a command in a transient systemd scope whose memory
     (without swap) is capped at `memory_limit` (e.g. "6G"). When the cap is hit, the kernel
     kills the largest process in the scope (the compiler) and the rest keep running
     (OOMPolicy=continue), so cargo reports the compiler's SIGKILL."""
     if not memory_limit:
         return []
-    return ["systemd-run", "--user", "--scope", "--quiet", "--collect",
-            "-p", f"MemoryMax={memory_limit}", "-p", "MemorySwapMax=0", "-p", "OOMPolicy=continue"]
+    scope = ["systemd-run", "--user", "--scope", "--quiet", "--collect",
+             "-p", f"MemoryMax={memory_limit}", "-p", "MemorySwapMax=0", "-p", "OOMPolicy=continue"]
+    # The memory cap must not invent a new semantic environment for every run.
+    # Restore the caller's invocation ID (or absence) after entering the scope.
+    environment = os.environ if environment is None else environment
+    if "INVOCATION_ID" in environment:
+        return scope + ["env", "INVOCATION_ID=" + environment["INVOCATION_ID"]]
+    return scope + ["env", "-u", "INVOCATION_ID"]
 
 
 # Runs argv[2:] and writes the peak RSS (KiB) of its process tree to the file descriptor
@@ -332,7 +338,7 @@ def run(cmd, cwd, env, timeout=None, memory_limit=None):
     With `memory_limit`, the command runs in a systemd scope capped at that much memory.
     """
     rss_read, rss_write = os.pipe()
-    cmd = [sys.executable, "-S", "-c", RSS_WRAPPER, str(rss_write)] + memory_scope(memory_limit) + list(cmd)
+    cmd = [sys.executable, "-S", "-c", RSS_WRAPPER, str(rss_write)] + memory_scope(memory_limit, env) + list(cmd)
     try:
         proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, errors="replace", start_new_session=True, pass_fds=(rss_write,))
@@ -633,7 +639,7 @@ def output_digest(entry_digests, tail):
 
 
 def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=None, phases=False,
-                    memory_limit=None, keep_output=True, command="focus"):
+                    memory_limit=None, keep_output=True, command="focus", perf=None):
     if phases:
         env = dict(env, RUST_LOG=PHASE_LOG)
     # rustc_plugin clears cargo's cached metadata for library targets only; for a binary,
@@ -641,6 +647,8 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
     if touch is not None:
         os.utime(touch)
     cmd = ["cargo", "flowistry", "--context-mode", mode, command, rel_file, str(line), str(col)]
+    if perf:
+        cmd = [str(perf), "stat", "-x", ";", "--no-big-num", "-e", "instructions:u,cycles:u", "--"] + cmd
     start = time.monotonic()
     try:
         res = run(cmd, crate_dir, env, timeout, memory_limit)
@@ -665,6 +673,13 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
     if CRASH_MARKER.search(stderr) or response is None:
         return {"status": "crash", "message": crash_signature(stderr), "seconds": seconds,
                 "max_rss_mb": max_rss_mb, "returncode": res.returncode, "stderr_tail": stderr[-4000:]}
+    counters = None
+    if perf:
+        try:
+            counters = parse_counters(stderr)
+        except ValueError as error:
+            return {"status": "error", "message": str(error), "measurement_error": True,
+                    "seconds": seconds, "max_rss_mb": max_rss_mb}
     timings = parse_phases(stderr) if phases else None
     stats = parse_stats(stderr) if phases else None
     if "Ok" in response:
@@ -675,12 +690,28 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
                          for body in output["bodies"] if isinstance(body.get("focus"), dict))
         return {"status": "ok", "seconds": seconds, "max_rss_mb": max_rss_mb, "output": output,
                 "phases": timings, "stats": stats, "places": places,
-                "cache": response.get("cache", output.get("cache"))}
+                "cache": response.get("cache", output.get("cache")), "counters": counters,
+                "wire_bytes": len(tail[-1].strip().encode())}
     err = response.get("Err", response)
     message = err.get("error") or err.get("type") or json.dumps(err)
     status = "benign" if any(b in message for b in BENIGN_ERRORS) else "error"
     return {"status": status, "message": message, "seconds": seconds, "max_rss_mb": max_rss_mb,
-            "phases": timings, "stats": stats}
+            "phases": timings, "stats": stats, "counters": counters}
+
+
+def parse_counters(stderr):
+    values = {}
+    for line in stderr.splitlines():
+        fields = line.split(";")
+        if len(fields) >= 3 and fields[2].strip() in ("instructions:u", "cycles:u"):
+            event = fields[2].strip().split(":")[0]
+            try:
+                values[event] = int(fields[0].strip())
+            except ValueError:
+                raise ValueError(f"perf did not count {event}: {fields[0].strip()}") from None
+    if set(values) != {"instructions", "cycles"}:
+        raise ValueError("perf output is missing instruction/cycle counters")
+    return values
 
 
 def parse_phases(stderr):
@@ -705,19 +736,47 @@ def parse_stats(stderr):
 
 
 def focus_repeated(crate_dir, env, rel_file, line, col, mode, args, touch=None):
-    """Run a position `--repeat` times; keep the fastest run (the least disturbed by noise),
-    unless some run failed, in which case that failure is the result."""
+    """Keep every sample; highlight the fastest only for legacy report compatibility."""
     runs = [flowistry_focus(crate_dir, env, rel_file, line, col, mode, args.timeout, touch, args.phases,
-                            args.memory_limit, args.keep_outputs, getattr(args, "command", "focus"))
+                            args.memory_limit, args.keep_outputs, getattr(args, "command", "focus"),
+                            getattr(args, "perf", None))
             for _ in range(max(1, args.repeat))]
+    return summarize_repeats(runs)
+
+
+def summarize_repeats(runs):
     worst = {"crash": 0, "oom": 1, "timeout": 2, "error": 3}
     failed = sorted((r for r in runs if r["status"] in worst), key=lambda r: worst[r["status"]])
-    if failed:
-        return failed[0]
-    best = min(runs, key=lambda r: r["seconds"])
+    result = dict(failed[0] if failed else min(runs, key=lambda r: r["seconds"]))
     if len(runs) > 1:
-        best["all_seconds"] = [r["seconds"] for r in runs]
-    return best
+        result["all_seconds"] = [r["seconds"] for r in runs]
+        result["samples"] = [{k: v for k, v in r.items() if k != "output"} for r in runs]
+        successful = [canonical(r["output"]) for r in runs if r["status"] == "ok"]
+        if not failed and successful and any(output != successful[0] for output in successful[1:]):
+            result.update(status="error", message="semantic output changed between repeated measurements",
+                          measurement_error=True)
+    return result
+
+
+def focus_interleaved(envs, dest, file_arg, line, col, mode, args, touch):
+    """Alternate A/B then B/A so elapsed-time drift does not favor one backend."""
+    single = argparse.Namespace(**vars(args))
+    single.repeat = 1
+    samples = {name: [] for name, _ in envs}
+    warmups = {}
+    for name, env in envs:
+        if getattr(args, f"{name}_cache", "inherit") == "warm":
+            warmups[name] = focus_repeated(dest, env, file_arg, line, col, mode, single, touch)
+    for repetition in range(args.repeat):
+        order = envs if repetition % 2 == 0 else list(reversed(envs))
+        for name, env in order:
+            samples[name].append(focus_repeated(dest, env, file_arg, line, col, mode, single, touch))
+    results = {name: summarize_repeats(runs) for name, runs in samples.items()}
+    for name, warmup in warmups.items():
+        results[name]["warmup_status"] = warmup["status"]
+        if warmup["status"] != "ok":
+            results[name]["warmup_message"] = warmup.get("message")
+    return results
 
 
 def canonical(output):
@@ -1130,6 +1189,12 @@ def run_positions(report, entry_dir, dest, args, backends):
         if positions_file is not None:
             entry_dir.mkdir(parents=True, exist_ok=True)
             write_positions(positions_file, positions)
+    if getattr(args, "selected_positions", None):
+        wanted = set(args.selected_positions)
+        missing = wanted - set(positions)
+        if missing:
+            raise ValueError(f"requested positions are outside the locked corpus: {sorted(missing)}")
+        positions = [position for position in positions if position in wanted]
     if args.budgets is not None:
         # Only the stress positions of this entry, each in its own mode.
         runs = [(b["file"], b["line"], b["column"], [b["mode"]])
@@ -1146,9 +1211,10 @@ def run_positions(report, entry_dir, dest, args, backends):
             for i, (name, bin_dir) in enumerate(backends)]
     checkpoints = getattr(args, "checkpoints", None)
     source_identity = None
-    if checkpoints:
+    if checkpoints or getattr(args, "perf", None) or getattr(args, "repeat", 1) > 1 or getattr(args, "phases", False):
         from smoke_checkpoint import tree_digest
         source_identity = tree_digest(target_root)
+        report["source_sha256"] = source_identity
     for name, env in envs:
         if getattr(args, "cache_dir", None):
             env["FLOWISTRY_CACHE_DIR"] = str(args.cache_dir / name)
@@ -1169,18 +1235,25 @@ def run_positions(report, entry_dir, dest, args, backends):
                     report["records"].append(previous)
                     continue
             rec["recorded_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            interleaved = None
+            if getattr(args, "repeat", 1) > 1 and len(envs) > 1:
+                file_arg = str(dest / rel) if report.get("target_root") not in (None, str(dest)) else rel
+                interleaved = focus_interleaved(envs, dest, file_arg, line, col, mode, args, report.get("touch"))
             for name, env in envs:
                 # Inside a workspace member, cargo-flowistry resolves relative paths from the
                 # package but the driver from the workspace root; an absolute path works for both.
                 file_arg = str(dest / rel) if report.get("target_root") not in (None, str(dest)) else rel
-                warmup = None
-                if getattr(args, f"{name}_cache", "inherit") == "warm":
-                    warmup = focus_repeated(dest, env, file_arg, line, col, mode, args, report.get("touch"))
-                result = focus_repeated(dest, env, file_arg, line, col, mode, args, report.get("touch"))
-                if warmup is not None:
-                    result["warmup_status"] = warmup["status"]
-                    if warmup["status"] != "ok":
-                        result["warmup_message"] = warmup.get("message")
+                if interleaved is not None:
+                    result = interleaved[name]
+                else:
+                    warmup = None
+                    if getattr(args, f"{name}_cache", "inherit") == "warm":
+                        warmup = focus_repeated(dest, env, file_arg, line, col, mode, args, report.get("touch"))
+                    result = focus_repeated(dest, env, file_arg, line, col, mode, args, report.get("touch"))
+                    if warmup is not None:
+                        result["warmup_status"] = warmup["status"]
+                        if warmup["status"] != "ok":
+                            result["warmup_message"] = warmup.get("message")
                 rec[name] = result
                 if result["status"] in FAILURES:
                     log(f"[{label}] {result['status'].upper()} ({name}) {mode} {rel}:{line}:{col}: "
@@ -1203,6 +1276,8 @@ def run_positions(report, entry_dir, dest, args, backends):
             report["records"].append(rec)
         if (idx + 1) % 10 == 0:
             log(f"[{label}] {idx + 1}/{len(runs)} positions")
+    if source_identity is not None and tree_digest(target_root) != source_identity:
+        raise RuntimeError(f"{label}: source inputs changed during measurements")
     report["seconds"] = round(time.monotonic() - started, 1)
     return report
 
@@ -1367,6 +1442,18 @@ def budget_summary(reports, names, budgets):
     return out, exceeded
 
 
+def checked_smoke_crate(spec, args, registries, backends):
+    """Retain an explicit failed entry if harness preparation/checkpointing fails."""
+    try:
+        return smoke_crate(spec, args, registries, backends)
+    except Exception as error:
+        name = spec.get('name') if isinstance(spec, dict) else str(spec)
+        message = f'harness failure ({type(error).__name__}): {error}'
+        log(f'[{name}] {message}')
+        return {'name': name, 'spec': spec, 'crate': None, 'files': [], 'records': [],
+                'skipped': [(name, message)]}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__.split("\n\n")[0],
@@ -1385,6 +1472,8 @@ def main():
     parser.add_argument("--work-dir", type=Path, default=REPO_ROOT / "target" / "smoke-crates",
                         help="where crate copies are prepared; must be under the repository's target/ "
                              "or another non-symlinked path (default: %(default)s)")
+    parser.add_argument("--position", dest="selected_positions", action="append", metavar="FILE:LINE:COLUMN",
+                        help="select an existing locked position; requires exactly one --crate; repeatable")
     parser.add_argument("--positions", type=int, default=60, help="positions per crate (default: %(default)s)")
     parser.add_argument("--seed", type=int, default=0, help="sampling seed (default: %(default)s)")
     parser.add_argument("--modes", default=",".join(MODES),
@@ -1419,6 +1508,8 @@ def main():
     parser.add_argument("--skip", action="append", default=[], metavar="NAME",
                         help="leave the corpus entry NAME out (repeatable)")
     parser.add_argument("--json", type=Path, metavar="FILE", help="write every run record to FILE")
+    parser.add_argument("--perf", type=Path, metavar="PERF",
+                        help="collect user-space instruction/cycle counters with this perf executable")
     parser.add_argument("--cache-dir", type=Path, help="isolated cache root, required for explicit cache reuse checks")
     parser.add_argument("--command", choices=("focus", "file-focus"), default="focus",
                         help="protocol to compare at each locked position")
@@ -1432,10 +1523,22 @@ def main():
     args = parser.parse_args()
 
     args.modes = [m.strip() for m in args.modes.split(",") if m.strip()]
+    if args.selected_positions:
+        if not args.crates or len(args.crates) != 1 or args.update_corpus or args.budgets:
+            parser.error("--position requires one locked --crate and no corpus update or budgets")
+        try:
+            args.selected_positions = [(file, int(line), int(col))
+                                       for file, line, col in (p.rsplit(":", 2) for p in args.selected_positions)]
+        except ValueError:
+            parser.error("--position must be FILE:LINE:COLUMN")
     if any(mode in ("refresh", "on", "warm") for mode in (args.base_cache, args.compare_cache)) and not args.cache_dir:
         parser.error("explicit cache reuse checks require --cache-dir")
     if args.cache_dir:
         args.cache_dir = args.cache_dir.resolve()
+    if args.perf:
+        args.perf = args.perf.resolve()
+        if not args.perf.is_file() or not os.access(args.perf, os.X_OK):
+            parser.error("--perf must name an executable")
     if args.checkpoint_dir:
         # Nix launchers allocate fresh temporary paths each time. Use one real,
         # stable directory for the compiler rather than ignoring observable env.
@@ -1502,16 +1605,21 @@ def main():
         budgeted = {b["crate"] for b in args.budgets}
         specs = [s for s in specs if isinstance(s, dict) and s["name"] in budgeted]
     args.checkpoints = None
+    args.execution_manifest = None
+    if args.perf or args.repeat > 1 or args.phases:
+        from smoke_checkpoint import manifest
+        args.execution_manifest = manifest(args, backends, CORPUS_DIR, __file__)
     if args.checkpoint_dir:
-        if args.update_corpus or args.prepare_only or args.keep_outputs or args.repeat != 1:
-            parser.error("checkpoints require a fixed correctness run (no update, prepare, full output, or repeats)")
+        if args.update_corpus or args.prepare_only or args.keep_outputs or args.repeat != 1 or args.perf:
+            parser.error("checkpoints require a fixed correctness run (no update, prepare, full output, repeats, or perf)")
         if any(not isinstance(spec, dict) for spec in specs):
             parser.error("checkpoints require locked corpus entries")
         from smoke_checkpoint import Checkpoints, manifest
         args.checkpoints = Checkpoints(args.checkpoint_dir, manifest(args, backends, CORPUS_DIR, __file__))
+    load_start = os.getloadavg()
     started = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-        reports = list(pool.map(lambda s: smoke_crate(s, args, registries, backends), specs))
+        reports = list(pool.map(lambda s: checked_smoke_crate(s, args, registries, backends), specs))
     total = time.monotonic() - started
     if args.update_corpus:
         if not args.crates:
@@ -1526,9 +1634,17 @@ def main():
             "backends": {n: str(d) for n, d in backends},
             "seed": args.seed, "positions": args.positions, "modes": args.modes,
             "total_seconds": round(total, 1),
-            "validation_manifest": args.checkpoints.manifest if args.checkpoints else None,
+            "validation_manifest": args.checkpoints.manifest if args.checkpoints else args.execution_manifest,
             "checkpoint_id": args.checkpoints.identity if args.checkpoints else None,
             "command": args.command,
+            "selected_positions": args.selected_positions,
+            "measurement": {"repeat": args.repeat, "phases": args.phases,
+                            "load_start": load_start, "load_end": os.getloadavg(),
+                            "cpu_count": os.cpu_count(), "kernel": os.uname().release,
+                            "machine": os.uname().machine, "ambient_cache": os.environ.get("FLOWISTRY_CACHE"),
+                            "sample_order": "alternating A/B, B/A" if len(backends) == 2 else "single backend",
+                            "perf": str(args.perf) if args.perf else None,
+                            "perf_sha256": sha256_file(args.perf) if args.perf else None},
             "cache_modes": {"base": args.base_cache, "compare": args.compare_cache},
             "crates": reports,
         }, indent=1))
@@ -1536,6 +1652,8 @@ def main():
     bad = any(r["skipped"] for r in reports)
     bad |= any(rec[n]["status"] in FAILURES for r in reports for rec in r["records"]
               for n, _ in backends)
+    bad |= any(rec[n].get("measurement_error", False)
+               for r in reports for rec in r["records"] for n, _ in backends)
     bad |= any(rec[n].get("warmup_status", "ok") not in ("ok", "benign")
                for r in reports for rec in r["records"] for n, _ in backends)
     bad |= any(not rec.get("same", True) for r in reports for rec in r["records"])

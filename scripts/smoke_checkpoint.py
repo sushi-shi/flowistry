@@ -18,15 +18,35 @@ def file_digest(path):
 
 
 def tree_digest(root):
-    """Hash prepared source contents, ignoring compiler outputs and git metadata."""
-    root = Path(root)
+    """Hash source contents and internal aliases; compiler caches are excluded."""
+    root = Path(root).resolve()
     files = {}
+
+    def excluded(path):
+        return path.name == '.git' or path == root / 'target' or (path / 'CACHEDIR.TAG').is_file()
+
     for directory, dirs, names in os.walk(root):
-        dirs[:] = sorted(d for d in dirs if d not in ('target', '.git'))
-        if any((Path(directory) / name).is_symlink() for name in dirs):
-            raise ValueError('checkpoint source trees cannot contain directory symlinks')
+        current = Path(directory)
+        kept = []
+        for name in sorted(dirs):
+            path = current / name
+            if excluded(path):
+                continue
+            if path.is_symlink():
+                resolved = path.resolve()
+                if not resolved.is_relative_to(root) or any(excluded(parent) for parent in
+                        (resolved, *[p for p in resolved.parents if p.is_relative_to(root)])):
+                    raise ValueError(f'checkpoint directory symlink points outside source inputs: {path}')
+                # The target is hashed through its ordinary path; do not follow
+                # aliases twice or recurse forever through a link back to root.
+                files[str(path.relative_to(root)) + '@symlink'] = os.readlink(path)
+            else:
+                kept.append(name)
+        dirs[:] = kept
         for name in sorted(names):
-            path = Path(directory) / name
+            path = current / name
+            if path.is_symlink():
+                files[str(path.relative_to(root)) + '@symlink'] = os.readlink(path)
             if path.is_file():
                 files[str(path.relative_to(root))] = file_digest(path)
     return digest(files)
