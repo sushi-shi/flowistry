@@ -117,4 +117,7 @@ the baseline measurements and budgets are complete).
 Next is [#43](https://github.com/sushi-shi/flowistry/pull/43), the Recurse row-group
 port with integration/reference fixes; its full corpus and performance gates are
 also pending.
+Then [#44](https://github.com/sushi-shi/flowistry/pull/44) tests fresh-root type
+templates for seed construction. Its semantic regressions pass; retention still
+depends on full corpus and performance evidence.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
