@@ -3,7 +3,7 @@
 //! The main function is [`compute_flow`]. See [`FlowResults`] and [`FlowDomain`] for an explanation
 //! of what it returns.
 
-use std::cell::RefCell;
+use std::rc::Rc;
 
 use log::debug;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
@@ -11,15 +11,18 @@ use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_utils::{BodyExt, block_timer};
 
+use self::shared_handles::SharedHandles;
 pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
+  callsite::{FallbackReason, UnsupportedOp},
   dependencies::{
-    Direction, compute_dependencies, compute_dependency_spans, merge_spans,
+    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans, merge_spans,
   },
   domain::{LazyMatrix, SeedRows},
+  session::{AnalysisSession, SummaryStats},
 };
 use crate::{
-  extensions::EvalMode,
+  extensions::{ContextMode, EvalMode},
   mir::{
     bitset::IndexSetExt,
     engine,
@@ -32,8 +35,14 @@ mod analysis;
 mod callsite;
 mod dependencies;
 mod domain;
+mod effects;
+mod interior;
 pub mod mutation;
 mod recursive;
+mod session;
+mod shared_handles;
+mod simple_args;
+mod summary;
 
 /// The output of the information flow analysis.
 ///
@@ -189,16 +198,24 @@ impl<'tcx> FlowResults<'_, 'tcx> {
 /// `stat engine_diff.unstable_same` or `stat engine_diff.unstable_differs` line).
 #[cfg(feature = "engine-diff")]
 fn check_engines<'tcx>(
-  tcx: TyCtxt<'tcx>,
-  def_id: rustc_hir::def_id::DefId,
+  session: &Rc<AnalysisSession<'tcx>>,
   body_with_facts: &BodyWithBorrowckFacts<'tcx>,
-  mode: EvalMode,
   results: &FlowResults<'_, 'tcx>,
 ) {
+  let tcx = session.tcx();
+  let def_id = results.analysis.def_id;
   let body = &body_with_facts.body;
-  let place_info = PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, mode);
+  let place_info =
+    PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, session.mode());
   let location_domain = place_info.location_domain().clone();
-  let analysis = FlowAnalysis::new(tcx, def_id, body, place_info);
+  let shared_handles = results
+    .analysis
+    .shared_handles
+    .as_ref()
+    .and_then(|_| SharedHandles::build(&place_info));
+  let mut analysis =
+    FlowAnalysis::with_session(tcx, def_id, body, place_info, session.clone());
+  analysis.shared_handles = shared_handles;
   let by_block = results.engine_stats().by_block;
   let other = if by_block {
     engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis)
@@ -238,17 +255,21 @@ fn check_engines<'tcx>(
     }
     log::info!(target: "flowistry::engine_diff", "{message}");
   });
+  // The dependencies of what the terminators read (in Recurse mode) are recorded
+  // from their pre-states during the fixpoint.
+  if by_block
+    && *results.analysis.call_reads.borrow() != *other.analysis.call_reads.borrow()
+  {
+    panic!(
+      "engine-diff: the engines disagree on the reads of the terminators in {}",
+      tcx.def_path_debug_str(def_id)
+    );
+  }
   if !by_block {
     let outcome = if differs { "differs" } else { "same" };
     log::info!(target: "flowistry::stats", "stat engine_diff.unstable_{outcome} = 1");
   }
 }
-
-thread_local! {
-  pub(super) static BODY_STACK: RefCell<Vec<BodyId>> =
-    const { RefCell::new(Vec::new()) };
-}
-
 /// Computes information flow for a MIR body.
 ///
 /// See [example.rs](https://github.com/willcrichton/flowistry/tree/master/crates/flowistry/examples/example.rs)
@@ -273,84 +294,139 @@ pub fn compute_flow<'a, 'tcx>(
 /// Computes information flow for a MIR body with an explicit [`EvalMode`].
 ///
 /// See [`compute_flow`] for details. The mode is also used for every callee analyzed
-/// in [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse).
+/// in [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse). The callee
+/// summaries are computed for this body only: use [`compute_flow_with_session`] to
+/// share them between bodies.
 pub fn compute_flow_with_mode<'a, 'tcx>(
   tcx: TyCtxt<'tcx>,
   body_id: BodyId,
   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
   mode: EvalMode,
 ) -> FlowResults<'a, 'tcx> {
-  BODY_STACK.with(|body_stack| {
-    body_stack.borrow_mut().push(body_id);
-    debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
+  compute_flow_with_session(&AnalysisSession::new(tcx, mode), body_id, body_with_facts)
+}
 
-    let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
-    let place_info = PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, mode);
-    if log::log_enabled!(log::Level::Debug) && place_info.arg_pointers_truncated() {
-      debug!(
-        "Arguments hold pointers nested deeper than {MAX_ARG_POINTER_DEPTH} projections; the loans behind them are ignored"
-      );
+/// Computes information flow for a MIR body in the mode of `session`, reusing (and
+/// adding to) the callee summaries of `session`.
+///
+/// See [`compute_flow`] for details. The session must belong to the compiler session
+/// of `body_with_facts`.
+pub fn compute_flow_with_session<'a, 'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+) -> FlowResults<'a, 'tcx> {
+  let place_info = build_place_info(session, body_id, body_with_facts);
+  run_flow(session, body_with_facts, place_info, None)
+}
+
+/// Computes information flow for a MIR body like [`compute_flow_with_session`], but
+/// assuming that separately held shared handles to state of the same
+/// interior-mutable type (e.g. two `Rc<RefCell<T>>`, or two `&Cell<T>`) may point to
+/// the same object: a write to the state of one handle possibly writes the state of
+/// the others.
+///
+/// Dependencies present here but not in the result of
+/// [`compute_flow_with_session`] are possible, not certain. Returns `None` when no
+/// two handles of the body share a state type, as the result would then equal the
+/// exact one.
+pub fn compute_flow_with_shared_handles<'a, 'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+) -> Option<FlowResults<'a, 'tcx>> {
+  let place_info = build_place_info(session, body_id, body_with_facts);
+  let shared_handles = SharedHandles::build(&place_info)?;
+  Some(run_flow(
+    session,
+    body_with_facts,
+    place_info,
+    Some(shared_handles),
+  ))
+}
+
+fn build_place_info<'a, 'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+) -> PlaceInfo<'a, 'tcx> {
+  let tcx = session.tcx();
+  debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
+  let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
+  let place_info =
+    PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, session.mode());
+  if log::log_enabled!(log::Level::Debug) && place_info.arg_pointers_truncated() {
+    debug!(
+      "Arguments hold pointers nested deeper than {MAX_ARG_POINTER_DEPTH} projections; the loans behind them are ignored"
+    );
+  }
+  place_info
+}
+
+fn run_flow<'a, 'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+  place_info: PlaceInfo<'a, 'tcx>,
+  shared_handles: Option<SharedHandles<'tcx>>,
+) -> FlowResults<'a, 'tcx> {
+  let tcx = session.tcx();
+  let mode = session.mode();
+  let def_id = place_info.def_id;
+  let location_domain = place_info.location_domain().clone();
+
+  let body = &body_with_facts.body;
+
+  let results = {
+    block_timer!("Flow");
+
+    let mut analysis =
+      FlowAnalysis::with_session(tcx, def_id, body, place_info, session.clone());
+    analysis.shared_handles = shared_handles;
+    // The block engine stores far fewer states, but it computes the same states as the
+    // location engine only if the effect of every location is idempotent on its own
+    // output (see `engine`).
+    let unstable = analysis.unstable_locations();
+    analysis.counters.unstable_locations.set(unstable);
+    if unstable == 0 {
+      engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
+    } else {
+      engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis)
     }
-    let location_domain = place_info.location_domain().clone();
+    // analysis.into_engine(tcx, body).iterate_to_fixpoint()
+  };
 
-    let body = &body_with_facts.body;
+  #[cfg(feature = "engine-diff")]
+  check_engines(session, body_with_facts, &results);
 
-    let results = {
-      block_timer!("Flow");
-
-      let analysis = FlowAnalysis::new(tcx, def_id, body, place_info);
-      // The block engine stores far fewer states, but it computes the same states as the
-      // location engine only if the effect of every location is idempotent on its own
-      // output (see `engine`).
-      let unstable = analysis.unstable_locations();
-      analysis.counters.unstable_locations.set(unstable);
-      if unstable == 0 {
-        engine::iterate_to_fixpoint(tcx, body, location_domain.clone(), analysis)
-      } else {
-        engine::iterate_to_fixpoint_by_location(
-          tcx,
-          body,
-          location_domain.clone(),
-          analysis,
-        )
-      }
-      // analysis.into_engine(tcx, body).iterate_to_fixpoint()
-    };
-
-    #[cfg(feature = "engine-diff")]
-    check_engines(tcx, def_id, body_with_facts, mode, &results);
-
-    if log::log_enabled!(target: "flowistry::stats", log::Level::Info) {
-      for (name, value) in results.stats().counters() {
-        log::info!(target: "flowistry::stats", "stat {name} = {value}");
-      }
+  if log::log_enabled!(target: "flowistry::stats", log::Level::Info) {
+    for (name, value) in results.stats().counters() {
+      log::info!(target: "flowistry::stats", "stat {name} = {value}");
     }
+  }
 
-    if log::log_enabled!(log::Level::Info) {
-      let FlowSizeStats {
-        locations: nloc,
-        rows: np,
-        explicit_rows: ne,
-        row_entries: nl,
-      } = results.size_stats();
-      let pavg = np as f64 / (nloc as f64);
-      let lavg = nl as f64 / (nloc as f64);
-      log::info!(
-        "Over {nloc} locations, total number of place entries: {np} (avg {pavg:.0}/loc, {ne} stored), total size of location sets: {nl} (avg {lavg:.0}/loc)",
-      );
+  if log::log_enabled!(log::Level::Info) {
+    let FlowSizeStats {
+      locations: nloc,
+      rows: np,
+      explicit_rows: ne,
+      row_entries: nl,
+    } = results.size_stats();
+    let pavg = np as f64 / (nloc as f64);
+    let lavg = nl as f64 / (nloc as f64);
+    log::info!(
+      "Over {nloc} locations, total number of place entries: {np} (avg {pavg:.0}/loc, {ne} stored), total size of location sets: {nl} (avg {lavg:.0}/loc)",
+    );
+    if mode.context_mode == ContextMode::Recurse {
+      log::info!("Callee summaries so far: {:?}", session.stats());
     }
+  }
 
-    if std::env::var("DUMP_MIR").is_ok()
-      && BODY_STACK.with(|body_stack| body_stack.borrow().len() == 1)
-    {
-      todo!()
-      // utils::dump_results(body, &results, def_id, tcx).unwrap();
-    }
+  if std::env::var("DUMP_MIR").is_ok() {
+    todo!()
+    // utils::dump_results(body, &results, def_id, tcx).unwrap();
+  }
 
-    body_stack.borrow_mut().pop();
-
-    results
-  })
+  results
 }
 
 #[cfg(test)]
