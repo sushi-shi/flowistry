@@ -3,9 +3,12 @@
 Updated 2026-09-30 after taking over the latest Claude optimization session.
 The Neovim plugin has since moved into `nvim/`; see
 [the migration guide](neovim-monorepo.md) for the shared package and review chain.
-The latest continuation is [#59](https://github.com/sushi-shi/flowistry/pull/59),
-`feat/safe-layout-reuse` in `/tmp/flowistry-layout-reuse`, based directly on #58.
-Its final runtime is frozen at `3ddebc5e3` as `layout-reuse-v3`; focused tests and
+The latest continuation is [#60](https://github.com/sushi-shi/flowistry/pull/60),
+`test/final-acceptance` in `/tmp/flowistry-acceptance`, based directly on #59.
+It adds a guarded queue for actual predecessor measurements and records the
+final reference build. Its package CI passed at `8872856ed`; correctness and
+performance acceptance are still pending. New work extends this unified tip.
+The runtime remains frozen at `3ddebc5e3` as `layout-reuse-v3`; focused tests and
 all five paired Nix checks pass. Eligible layout saves now relocate without
 compiler startup; source-sensitive cases fall back. #58's compiler-state
 experiment remains rejected on measured instruction regressions.
@@ -16,6 +19,9 @@ prepared roots; see [current progress](continuation-progress.md) for exact
 artifacts and process observations. Earlier process/worktree descriptions below
 are historical. The remaining work includes final/reference/resource gates,
 quiet performance measurements and actual budgets; the complete plan is active.
+The live measurement queue waits for both corpus reports and then a quiet host.
+Do not start a duplicate or change its pinned scripts/inputs; see
+[the queue policy](acceptance-measurement-queue.md).
 
 Master remains `f8b5582b7` (#18); nothing was merged. The canonical review order
 is [docs/review-chain.md](review-chain.md), also linked from every active PR.

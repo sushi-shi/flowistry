@@ -243,9 +243,9 @@ Continue with step 12 and the outstanding gates in steps 1–4, 6–11 and 13.
 
 ## Layout continuation and terminal warm-cache gate
 
-The newest published PR is [#59](https://github.com/sushi-shi/flowistry/pull/59),
+At this checkpoint, the newest published PR was [#59](https://github.com/sushi-shi/flowistry/pull/59),
 branch `feat/safe-layout-reuse` in `/tmp/flowistry-layout-reuse`, directly above
-#58. New work starts above #59. The final runtime candidate is `3ddebc5e3`, frozen as
+#58. The acceptance continuation below now extends it. The final runtime candidate is `3ddebc5e3`, frozen as
 `layout-reuse-v3`. All five paired Nix checks pass on that exact revision. See [safe layout reuse](safe-layout-reuse.md) for eligibility,
 explicit conservative fallbacks and the new editor/compiler evidence.
 #58's final paired-package CI passed before this feature began.
@@ -273,8 +273,10 @@ heavy harness. Quiet measurements must wait for these jobs to finish.
 
 ## Guarded acceptance continuation
 
-`/tmp/flowistry-acceptance`, branch `test/final-acceptance`, starts directly above
-#59 (`62bd531ab`). #59's remote paired-package CI passed. The backend/editor
+The newest published PR is [#60](https://github.com/sushi-shi/flowistry/pull/60),
+`/tmp/flowistry-acceptance`, branch `test/final-acceptance`, directly above
+#59 (`62bd531ab`). Both #59's final remote paired-package CI and #60's check at
+`8872856ed` passed. New work extends #60. The backend/editor
 runtime remains identical to frozen `3ddebc5e3`; this increment prepares actual
 acceptance measurements and independent reference validation.
 

@@ -1,0 +1,433 @@
+{
+  "schema": 1,
+  "observed_at": "2026-09-30T16:27:27.994863+00:00",
+  "repository": "sushi-shi/flowistry",
+  "root": {
+    "branch": "master",
+    "oid": "693ceda925bd1d39d8de413ce239cfa6a87bb665"
+  },
+  "checks": {
+    "single_linear_chain": true,
+    "all_open_prs_included": true,
+    "each_base_head_is_ancestor": true,
+    "each_three_dot_diff_nonempty": true,
+    "review_table_matches": true
+  },
+  "scope": "GitHub branch snapshot and local commit ancestry. Later documentation-only commits on #60 do not change its base. No merge or force push performed. This is not a correctness or performance gate.",
+  "pull_requests": [
+    {
+      "baseRefName": "master",
+      "headRefName": "feat/file-focus",
+      "headRefOid": "6019119485e47e53ae8f8bd5380d968dab517c9e",
+      "number": 14,
+      "url": "https://github.com/sushi-shi/flowistry/pull/14",
+      "baseRefOid": "693ceda925bd1d39d8de413ce239cfa6a87bb665",
+      "changed_files": 161
+    },
+    {
+      "baseRefName": "feat/file-focus",
+      "headRefName": "feat/callee-summaries",
+      "headRefOid": "fe190609e5d879d37517191adc97868dae8b60dd",
+      "number": 15,
+      "url": "https://github.com/sushi-shi/flowistry/pull/15",
+      "baseRefOid": "6019119485e47e53ae8f8bd5380d968dab517c9e",
+      "changed_files": 23
+    },
+    {
+      "baseRefName": "feat/callee-summaries",
+      "headRefName": "feat/interior-mutability",
+      "headRefOid": "52ea75bb8f217c382c053d7f127cd9047dbfee20",
+      "number": 16,
+      "url": "https://github.com/sushi-shi/flowistry/pull/16",
+      "baseRefOid": "fe190609e5d879d37517191adc97868dae8b60dd",
+      "changed_files": 9
+    },
+    {
+      "baseRefName": "feat/interior-mutability",
+      "headRefName": "feat/shared-handle-hints",
+      "headRefOid": "82d430807a315e1bff8c0b3e2155295ad2265371",
+      "number": 17,
+      "url": "https://github.com/sushi-shi/flowistry/pull/17",
+      "baseRefOid": "52ea75bb8f217c382c053d7f127cd9047dbfee20",
+      "changed_files": 11
+    },
+    {
+      "baseRefName": "feat/shared-handle-hints",
+      "headRefName": "perf/measure-harness",
+      "headRefOid": "285b82117af8d57549f2124e976dd522450d1f39",
+      "number": 19,
+      "url": "https://github.com/sushi-shi/flowistry/pull/19",
+      "baseRefOid": "82d430807a315e1bff8c0b3e2155295ad2265371",
+      "changed_files": 4
+    },
+    {
+      "baseRefName": "perf/measure-harness",
+      "headRefName": "perf/measure",
+      "headRefOid": "93d5eb14ea9d410e78ac92eb86d8db27f17fbf9a",
+      "number": 20,
+      "url": "https://github.com/sushi-shi/flowistry/pull/20",
+      "baseRefOid": "285b82117af8d57549f2124e976dd522450d1f39",
+      "changed_files": 5
+    },
+    {
+      "baseRefName": "perf/measure",
+      "headRefName": "perf/fast-bitsets",
+      "headRefOid": "748500c2cad6630e0d94b47981a50e94fa79cb3d",
+      "number": 21,
+      "url": "https://github.com/sushi-shi/flowistry/pull/21",
+      "baseRefOid": "93d5eb14ea9d410e78ac92eb86d8db27f17fbf9a",
+      "changed_files": 4
+    },
+    {
+      "baseRefName": "perf/fast-bitsets",
+      "headRefName": "perf/gzip-6",
+      "headRefOid": "2d1fbd457a0eca1e1d99d8aad1f1d712fdd7a962",
+      "number": 22,
+      "url": "https://github.com/sushi-shi/flowistry/pull/22",
+      "baseRefOid": "748500c2cad6630e0d94b47981a50e94fa79cb3d",
+      "changed_files": 1
+    },
+    {
+      "baseRefName": "perf/gzip-6",
+      "headRefName": "perf/lazy-arg-rows",
+      "headRefOid": "250a09942478796cc4c01ce72ca6ec240ee4f986",
+      "number": 23,
+      "url": "https://github.com/sushi-shi/flowistry/pull/23",
+      "baseRefOid": "2d1fbd457a0eca1e1d99d8aad1f1d712fdd7a962",
+      "changed_files": 48
+    },
+    {
+      "baseRefName": "perf/lazy-arg-rows",
+      "headRefName": "perf/place-caches",
+      "headRefOid": "c31282e572261ac4851a9901bcdab31e696347b7",
+      "number": 24,
+      "url": "https://github.com/sushi-shi/flowistry/pull/24",
+      "baseRefOid": "250a09942478796cc4c01ce72ca6ec240ee4f986",
+      "changed_files": 3
+    },
+    {
+      "baseRefName": "perf/place-caches",
+      "headRefName": "perf/shared-rows",
+      "headRefOid": "385029f5f20fbd4323b0d62edcef31909e3c448c",
+      "number": 25,
+      "url": "https://github.com/sushi-shi/flowistry/pull/25",
+      "baseRefOid": "c31282e572261ac4851a9901bcdab31e696347b7",
+      "changed_files": 1
+    },
+    {
+      "baseRefName": "perf/shared-rows",
+      "headRefName": "perf/block-engine",
+      "headRefOid": "8e3af89daee3946a49d1896787b9c655a8674803",
+      "number": 26,
+      "url": "https://github.com/sushi-shi/flowistry/pull/26",
+      "baseRefOid": "385029f5f20fbd4323b0d62edcef31909e3c448c",
+      "changed_files": 9
+    },
+    {
+      "baseRefName": "perf/block-engine",
+      "headRefName": "perf/forward-buckets",
+      "headRefOid": "4ad10c8febe090cc32f2cc8855d446f2c889da42",
+      "number": 29,
+      "url": "https://github.com/sushi-shi/flowistry/pull/29",
+      "baseRefOid": "8e3af89daee3946a49d1896787b9c655a8674803",
+      "changed_files": 1
+    },
+    {
+      "baseRefName": "perf/forward-buckets",
+      "headRefName": "perf/span-merge",
+      "headRefOid": "bd675de6024f5f934bc47dccaa373738b96b6a4d",
+      "number": 30,
+      "url": "https://github.com/sushi-shi/flowistry/pull/30",
+      "baseRefOid": "4ad10c8febe090cc32f2cc8855d446f2c889da42",
+      "changed_files": 2
+    },
+    {
+      "baseRefName": "perf/span-merge",
+      "headRefName": "perf/cheap-checks",
+      "headRefOid": "62b4f863f69205a5dbf27cc9dea6b03a9dbafd7f",
+      "number": 37,
+      "url": "https://github.com/sushi-shi/flowistry/pull/37",
+      "baseRefOid": "bd675de6024f5f934bc47dccaa373738b96b6a4d",
+      "changed_files": 3
+    },
+    {
+      "baseRefName": "perf/cheap-checks",
+      "headRefName": "perf/span-table",
+      "headRefOid": "b5929d71330e88d3bd37584e4b0bdf2e984e7363",
+      "number": 38,
+      "url": "https://github.com/sushi-shi/flowistry/pull/38",
+      "baseRefOid": "62b4f863f69205a5dbf27cc9dea6b03a9dbafd7f",
+      "changed_files": 1
+    },
+    {
+      "baseRefName": "perf/span-table",
+      "headRefName": "perf/dedup-direct-influence",
+      "headRefOid": "c983acf6e8042f79aa763a9c8a25dfaebdefd76e",
+      "number": 28,
+      "url": "https://github.com/sushi-shi/flowistry/pull/28",
+      "baseRefOid": "b5929d71330e88d3bd37584e4b0bdf2e984e7363",
+      "changed_files": 3
+    },
+    {
+      "baseRefName": "perf/dedup-direct-influence",
+      "headRefName": "perf/range-table",
+      "headRefOid": "30b0499202de07acec6057d46572cb4d631b9f0d",
+      "number": 32,
+      "url": "https://github.com/sushi-shi/flowistry/pull/32",
+      "baseRefOid": "c983acf6e8042f79aa763a9c8a25dfaebdefd76e",
+      "changed_files": 4
+    },
+    {
+      "baseRefName": "perf/range-table",
+      "headRefName": "perf/char-positions",
+      "headRefOid": "f5bd2a51c052ae4af74dac7879314be1ca5e902e",
+      "number": 35,
+      "url": "https://github.com/sushi-shi/flowistry/pull/35",
+      "baseRefOid": "30b0499202de07acec6057d46572cb4d631b9f0d",
+      "changed_files": 7
+    },
+    {
+      "baseRefName": "perf/char-positions",
+      "headRefName": "perf/influence-filter",
+      "headRefOid": "68e62641db14482182d01546f12967ece736ceb1",
+      "number": 39,
+      "url": "https://github.com/sushi-shi/flowistry/pull/39",
+      "baseRefOid": "f5bd2a51c052ae4af74dac7879314be1ca5e902e",
+      "changed_files": 1
+    },
+    {
+      "baseRefName": "perf/influence-filter",
+      "headRefName": "perf/alias-relations",
+      "headRefOid": "fb37076e65c78cdba20131064d1b3cc97b0d9a9a",
+      "number": 31,
+      "url": "https://github.com/sushi-shi/flowistry/pull/31",
+      "baseRefOid": "68e62641db14482182d01546f12967ece736ceb1",
+      "changed_files": 1
+    },
+    {
+      "baseRefName": "perf/alias-relations",
+      "headRefName": "perf/demand-driven",
+      "headRefOid": "1353693d019aa27fc6d21588ac7137c84446aca6",
+      "number": 33,
+      "url": "https://github.com/sushi-shi/flowistry/pull/33",
+      "baseRefOid": "fb37076e65c78cdba20131064d1b3cc97b0d9a9a",
+      "changed_files": 12
+    },
+    {
+      "baseRefName": "perf/demand-driven",
+      "headRefName": "perf/lean-session",
+      "headRefOid": "b48b0ba5935af58b2414f098a787bff3ac51e209",
+      "number": 36,
+      "url": "https://github.com/sushi-shi/flowistry/pull/36",
+      "baseRefOid": "1353693d019aa27fc6d21588ac7137c84446aca6",
+      "changed_files": 2
+    },
+    {
+      "baseRefName": "perf/lean-session",
+      "headRefName": "perf/cargo-bypass",
+      "headRefOid": "f1040182da4ccce70c8aa2ccb0d38167330514b5",
+      "number": 34,
+      "url": "https://github.com/sushi-shi/flowistry/pull/34",
+      "baseRefOid": "b48b0ba5935af58b2414f098a787bff3ac51e209",
+      "changed_files": 5
+    },
+    {
+      "baseRefName": "perf/cargo-bypass",
+      "headRefName": "feat/persistent-focus-cache",
+      "headRefOid": "2630ee356d8f606e22a205527b4eea67cdab66d0",
+      "number": 2,
+      "url": "https://github.com/sushi-shi/flowistry/pull/2",
+      "baseRefOid": "f1040182da4ccce70c8aa2ccb0d38167330514b5",
+      "changed_files": 11
+    },
+    {
+      "baseRefName": "feat/persistent-focus-cache",
+      "headRefName": "docs/handoff",
+      "headRefOid": "edb9e919c74d4f0ac0de86d7af1f1e3c376dcfda",
+      "number": 40,
+      "url": "https://github.com/sushi-shi/flowistry/pull/40",
+      "baseRefOid": "2630ee356d8f606e22a205527b4eea67cdab66d0",
+      "changed_files": 4
+    },
+    {
+      "baseRefName": "docs/handoff",
+      "headRefName": "test/combined-chain-validation",
+      "headRefOid": "11d5f376355c6753b529e7cd6508f51847792eda",
+      "number": 41,
+      "url": "https://github.com/sushi-shi/flowistry/pull/41",
+      "baseRefOid": "edb9e919c74d4f0ac0de86d7af1f1e3c376dcfda",
+      "changed_files": 13
+    },
+    {
+      "baseRefName": "test/combined-chain-validation",
+      "headRefName": "perf/combined-chain-measurements",
+      "headRefOid": "6b45b1c163b6daabe8b5398ba41e0e1e2adc25b4",
+      "number": 42,
+      "url": "https://github.com/sushi-shi/flowistry/pull/42",
+      "baseRefOid": "11d5f376355c6753b529e7cd6508f51847792eda",
+      "changed_files": 10
+    },
+    {
+      "baseRefName": "perf/combined-chain-measurements",
+      "headRefName": "perf/integrated-recurse-groups",
+      "headRefOid": "715bc53573f82c352e7517796d48657406a2bd6f",
+      "number": 43,
+      "url": "https://github.com/sushi-shi/flowistry/pull/43",
+      "baseRefOid": "6b45b1c163b6daabe8b5398ba41e0e1e2adc25b4",
+      "changed_files": 12
+    },
+    {
+      "baseRefName": "perf/integrated-recurse-groups",
+      "headRefName": "perf/integrated-seed-rows",
+      "headRefOid": "2198569cf352f8b5c3ddd05a38faecf226664436",
+      "number": 44,
+      "url": "https://github.com/sushi-shi/flowistry/pull/44",
+      "baseRefOid": "715bc53573f82c352e7517796d48657406a2bd6f",
+      "changed_files": 5
+    },
+    {
+      "baseRefName": "perf/integrated-seed-rows",
+      "headRefName": "docs/hir-hashing-experiment",
+      "headRefOid": "1b54ce16b8fffd09f515cf09b6c3885106908faa",
+      "number": 45,
+      "url": "https://github.com/sushi-shi/flowistry/pull/45",
+      "baseRefOid": "2198569cf352f8b5c3ddd05a38faecf226664436",
+      "changed_files": 3
+    },
+    {
+      "baseRefName": "docs/hir-hashing-experiment",
+      "headRefName": "fix/replay-signal-status",
+      "headRefOid": "a1069824aac945a3ec07bfb80a07f3735e82ea06",
+      "number": 46,
+      "url": "https://github.com/sushi-shi/flowistry/pull/46",
+      "baseRefOid": "1b54ce16b8fffd09f515cf09b6c3885106908faa",
+      "changed_files": 5
+    },
+    {
+      "baseRefName": "fix/replay-signal-status",
+      "headRefName": "test/incremental-edit-matrix",
+      "headRefOid": "89ad0772d0c5d024d0671f999b15c622d6c5f30c",
+      "number": 47,
+      "url": "https://github.com/sushi-shi/flowistry/pull/47",
+      "baseRefOid": "a1069824aac945a3ec07bfb80a07f3735e82ea06",
+      "changed_files": 14
+    },
+    {
+      "baseRefName": "test/incremental-edit-matrix",
+      "headRefName": "feat/versioned-result-index",
+      "headRefOid": "44f269a033929eb8c44fff00a0ed72f80cd56d92",
+      "number": 48,
+      "url": "https://github.com/sushi-shi/flowistry/pull/48",
+      "baseRefOid": "89ad0772d0c5d024d0671f999b15c622d6c5f30c",
+      "changed_files": 22
+    },
+    {
+      "baseRefName": "feat/versioned-result-index",
+      "headRefName": "feat/persisted-callee-summaries",
+      "headRefOid": "4a1f3e831786374b068325c365bcc1571c39fe68",
+      "number": 49,
+      "url": "https://github.com/sushi-shi/flowistry/pull/49",
+      "baseRefOid": "44f269a033929eb8c44fff00a0ed72f80cd56d92",
+      "changed_files": 22
+    },
+    {
+      "baseRefName": "feat/persisted-callee-summaries",
+      "headRefName": "fix/file-focus-filenames",
+      "headRefOid": "dc357b06f33ba8616c130ca21bd7d4acabb31434",
+      "number": 50,
+      "url": "https://github.com/sushi-shi/flowistry/pull/50",
+      "baseRefOid": "4a1f3e831786374b068325c365bcc1571c39fe68",
+      "changed_files": 13
+    },
+    {
+      "baseRefName": "fix/file-focus-filenames",
+      "headRefName": "feat/project-analysis",
+      "headRefOid": "cea628654cc1d07ee61e0f28da9b85a396b82b52",
+      "number": 51,
+      "url": "https://github.com/sushi-shi/flowistry/pull/51",
+      "baseRefOid": "dc357b06f33ba8616c130ca21bd7d4acabb31434",
+      "changed_files": 10
+    },
+    {
+      "baseRefName": "feat/project-analysis",
+      "headRefName": "fix/focus-source-selection",
+      "headRefOid": "aabccad27a8fde067219684f0aac35580b5276b0",
+      "number": 52,
+      "url": "https://github.com/sushi-shi/flowistry/pull/52",
+      "baseRefOid": "cea628654cc1d07ee61e0f28da9b85a396b82b52",
+      "changed_files": 14
+    },
+    {
+      "baseRefName": "fix/focus-source-selection",
+      "headRefName": "refactor/neovim-monorepo",
+      "headRefOid": "d1752759345f488e8b3689eaeebb24de942afb87",
+      "number": 53,
+      "url": "https://github.com/sushi-shi/flowistry/pull/53",
+      "baseRefOid": "aabccad27a8fde067219684f0aac35580b5276b0",
+      "changed_files": 46
+    },
+    {
+      "baseRefName": "refactor/neovim-monorepo",
+      "headRefName": "feat/project-coordinator",
+      "headRefOid": "756b9bbec4ca18defa068eaad3ca2e710b58f0c0",
+      "number": 54,
+      "url": "https://github.com/sushi-shi/flowistry/pull/54",
+      "baseRefOid": "d1752759345f488e8b3689eaeebb24de942afb87",
+      "changed_files": 19
+    },
+    {
+      "baseRefName": "feat/project-coordinator",
+      "headRefName": "feat/neovim-background",
+      "headRefOid": "70ed5f6a2ced07309a23bae3ec67a96d9a94ed84",
+      "number": 55,
+      "url": "https://github.com/sushi-shi/flowistry/pull/55",
+      "baseRefOid": "756b9bbec4ca18defa068eaad3ca2e710b58f0c0",
+      "changed_files": 19
+    },
+    {
+      "baseRefName": "feat/neovim-background",
+      "headRefName": "feat/dependency-save-plan",
+      "headRefOid": "2899e71979cf8772f5c919bc679bd3dcef592678",
+      "number": 56,
+      "url": "https://github.com/sushi-shi/flowistry/pull/56",
+      "baseRefOid": "70ed5f6a2ced07309a23bae3ec67a96d9a94ed84",
+      "changed_files": 14
+    },
+    {
+      "baseRefName": "feat/dependency-save-plan",
+      "headRefName": "fix/editor-input-invalidation",
+      "headRefOid": "0d0108a966e53fef7512e067c817b8340e11cb56",
+      "number": 57,
+      "url": "https://github.com/sushi-shi/flowistry/pull/57",
+      "baseRefOid": "2899e71979cf8772f5c919bc679bd3dcef592678",
+      "changed_files": 16
+    },
+    {
+      "baseRefName": "fix/editor-input-invalidation",
+      "headRefName": "experiment/rustc-incremental",
+      "headRefOid": "3afb6f4d3f73a37f12e30b957b29af68e4e5d257",
+      "number": 58,
+      "url": "https://github.com/sushi-shi/flowistry/pull/58",
+      "baseRefOid": "0d0108a966e53fef7512e067c817b8340e11cb56",
+      "changed_files": 9
+    },
+    {
+      "baseRefName": "experiment/rustc-incremental",
+      "headRefName": "feat/safe-layout-reuse",
+      "headRefOid": "62bd531ab43be20a720c33d46bc6f30b761195f5",
+      "number": 59,
+      "url": "https://github.com/sushi-shi/flowistry/pull/59",
+      "baseRefOid": "3afb6f4d3f73a37f12e30b957b29af68e4e5d257",
+      "changed_files": 13
+    },
+    {
+      "baseRefName": "feat/safe-layout-reuse",
+      "headRefName": "test/final-acceptance",
+      "headRefOid": "8872856ed78679fb8da01ab932fe5ab234a6420b",
+      "number": 60,
+      "url": "https://github.com/sushi-shi/flowistry/pull/60",
+      "baseRefOid": "62bd531ab43be20a720c33d46bc6f30b761195f5",
+      "changed_files": 10
+    }
+  ]
+}
