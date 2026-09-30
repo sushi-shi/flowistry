@@ -39,6 +39,15 @@ elseif action == "file-focus" then
       { range = z, ranges = { z }, slice = { range(9, 8, 18) }, direct_influence = {} },
     } } } },
   } } }
+  if vim.env.FLOWISTRY_TEST_MODE == "inclusive_body_end" then
+    -- A compiler point at the inner body's exclusive end still selects it.
+    -- Only the selected body gets a result, as in real large-file requests.
+    local column = tonumber(arg[4]) or 0
+    local inner = requested and requested >= 8 and (requested < 10 or (requested == 10 and column <= 1))
+    result.Ok.bodies[2].focus = requested and requested >= 7 and not inner
+      and { Err = "unsupported body fixture" } or vim.NIL
+    if not inner then result.Ok.bodies[3].focus = vim.NIL end
+  end
 elseif action == "focus" and tonumber(arg[3]) >= 7 then
   local z = range(9, 12, 13)
   result = { Ok = { containers = { body(8, 10) }, place_info = {

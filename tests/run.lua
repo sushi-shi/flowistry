@@ -69,6 +69,47 @@ local function run()
   check(not pcall(convert, span), "out-of-bounds analysis rejected")
   vim.api.nvim_buf_delete(unicode, { force = true })
 
+  local syntax_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(syntax_buf, 0, -1, false, {
+    "fn restore(map: &LevelMap) {", "  // travel comment", "  let state = map;",
+    "  /* nested", "     comment */ state;", "}",
+  })
+  local binding = { start = { 0, 11 }, finish = { 0, 14 } }
+  local argument_type = { start = { 0, 16 }, finish = { 0, 25 } }
+  local whole = { start = { 0, 0 }, finish = { 5, 1 } }
+  local comments = {
+    { start = { 1, 2 }, finish = { 1, 19 } },
+    { start = { 3, 2 }, finish = { 4, 15 } },
+  }
+  local syntax_focus = {
+    containers = { whole }, comments = comments,
+    parameter_aliases = { { range = argument_type, target = binding } },
+    places = { { range = binding, ranges = { binding }, slice = { whole },
+      maybe_slice = { whole }, direct_influence = { whole } } },
+  }
+  local binding_slice = render.show(syntax_buf, syntax_focus, binding.start, 200, true)
+  for _, column in ipairs({ 16, 17, 22, 24 }) do
+    equal(render.show(syntax_buf, syntax_focus, { 0, column }, 200, true), binding_slice,
+      "type selection, including &, has the binding's slice")
+  end
+  equal(render.show(syntax_buf, syntax_focus, { 0, 18 }, 200, true, true, false), nil,
+    "parameter_types=false disables the alias")
+  for _, slice in ipairs({ { whole }, { binding } }) do
+    syntax_focus.places[1].slice = slice
+    render.show(syntax_buf, syntax_focus, binding.start, 200, true)
+    for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(syntax_buf, render.namespace, 0, -1, { details = true })) do
+      local marked = { start = { mark[2], mark[3] }, finish = { mark[4].end_row, mark[4].end_col } }
+      for _, comment in ipairs(comments) do
+        check(not (ranges.before(marked.start, comment.finish) and ranges.before(comment.start, marked.finish)),
+          "no dim, focus, influence or maybe decoration overlaps comments")
+      end
+    end
+  end
+  equal(render.show(syntax_buf, syntax_focus, { 1, 6 }, 200, true), nil, "a comment word cannot select a place")
+  equal(#vim.api.nvim_buf_get_extmarks(syntax_buf, render.namespace, 0, -1, {}), 0,
+    "entering a comment clears previous focus decorations")
+  vim.api.nvim_buf_delete(syntax_buf, { force = true })
+
   local pins = require("flowistry.pin")
   local anchor_buf = vim.api.nvim_create_buf(false, true)
   local original_lines = { "fn main() {", "    let dx = end[0] - start[0];",
@@ -465,6 +506,20 @@ local function run()
     await(function() return flow.status() == "analysis unavailable" end, "individual body error does not discard other cached functions")
     flow.disable()
   end
+
+  -- At the exclusive end of a nested body, request its enclosing body even
+  -- though the compiler's zero-width cursor containment would select the child.
+  flow.setup({ command = command, auto_enable = false, batch = true, batch_max_lines = 1, debounce_ms = 5,
+    env = { FLOWISTRY_TEST_LOG = log, FLOWISTRY_TEST_MODE = "inclusive_body_end" } })
+  move(2, 8)
+  flow.enable()
+  await(function() return flow.status() == "active" end, "boundary fixture initially analyzed")
+  move(11, 1)
+  await(function() return flow.status() == "analysis unavailable" end,
+    "closure-end boundary loads the parent result without a protocol failure")
+  move(10, 12)
+  await(function() return flow.status() == "active" end, "nested body still loads after boundary navigation")
+  flow.disable()
 
   -- Session setup preserves the existing statusline and leaves the winbar alone.
   vim.env.FLOWISTRY_BACKEND_EXE = "/not/invoked/in/this/test"

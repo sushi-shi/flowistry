@@ -6,6 +6,13 @@ local temp = vim.fn.tempname() .. " flowistry precision"
 local source = vim.fn.readfile(repo .. "/tests/fixtures/precision.rs")
 local passed = 0
 local function check(value, message) assert(value, message); passed = passed + 1 end
+local function focus_converter(focus)
+  local convert = ranges.converter(0, temp, focus.containers[1].filename)
+  return function(range)
+    if focus.ranges then range = assert(focus.ranges[range + 1], "invalid range-table index") end
+    return convert(range)
+  end
+end
 local function run()
   vim.fn.mkdir(temp .. "/src", "p")
   vim.fn.writefile({ '[package]', 'name="precision"', 'version="0.1.0"', 'edition="2021"' }, temp .. "/Cargo.toml")
@@ -21,7 +28,7 @@ local function run()
   for _, body in ipairs(result.bodies) do
     check(body.focus.Ok ~= nil, "fixture body failed analysis: " .. vim.inspect(body.focus))
     local focus = body.focus.Ok
-    local convert = ranges.converter(0, temp, focus.containers[1].filename)
+    local convert = focus_converter(focus)
     for _, place in ipairs(focus.place_info) do
       places[#places + 1] = { range = convert(place.range), slice = ranges.convert_list(place.slice, convert) }
     end
@@ -67,7 +74,7 @@ local function run()
     for _, body in ipairs(result.bodies) do
       check(body.focus.Ok ~= nil, "baseline fixture failed analysis")
       local focus = body.focus.Ok
-      local convert = ranges.converter(0, temp, focus.containers[1].filename)
+      local convert = focus_converter(focus)
       for _, p in ipairs(focus.place_info) do
         old_places[#old_places + 1] = { range = convert(p.range), slice = ranges.convert_list(p.slice, convert) }
       end
@@ -88,15 +95,21 @@ local function run()
       check(vim.deep_equal(ranges.merge(new.slice), ranges.merge(old.slice)), "full backward slice preserved for " .. token)
     end
   end
-  -- The scoped collector must still let rustc reject errors in unrelated code.
+  -- Demand analysis skips unrelated type errors, but rejects the selected body.
   local bad_source = vim.deepcopy(source)
-  bad_source[#bad_source + 1] = "fn invalid_elsewhere() { let value: i32 = true; }"
+  bad_source[4] = "    let selected: i32 = true;"
   vim.fn.writefile(bad_source, file)
-  done, err = false, nil
+  done, err, result = false, nil, nil
   backend.request({ root = temp, env = {}, command = { vim.env.FLOWISTRY_BACKEND_EXE } },
-    { "file-focus", file, "3", "8" }, { timeout_ms = 300000, gzip = "gzip" }, function(e) err, done = e, true end)
+    { "file-focus", file, "3", "8" }, { timeout_ms = 300000, gzip = "gzip" }, function(e, value) err, result, done = e, value, true end)
   check(vim.wait(300000, function() return done end, 20), "invalid crate check timed out")
-  check(type(err) == "string" and err:find("mismatched types", 1, true), "normal Rust checks still reject errors outside the selected function")
+  local rejected = type(err) == "string" and err:find("mismatched types", 1, true)
+  for _, body in ipairs(result and result.bodies or {}) do
+    if body.range.start.line <= 3 and body.range["end"].line > 3 then
+      rejected = rejected or (body.focus and body.focus.Err ~= nil)
+    end
+  end
+  check(rejected, "normal Rust checks still reject type errors inside the selected function")
 end
 local ok, err = xpcall(run, debug.traceback)
 vim.fn.delete(temp, "rf")

@@ -33,6 +33,14 @@ local function selected()
   end
   check(found, "saved focus must still highlight dy at " .. row .. ":" .. column)
 end
+local function highlights()
+  local result = {}
+  for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, render.namespace, 0, -1, { details = true })) do
+    result[#result + 1] = { mark[2], mark[3], mark[4].end_row, mark[4].end_col, mark[4].hl_group }
+  end
+  table.sort(result, function(a, b) return vim.inspect(a) < vim.inspect(b) end)
+  return result
+end
 local function run()
   check(vim.fn.executable("rustfmt") == 1, "rustfmt must be on PATH")
   check(vim.g.rustfmt_autosave == 1, "test requires rustfmt on save")
@@ -98,6 +106,27 @@ local function run()
     selected()
   end
   check(formatted == 10, "all ten saves passed through BufWritePre")
+  -- rustfmt removes empty lines at the beginning of a closure. Saving without
+  -- leaving Insert mode must redraw every range, even when the final source is
+  -- unchanged and the analysis comes straight from the editor's memory cache.
+  local before_format = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  local before_highlights = highlights()
+  local closure_row = locate(".map(|positions| {")
+  vim.api.nvim_buf_set_lines(0, closure_row, closure_row, false, { "", "", "" })
+  vim.api.nvim_exec_autocmds("TextChangedI", { buffer = 0 })
+  local original_get_mode = vim.api.nvim_get_mode
+  vim.api.nvim_get_mode = function() return { mode = "i", blocking = false } end
+  local ok, err = pcall(function()
+    vim.cmd("silent write")
+    ready("pinned")
+    check(vim.deep_equal(before_format, vim.api.nvim_buf_get_lines(0, 0, -1, false)),
+      "rustfmt removes the inserted lines on save")
+    check(vim.deep_equal(before_highlights, highlights()),
+      "saving in Insert mode restores all highlight ranges after rustfmt")
+    check(not flow.is_stale(), "Insert-mode save publishes current highlights")
+  end)
+  vim.api.nvim_get_mode = original_get_mode
+  if not ok then error(err) end
   check(vim.fn.exists("*rustfmt#PreWrite") == 1, "actual rust.vim formatter was loaded")
   row, column = locate("dy =")
   check(column == 16, "actual rustfmt output has the expected closure indentation")
@@ -147,6 +176,6 @@ vim.schedule(function()
   flow.disable()
   vim.fn.delete(temp, "rf")
   if not ok then io.stderr:write(err .. "\n"); vim.cmd("cquit 1") end
-  print(("Passed %d rustfmt-on-save assertions (10 real compiler saves)"):format(passed))
+  print(("Passed %d rustfmt-on-save assertions (11 formatted saves)"):format(passed))
   vim.cmd("qa!")
 end)

@@ -34,8 +34,21 @@ local function highlight(buf, items, group, priority)
   end
 end
 
-function M.show(buf, focus, pos, priority, show_influence, show_maybe)
+function M.selection(focus, pos, parameter_types)
+  for _, comment in ipairs(focus.comments or {}) do
+    if ranges.contains(comment, pos) then return nil end
+  end
+  if parameter_types ~= false then
+    local alias = ranges.smallest(focus.parameter_aliases or {}, pos, function(item) return item.range end)
+    if alias then return alias.target.start end
+  end
+  return pos
+end
+
+function M.show(buf, focus, pos, priority, show_influence, show_maybe, parameter_types)
   M.clear(buf)
+  pos = M.selection(focus, pos, parameter_types)
+  if not pos then return nil end
   local token = ranges.token(buf, pos)
   if not token then return nil end
   local place = ranges.smallest(focus.places, pos, function(item) return item.range end)
@@ -43,13 +56,16 @@ function M.show(buf, focus, pos, priority, show_influence, show_maybe)
   local slice = vim.list_extend(vim.deepcopy(place.slice), place.ranges)
   local maybe = show_maybe ~= false and place.maybe_slice or {}
   local shown = vim.list_extend(vim.deepcopy(slice), maybe)
-  highlight(buf, ranges.complement(focus.containers, shown), "FlowistryDim", priority)
-  highlight(buf, maybe, "FlowistryMaybe", priority)
+  -- Comment tokens keep their syntax colors even when a broad MIR source span
+  -- includes them. Subtract from every decoration, including optional modes.
+  local function without_comments(items) return ranges.complement(items, focus.comments or {}) end
+  highlight(buf, without_comments(ranges.complement(focus.containers, shown)), "FlowistryDim", priority)
+  highlight(buf, without_comments(maybe), "FlowistryMaybe", priority)
   if show_influence then
-    highlight(buf, place.direct_influence, "FlowistryInfluence", priority + 1)
+    highlight(buf, without_comments(place.direct_influence), "FlowistryInfluence", priority + 1)
   end
   highlight(buf, { token }, "FlowistryFocus", priority + 2)
-  return ranges.merge(slice)
+  return without_comments(slice)
 end
 
 return M

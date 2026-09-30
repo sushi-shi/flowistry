@@ -178,6 +178,7 @@ require("flowistry").setup({
   priority = 200,                -- above normal syntax/semantic highlights
   show_influence = false,        -- optional extra direct-influence backgrounds
   show_maybe = true,             -- tint code that matters only if shared handles alias
+  parameter_types = true,        -- an argument's type selects its binding (map: &LevelMap)
   progress = false,              -- analysis popups; enabled by the Nix launcher
 })
 ```
@@ -187,6 +188,14 @@ For the `./tools/flowistry` / Nix launcher, set overrides in your Neovim config:
 ```lua
 vim.g.flowistry_config = { auto_enable = false }
 ```
+
+With a backend that supplies source-selection metadata, comments retain their
+syntax colors and cannot be selected as dataflow targets. `parameter_types`
+also makes the entire argument type, including `&` and generic arguments, behave
+like its binding. Set it to `false` to keep ordinary cursor selection. Destructured
+arguments are left unchanged because their type does not identify one binding.
+Use `:Flow types` to toggle type selection during a session without clearing caches.
+Older backends remain supported and keep their existing behavior.
 
 With `auto_enable=false`, use `:Flow on` when you want analysis. The launcher
 merges these overrides with its packaged backend settings.

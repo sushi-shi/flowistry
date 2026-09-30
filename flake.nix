@@ -7,7 +7,7 @@
     fenix.url = "github:nix-community/fenix/5f7e7d793cb2553410f857554de86f277ebe2f71";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
     flowistry-src = {
-      url = "github:sushi-shi/flowistry/2630ee356d8f606e22a205527b4eea67cdab66d0";
+      url = "github:sushi-shi/flowistry/ceeabfd97ac5271d676e89cc8007ff061106ce2d";
       flake = false;
     };
   };
@@ -29,7 +29,7 @@
           compilerLibraries = "${toolchain}/lib:${toolchain}/lib/rustlib/${pkgs.stdenv.hostPlatform.rust.rustcTarget}/lib";
           backend = rustPlatform.buildRustPackage {
             pname = "flowistry-backend";
-            version = "0.5.44-2630ee3";
+            version = "0.5.44-ceeabfd";
             src = flowistry-src;
             cargoLock.lockFile = "${flowistry-src}/Cargo.lock";
             cargoBuildFlags = [ "-p" "flowistry_ide" ];
@@ -99,6 +99,10 @@
         in {
           frontend = test "flowistry-frontend-tests"
             "nvim --headless -u NONE -i NONE -l tests/run.lua" [];
+          source-selection = test "flowistry-source-selection-tests" ''
+            export FLOWISTRY_BACKEND_EXE=${packages.backend}/bin/flowistry-backend
+            nvim --headless -u NONE -i NONE -l tests/source-selection.lua
+          '' [ packages.backend ];
           summaries = test "flowistry-callee-summary-tests" ''
             export FLOWISTRY_BACKEND_EXE=${packages.backend}/bin/flowistry-backend
             nvim --headless -u NONE -i NONE -l tests/summaries.lua

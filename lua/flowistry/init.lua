@@ -27,6 +27,7 @@ local defaults = {
   priority = 200,
   show_influence = false,
   show_maybe = true,
+  parameter_types = true, -- Focusing an argument's type selects its binding.
   progress = false, -- Session launcher enables analysis progress popups.
 }
 local config = vim.deepcopy(defaults)
@@ -202,12 +203,23 @@ local function prepare_focus(state, value)
       }
     end
   end
+  result.comments = place_list(value.comments or {})
+  result.parameter_aliases = {}
+  for _, alias in ipairs(value.parameter_aliases or {}) do
+    local range, target = place_range(alias.range), place_range(alias.target)
+    if range and target then
+      result.parameter_aliases[#result.parameter_aliases + 1] = { range = range, target = target }
+    end
+  end
   return result
 end
 
 update = function(state)
   if states[state.buf] ~= state or current() ~= state.buf then return end
-  if vim.api.nvim_get_mode().mode:sub(1, 1) == "i" then
+  -- Saving from Insert mode can let rustfmt replace whole lines and displace
+  -- extmarks. Finish that save's redraw without resuming ordinary cursor
+  -- tracking while the user is typing.
+  if vim.api.nvim_get_mode().mode:sub(1, 1) == "i" and not state.refresh_after_save then
     state.status = state.stale and "waiting for save" or "editing"
     return
   end
@@ -223,6 +235,7 @@ update = function(state)
   if state.mark and not pinned then
     render.clear(state.buf)
     state.slice, state.stale, state.status = nil, false, "pinned target unavailable"
+    state.refresh_after_save = nil
     return
   end
   if not state.context then
@@ -284,15 +297,21 @@ update = function(state)
     render.clear(state.buf)
     state.stale = false
     state.slice, state.status = nil, "outside function"
+    state.refresh_after_save = nil
     return
   end
   if not body.focus then
     if not state.stale then render.clear(state.buf) end
     if body.error then
       state.slice, state.status = nil, "analysis unavailable"
+      state.refresh_after_save = nil
       return
     end
-    local char = ranges.position(state.buf, { pos[1] + 1, pos[2] })
+    -- Request the body we selected, rather than the cursor point. rustc's
+    -- zero-width span containment includes a closure's end, while editor
+    -- ranges are half-open: at that boundary the cursor selects its parent.
+    local request_pos = config.batch and body.range.start or pos
+    local char = ranges.position(state.buf, { request_pos[1] + 1, request_pos[2] })
     state.operation = backend.request(state.context, {
       config.batch and "file-focus" or "focus", filename, tostring(char[1]), tostring(char[2]),
     }, vim.tbl_extend("force", config, { cache_refresh = state.cache_refresh }), callback(state, function(value)
@@ -315,11 +334,12 @@ update = function(state)
     return
   end
   state.slice = render.show(
-    state.buf, body.focus, pos, config.priority, config.show_influence, config.show_maybe
+    state.buf, body.focus, pos, config.priority, config.show_influence, config.show_maybe, config.parameter_types
   )
   state.cached = body.cached == true
   state.stale = false
   state.status = state.slice and (state.mark and "pinned" or "active") or "no place"
+  state.refresh_after_save = nil
 end
 
 local function schedule(state)
@@ -395,6 +415,7 @@ function M.setup(opts)
         if state.buf == args.buf or inside_root(name, root)
           or (args.event == "BufFilePost" and previous_name and inside_root(previous_name, root)) then
           invalidate(state, args.event ~= "BufReadPost" and args.event ~= "BufFilePost")
+          if args.event == "BufWritePost" then state.refresh_after_save = true end
           if state.retained and state.retained.inputs[name] == nil then
             state.retained.inputs[name] = saved_sources[name] or false
           end
@@ -499,6 +520,11 @@ function M.mark()
   if not state then return end
   local cursor = vim.api.nvim_win_get_cursor(0)
   local pos = { cursor[1] - 1, cursor[2] }
+  local body = ranges.smallest(state.bodies or {}, pos, function(item) return item.range end)
+  if body and body.focus then
+    pos = render.selection(body.focus, pos, config.parameter_types)
+    if not pos then return end
+  end
   if not ranges.token(state.buf, pos) then return end
   if state.mark and pins.contains(state.buf, state.mark, pos) then
     clear_pin(state)
@@ -506,6 +532,12 @@ function M.mark()
     state.mark = pins.set(state.buf, pos, state.mark)
   end
   update(state)
+end
+
+function M.types()
+  config.parameter_types = config.parameter_types == false
+  if states[current()] then update(states[current()]) end
+  notify("argument type selection " .. (config.parameter_types and "enabled" or "disabled"))
 end
 
 function M.unmark()
