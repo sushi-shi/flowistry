@@ -1,0 +1,135 @@
+*flowistry.txt*  Ownership-aware Rust focus mode for Neovim
+
+COMMANDS                                                   *:Flowistry*
+
+:Flow on                 Enable focus in this Rust buffer.       *:Flow*
+:Flow off                Clear decorations and disable focus.
+:Flow pin                Pin focus; repeat on the pinned variable to unpin.
+:Flow unpin              Resume tracking the cursor.
+:Flow                    Show an action menu.
+:Flow toggle             Toggle focus; also accepts refresh and log.
+:Flow types              Toggle parameter-type selection (map: &LevelMap).
+
+The longer command names remain available:
+
+:Flowistry                Show an action menu.
+:Flowistry toggle         Toggle focus mode in this Rust buffer.
+:Flowistry enable         Enable focus mode; analysis runs asynchronously.
+:Flowistry disable        Clear decorations and disable focus mode.
+:Flowistry mark           Pin focus; repeat on the pinned variable to unpin.
+:Flowistry unmark         Resume tracking the cursor.
+:Flowistry refresh        Invalidate analysis caches and retry.
+:Flowistry log            Open the current buffer's error log; q closes it.
+
+SETUP                                                      *flowistry-setup*
+>
+    require('flowistry').setup({
+      auto_enable = true,
+      toolchain = 'nightly-2026-05-01',
+      debounce_ms = 120,
+      timeout_ms = 180000,
+    })
+<
+Requires Neovim 0.10+, gzip, and a separately installed Flowistry backend.
+Saved Rust buffers inside Cargo projects enable automatically. Set auto_enable
+to false for manual activation with :Flow on. Explicit :Flow off remains off
+when returning to or saving that buffer. Save modified
+Rust buffers and Cargo manifests before requesting analysis. The plugin does
+not save buffers automatically. The first analysis can take several minutes.
+
+BACKEND                                                    *flowistry-backend*
+
+The plugin and Rust backend live in the same Flowistry repository. The root
+flake builds them together; its plugin package automatically chooses the paired
+backend and compiler environment. See README.md and doc/nix.md for installation.
+
+The backend performs Rust analysis independently of the editor. For a custom
+installation or Nix wrapper, pass a complete argv prefix through `command`:
+>
+    require('flowistry').setup({ command = { '/path/to/wrapper' } })
+<
+The wrapper receives `spans FILE` or `focus FILE LINE COLUMN`. A custom command
+must supply its compiler environment; automatic toolchain discovery is skipped.
+Set `root` to the Cargo workspace directory when using a custom command.
+Use the `env` table for extra environment variables and `gzip` to override the
+decompressor executable. `toolchain = false` selects the ambient compiler.
+
+`context_mode = "Recurse"` opts into cached local callee summaries in the Nix
+backend. Omit it or set "SigOnly" for signature-based effects. Summaries are
+shared within one compiler invocation. Completed focus results are separately
+persisted by the backend. Unsupported and recursive calls retain conservative
+effects. See doc/summaries.md and doc/cache.md.
+
+`cache = false` disables persistent caching; `cache_dir` overrides its shared
+directory. The default is $XDG_CACHE_HOME/flowistry or $HOME/.cache/flowistry.
+Unchanged saves, edit-and-undo, and off/on retain memory results. Real edits and
+editor restarts reuse unchanged input snapshots before compiler startup. Changed
+inputs still require compiler validation before function-level reuse.
+`:Flow refresh` forces the next analysis to bypass cached results.
+
+On NixOS, the repository flake provides the matching backend/compiler libraries:
+>
+    nix run /path/to/flowistry#nvim -- /path/to/project/src/main.rs
+<
+The nvim app loads your usual Neovim config and adds Flowistry for this
+session. Separate flake packages are available as #backend and #plugin.
+For this launcher, override settings in your Neovim config with:
+>
+    vim.g.flowistry_config = { auto_enable = false }
+<
+
+HIGHLIGHTS                                                 *flowistry-highlights*
+
+FlowistryDim             Unrelated code (muted blue-gray, separate from comments).
+FlowistryFocus           Word under the cursor (default: Visual).
+FlowistryInfluence       Direct influence (CursorLine; opt in: show_influence).
+FlowistryMaybe           Code relevant only if two shared handles to the same
+                         interior-mutable type (e.g. Rc<RefCell<T>> clones) are
+                         one object (amber italic; opt out: show_maybe = false).
+
+Set these with nvim_set_hl() in your colorscheme. The `priority` setting defaults
+to 200. Highlighting is buffer-wide, so windows sharing a buffer share its focus.
+Punctuation and whitespace do not select their enclosing expressions.
+
+LUA API                                                    *flowistry-api*
+
+require('flowistry').setup(opts)       Configure and reset the plugin.
+require('flowistry').toggle()          Toggle current buffer.
+require('flowistry').enable()          Enable current buffer.
+require('flowistry').disable([buf])    Disable a buffer.
+require('flowistry').mark()            Pin at cursor, or unpin the same target.
+require('flowistry').unmark()          Remove pin.
+require('flowistry').refresh()         Clear caches and retry current buffer.
+require('flowistry').log()             Open latest error.
+require('flowistry').status([buf])     Get status string; "off" when disabled.
+require('flowistry').is_stale([buf])   Whether saved analysis is still displayed.
+require('flowistry').cache_status([buf]) Latest backend cache hit/miss counts.
+require('flowistry').indicator([buf])  Readable status including elapsed analysis.
+
+The Nix launcher adds a compact label to the existing Rust buffer statusline:
+rust-analyzer | flowistry. It matches airline's language-server text style.
+The label disappears when disabled; pins show flowistry (pinned).
+The launcher also enables progress=true: analysis opens an elapsed-time popup
+using CoC's progress notifications, or a Neovim float when CoC is not installed.
+Completion, errors and cancellation close the popup; cached cursor moves do not
+open one.
+Batch mode is enabled for its fork backend: files up to
+batch_max_lines (600) are analyzed together; larger files load functions on
+demand. Set batch=false for the unmodified upstream backend (the setup default).
+
+Status strings include loading, active, pinned, idle, editing, waiting for save,
+outside function, no place, pinned target unavailable, error, and off.
+
+LIMITATIONS                                                *flowistry-limits*
+
+Normal-mode cursor focus only. Editing preserves highlights and pins from the
+last successful analysis, labelled [saved analysis]. Saving refreshes them.
+Pins are remapped across formatter rewrites and line/column changes. A target
+that cannot be recovered is labelled "pinned target unavailable"; undo, repin,
+or use :Flow unpin to resume cursor tracking. Unsaved changes are not compiled.
+External changes may require :Flowistry refresh. Analysis is conservative, with
+optional local callee summaries, and subject to upstream limits around interior
+mutability and macros. Dimming is
+a reading aid, not proof of irrelevance. See the upstream Flowistry README.
+
+vim:tw=78:ts=8:noet:ft=help:norl:

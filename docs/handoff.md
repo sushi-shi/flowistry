@@ -1,6 +1,8 @@
 # Handoff: integrated review chain and optimization work
 
 Updated 2026-09-30 after taking over the latest Claude optimization session.
+The Neovim plugin has since moved into `nvim/`; see
+[the migration guide](neovim-monorepo.md) for the shared package and review chain.
 Master remains `f8b5582b7` (#18); nothing was merged. The canonical review order
 is [docs/review-chain.md](review-chain.md), also linked from every active PR.
 

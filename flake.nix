@@ -2,8 +2,7 @@
   description = "Flowistry: ownership-aware information-flow analysis for Rust";
 
   inputs = {
-    # Same pins as flowistry.nvim, so both evaluate to the same toolchain store
-    # path and neither re-fetches it.
+    # One compiler and dependency lock for the backend and all editor packages.
     nixpkgs.url = "github:NixOS/nixpkgs/1559d3daa3ecc813a650b79375ea61b6741b8746";
     fenix.url = "github:nix-community/fenix/5f7e7d793cb2553410f857554de86f277ebe2f71";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
@@ -56,9 +55,85 @@
               license = pkgs.lib.licenses.mit;
             };
           };
+          plugin = pkgs.vimUtils.buildVimPlugin {
+            pname = "flowistry.nvim";
+            version = self.shortRev or self.dirtyShortRev or "dev";
+            src = ./nvim;
+            # Loading this plugin directly also selects this checkout's backend.
+            # No second repository input, revision pin or ambient backend lookup.
+            postInstall = ''
+              cat > "$out/lua/flowistry/packaged.lua" <<'LUA'
+              return {
+                command = { "${backend}/bin/flowistry-backend" },
+                gzip = "${pkgs.gzip}/bin/gzip",
+                batch = true,
+              }
+              LUA
+            '';
+          };
+          nvim = pkgs.writeShellScriptBin "flowistry-nvim" ''
+            set -euo pipefail
+            editor=$(command -v nvim || true)
+            if [ -z "$editor" ]; then editor=${pkgs.neovim}/bin/nvim; fi
+            export FLOWISTRY_BACKEND_EXE=${backend}/bin/flowistry-backend
+            export FLOWISTRY_GZIP=${pkgs.gzip}/bin/gzip
+            exec "$editor" \
+              --cmd 'set runtimepath^=${plugin}' \
+              -c 'luafile ${plugin}/scripts/session.lua' "$@"
+          '';
         in {
-          inherit backend toolchain;
+          inherit backend toolchain plugin nvim;
           default = backend;
+        });
+
+      apps = eachSystem ({ system, ... }: {
+        nvim = {
+          type = "app";
+          meta.description = "Neovim with Flowistry from the same checkout";
+          program = "${self.packages.${system}.nvim}/bin/flowistry-nvim";
+        };
+      });
+
+      checks = eachSystem ({ pkgs, system, ... }:
+        let
+          packages = self.packages.${system};
+          test = name: script: inputs: pkgs.runCommand name {
+            nativeBuildInputs = [ pkgs.neovim pkgs.gzip ] ++ inputs;
+          } ''
+            export XDG_STATE_HOME="$TMPDIR/state"
+            export XDG_CACHE_HOME="$TMPDIR/cache"
+            export CARGO_HOME="$TMPDIR/cargo"
+            cp -r ${./nvim} source
+            chmod -R u+w source
+            cd source
+            ${script}
+            touch "$out"
+          '';
+          backendTest = name: script: test name ''
+            export FLOWISTRY_BACKEND_EXE=${packages.backend}/bin/flowistry-backend
+            ${script}
+          '' [ packages.backend pkgs.python3 ];
+        in {
+          nvim-frontend = test "flowistry-nvim-frontend" "make test" [ pkgs.gnumake ];
+          nvim-source-selection = backendTest "flowistry-nvim-source-selection" ''
+            nvim --headless -u NONE -i NONE -l tests/source-selection.lua
+            nvim --headless -u NONE -i NONE -l tests/precision.lua
+          '';
+          nvim-summaries = backendTest "flowistry-nvim-summaries" ''
+            nvim --headless -u NONE -i NONE -l tests/summaries.lua
+          '';
+          nvim-cache = backendTest "flowistry-nvim-cache" ''
+            nvim --headless -u NONE -i NONE -l tests/cache.lua
+            python3 ${./scripts/test-focus-cache.py} --backend "$FLOWISTRY_BACKEND_EXE"
+            python3 ${./scripts/test-fast-cache.py} --backend "$FLOWISTRY_BACKEND_EXE"
+          '';
+          nvim-package = test "flowistry-nvim-package" ''
+            export FLOWISTRY_EXPECTED_BACKEND=${packages.backend}/bin/flowistry-backend
+            export FLOWISTRY_TEST_PLUGIN=${packages.plugin}
+            nvim --headless -u NONE -i NONE -l tests/package.lua
+            FLOWISTRY_TEST_SESSION=1 ${packages.nvim}/bin/flowistry-nvim \
+              --headless -u NONE -i NONE -c 'luafile tests/package.lua'
+          '' [ packages.nvim packages.plugin ];
         });
 
       devShells = eachSystem ({ pkgs, toolchain, compilerLibraries, ... }: {
@@ -67,6 +142,12 @@
           packages = [ toolchain pkgs.pkg-config pkgs.python3 pkgs.time ];
           SYSROOT = "${toolchain}";
           LD_LIBRARY_PATH = compilerLibraries;
+        };
+
+        nvim = pkgs.mkShell {
+          packages = [ pkgs.neovim pkgs.gzip pkgs.gnumake self.packages.${pkgs.stdenv.hostPlatform.system}.backend ];
+          FLOWISTRY_BACKEND_EXE = "${self.packages.${pkgs.stdenv.hostPlatform.system}.backend}/bin/flowistry-backend";
+          FLOWISTRY_BATCH = "1";
         };
 
         # The default shell plus the native libraries that the git repositories in the
