@@ -28,8 +28,9 @@ their identifiable requested-file index; unknown foreign indices are rejected.
 Decoder failures on successful commands now retain their reason and fail the
 gate as protocol errors instead of being labeled compiler crashes.
 
-The first filename-table candidate is frozen at `77e347ae8` in
-`target/continuation-validation/file-identities-v1/`. The exact copied `just`
+The final candidate is frozen at `76d775628` in
+`target/continuation-validation/file-identities-v2/`. The initial candidate
+`77e347ae8` also remains available. On that initial candidate the exact copied `just`
 reproduction resolves both filenames in all six requests (cache-off, fresh cache
 and warm cache in both modes). Every preexisting output field matches the old
 response after the existing ordering/cache-metadata normalization. The new
@@ -41,11 +42,13 @@ all 18 summary cases, 54 Python harness regressions and the IDE all-targets suit
 pass. The [compact evidence](measurements/file-identities.json) retains exact
 build/harness provenance, outcomes and full-report checksums. The six cases
 verify complete table coverage, preservation of numeric fields, real macro-source
-identity, fresh/warm equality and compiler-free snapshot replay. Full corpus
-validation must be repeated at this candidate after the active legacy runs end.
+identity, fresh/warm equality and compiler-free snapshot replay. The full Recurse
+summary/output gate now runs at this candidate. The remaining cache/snapshot
+corpus gate will use the engine corpus after its legacy run ends.
 This fix does not convert old digest-only records into successful comparisons.
 
 The persistent result index also retains the requested file path in body ranges,
 instead of storing a process-local filename slot. The index is scoped to that
-file; the existing focus/file-focus numeric fields remain unchanged. Validation
-of this final metadata adjustment is pending.
+file; the existing focus/file-focus numeric fields remain unchanged. All 124
+process-level cases and the IDE suite pass at the final candidate, including
+explicit filename-path checks in the publication/index tests.

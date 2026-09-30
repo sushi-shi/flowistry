@@ -8,7 +8,7 @@ complete merely because tooling or a subset of its tests passes.
 | 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Full #17/integrated coverage: 2,827 equal successful pairs, 48 paired benign selections and five reference-OOM/integrated-success outcomes; see [combined-corpus-results.md](combined-corpus-results.md). Independent reference coverage is complete but five checks remain resource-limited. Full file-focus/cache comparison now running. |
 | 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Full Recurse equality passed, [#43](https://github.com/sushi-shi/flowistry/pull/43); acceptance pending | 1,416 equal successful pairs and 24 matching benign selections cover all locked Recurse positions. 107 core tests pass with engine-diff/shadow-eager. Full reference and quiet stress performance gates remain; see [recurse-row-groups.md](recurse-row-groups.md). |
-| 4. Seed rows | Candidate prepared, [#44](https://github.com/sushi-shi/flowistry/pull/44); gates pending | Fresh-root type templates preserve the traversal cutoff, with bounded temporary storage and shadow comparison to original seeds. 108 core tests pass; two-mode small-case comparison passes, full corpus and stress measurements pending. See [seed-row-experiment.md](seed-row-experiment.md). |
+| 4. Seed rows | Full corpus equality passed, [#44](https://github.com/sushi-shi/flowistry/pull/44); acceptance pending | All 2,880 locked selections agree: 2,832 successful pairs and 48 matching benign selections. 108 core tests pass; enhanced reference and quiet seed-construction/stress measurements remain. See [seed-row-experiment.md](seed-row-experiment.md). |
 | 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
 | 6. Edit/concurrency harness | Implemented in [#47](https://github.com/sushi-shi/flowistry/pull/47); release gates pending | 84 serial, concurrency, recovery and real-project cases pass; 47 harness regressions pass. See [edit-concurrency-validation.md](edit-concurrency-validation.md). Add versioned-publication/background cases as those features land; full corpus gates remain required. |
 | 7. Shared result index | Implemented in [#48](https://github.com/sushi-shi/flowistry/pull/48); final integration gates pending | Existing caches now share a publication lock and disk budget. Compiler-derived body index, revision/generation envelopes, cancellation, source-hash checks and interrupted-write recovery pass 16 new cases, plus all 84 edit cases. See [versioned-result-index.md](versioned-result-index.md). |
@@ -80,9 +80,11 @@ Do not delete active source/build inputs or preserved experiment work.
    `equivalence-complete{,-summary}.json` has exact full coverage; see
    [combined-corpus-results.md](combined-corpus-results.md). The full Recurse
    comparison of `baseline/` with `row-groups/` has passed: 1,416 equal successful
-   pairs and 24 matching benign selections. The h19 slot now runs both-mode
-   `row-groups/` versus `seed-rows/`, in `seed-rows-corpus.{log,json}` and
-   `seed-rows-checkpoints/`, under the same two-job/6 GiB caps.
+   pairs and 24 matching benign selections. The full both-mode `row-groups/`
+   versus `seed-rows/` comparison also passed: 2,832 equal successful pairs and
+   48 matching benign selections in `seed-rows-corpus.{log,json}` and
+   `seed-rows-checkpoints/`. Its h19 slot now runs persisted-summary verification
+   at `file-identities-v2/`, as described below, under the same two-job/6 GiB caps.
    Cache-off versus warm `file-focus` at `result-index-v1/` completed all 2,880
    requests successfully, but reported 2,040 output differences. A reproduced
    pair differs only in the requested file's response-local FilenameIndex.
@@ -91,7 +93,12 @@ Do not delete active source/build inputs or preserved experiment work.
    `file-cache-corpus.{log,json}` and the compact
    [initial report](measurements/file-cache-initial.json); they are not relabeled
    as passing. The corrected full run uses `file-cache-resolved.{log,json}` and
-   `file-cache-resolved-checkpoints/`. See [file-cache-comparison.md](file-cache-comparison.md).
+   `file-cache-resolved-checkpoints/`. It encountered two legacy decoder failures
+   at just's `src/unindent.rs:49:23`; both compiler commands exited successfully.
+   The [filename-table fix](file-focus-identities.md) resolves the foreign macro
+   identity and passes 124 process-level cases at `76d775628`. Preserve the
+   legacy run and its raw outcomes; the final cache corpus must use the new binary.
+   See [file-cache-comparison.md](file-cache-comparison.md).
    Preserve all three manifests when assembling coverage; do not present a new
    harness manifest as the origin of old records.
    The independent reference sweep has finished with complete coverage: 2,827
@@ -121,7 +128,10 @@ Do not delete active source/build inputs or preserved experiment work.
    saves and safe relocation (steps 8–12). Step 8's portable core boundary is
    connected to its disk adapter; 18 summary, 84 edit and 16 publication cases
    pass at `summary-store-v2/` (`9da7aba9f`). The full Recurse persisted/fresh
-   logical-summary and output gate must run when a heavy slot becomes free.
+   logical-summary and output gate now runs at the filename-fixed
+   `file-identities-v2/` (`76d775628`), using the h19 corpus and separate
+   `summary-corpus-stores/`, `summary-corpus-checkpoints/` and
+   `summary-corpus.{json,log}` artifacts.
    Use `FLOWISTRY_VERIFY_SUMMARIES=1` and `RUST_LOG=flowistry::audit=info` so
    completed-result hits cannot bypass summary verification and the report
    records actual summary hits/computations/verifications. Preserve both active

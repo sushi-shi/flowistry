@@ -1,8 +1,8 @@
 {
   "build": {
     "binaries": {
-      "cargo-flowistry": "1b7dc53e2a9e3ea56b9c462ef62aea941b10931c74b31c75bd5ad3de2e094bec",
-      "flowistry-driver": "4e6f6bf3b8dbdac4772bb02f318c691e48008a65abad73065cdfdff83def388a"
+      "cargo-flowistry": "1d5f00ee3250bbd0859f1d715672bfbccd0f45272484b8316d700e947076cdfb",
+      "flowistry-driver": "0dcefeec2e1177ad7f51d6b0f443323b1f85758abdcaffe2246a48f9fbc30b24"
     },
     "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
     "cargo_encoded_rustflags": "",
@@ -19,13 +19,13 @@
     "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
     "features": "",
     "profile": {},
-    "recorded_at": "2026-09-30T08:48:53.639222+00:00",
-    "revision": "77e347ae8051567cdba943b5eb7beebf22f333f3",
+    "recorded_at": "2026-09-30T08:58:35.451510+00:00",
+    "revision": "76d775628c0774290286ba0e3876d610d3ad9d4e",
     "rustflags": "",
-    "tree": "af7d22c371e5534f5428c720610c073be2a44113"
+    "tree": "7725266c56ec859cf5310bcf1af918e5b1feafcb"
   },
   "gates": {
-    "file-identities-edit-matrix-v1": {
+    "file-identities-edit-matrix-v2": {
       "cases": 84,
       "harness": {
         "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
@@ -36,15 +36,15 @@
       },
       "passed": true
     },
-    "file-identities-publication-v1": {
+    "file-identities-publication-v2": {
       "cases": 16,
       "harness": {
         "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
-        "test-result-index.py": "345cc5b6351c4dc641ad631d06ff89c297e14b2e4357e63d04aae6318ec321f3"
+        "test-result-index.py": "c13b63a70e6b57991fdc0fcd9db0defc7f8ff1c44151c2d81553fd108aeb7ce6"
       },
       "passed": true
     },
-    "file-identities-summaries-v1": {
+    "file-identities-summaries-v2": {
       "cases": 18,
       "harness": {
         "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
@@ -52,7 +52,7 @@
       },
       "passed": true
     },
-    "file-identities-tests-v1": {
+    "file-identities-tests-v2": {
       "cases": 6,
       "harness": {
         "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
@@ -64,6 +64,7 @@
   },
   "ide_all_targets": "passed",
   "legacy_reproduction": {
+    "backend": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v1",
     "preexisting_fields_equal": true,
     "requests": 6,
     "source": "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/_git/just/src/unindent.rs",
@@ -71,27 +72,27 @@
   },
   "logs": [
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v1-evidence/flowistry-file-identities-tests-v1.log",
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v2-evidence/flowistry-file-identities-tests-v2.log",
       "sha256": "9f91523c8530b5e08dc3148744d52dd8010041221359cc4c46dd69ef7e019e86"
     },
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v1-evidence/flowistry-file-identities-edit-matrix-v1.log",
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v2-evidence/flowistry-file-identities-edit-matrix-v2.log",
       "sha256": "9532c5e730a64a9997d999424a34268815f7067f5f52c4338e6f2c8654abe2a5"
     },
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v1-evidence/flowistry-file-identities-publication-v1.log",
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v2-evidence/flowistry-file-identities-publication-v2.log",
       "sha256": "80418f2576c03828421dc76f00eb635703978e0f3497a352514cca7f6c8f140e"
     },
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v1-evidence/flowistry-file-identities-summaries-v1.log",
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v2-evidence/flowistry-file-identities-summaries-v2.log",
       "sha256": "e581736ddb86d1a1dedf6b409f4758a19bc12ef5cb515770c02338ef16e24e2d"
     },
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v1-evidence/flowistry-file-identities-ide.log",
-      "sha256": "ab6d0ae2b360561b400abf796408da1531c3bd206e8f1123f4c66f021f4f7de5"
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v2-evidence/flowistry-file-identities-ide-v2.log",
+      "sha256": "8cbeeafb6d430cce3a591e0324c116834ab9ba472f522bbd5e352d185c26c402"
     },
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v1-evidence/flowistry-file-identities-python.log",
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-v2-evidence/flowistry-file-identities-python.log",
       "sha256": "ed6a3b179b6544ac68795e3b391d344d5b811899fd6a3b1c0f7f3376688e3032"
     }
   ],
@@ -159,20 +160,20 @@
   "python_harness_regressions": 54,
   "reports": [
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-tests-v1.json",
-      "sha256": "2c1b4ab8b65fc9db633eb5e6e07e7f7c0da867bacfdc883a91df66234409e8c5"
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-tests-v2.json",
+      "sha256": "baa19c97a09c6a176422e0f2f3396f2194e29e27f3f0418fdd1aafd5700cd943"
     },
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-edit-matrix-v1.json",
-      "sha256": "6d773db36829e24cb07155a9be456f65b93d554fdf4c96c09b73c1f69c5a185a"
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-edit-matrix-v2.json",
+      "sha256": "30d90240c744a8ea6946774c614171295c83b480885d5c7558ee7fe2fbe59a1b"
     },
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-publication-v1.json",
-      "sha256": "d6810d82790ad8bebdcd542334754707ecaf73487261dab549396f366ace0f4a"
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-publication-v2.json",
+      "sha256": "b4c1534117331f5a88f46e346e5696e5e42cc7ff0299eb7a828ed6d7fa527176"
     },
     {
-      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-summaries-v1.json",
-      "sha256": "067f994b261aef534c0855af465410750da622f2142e46c2d2eb783c2366d2b0"
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/file-identities-summaries-v2.json",
+      "sha256": "1947e8764aab7146406c0ad9fc5437a00b3df24fc5bf7b0e4d9c84263732e13e"
     },
     {
       "path": "/home/sheep/Projects/flowistry/target/continuation-validation/unindent-wire-repro.json",
