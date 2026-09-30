@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Instant};
 
 use anyhow::Result;
-use flowistry::infoflow::{self, Direction};
+use flowistry::infoflow;
 use itertools::Itertools;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
@@ -59,7 +59,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     })
     .into_group_map()
     .into_iter()
-    .map(|(k, vs)| (k, vs.concat()))
+    .map(|(k, vs)| (k, vs.into_iter().flatten().unique().collect::<Vec<_>>()))
     .collect::<Vec<_>>();
 
   let targets = grouped_spans
@@ -69,7 +69,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
 
   let relevant = {
     block_timer!("focus: dependency spans");
-    infoflow::compute_dependency_spans(results, targets, Direction::Both, &spanner)
+    infoflow::compute_focus_spans(results, targets, &spanner)
   };
 
   let direct = {

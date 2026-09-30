@@ -48,6 +48,11 @@ pub struct FlowistryPluginArgs {
 
 #[derive(Subcommand, Serialize, Deserialize)]
 enum FlowistryCommand {
+  FileFocus {
+    file: String,
+    pos_line: Option<usize>,
+    pos_column: Option<usize>,
+  },
   Spans {
     file: String,
   },
@@ -114,6 +119,7 @@ impl RustcPlugin for FlowistryPlugin {
     };
 
     let file = match &args.command {
+      FileFocus { file, .. } => file,
       Spans { file, .. } => file,
       Focus { file, .. } => file,
       Decompose { file, .. } => file,
@@ -143,6 +149,17 @@ impl RustcPlugin for FlowistryPlugin {
 
     use FlowistryCommand::*;
     match plugin_args.command {
+      FileFocus {
+        file,
+        pos_line,
+        pos_column,
+      } => postprocess(crate::file_focus::analyze(
+        &compiler_args,
+        file,
+        pos_line
+          .zip(pos_column)
+          .map(|(line, column)| CharPos { line, column }),
+      )),
       Spans { file, .. } => postprocess(crate::spans::spans(&compiler_args, file)),
       Playground {
         file,

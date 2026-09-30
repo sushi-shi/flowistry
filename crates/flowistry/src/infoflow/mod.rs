@@ -13,7 +13,9 @@ use rustc_utils::{BodyExt, block_timer};
 
 pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
-  dependencies::{Direction, compute_dependencies, compute_dependency_spans},
+  dependencies::{
+    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans,
+  },
 };
 use crate::{
   extensions::EvalMode,
@@ -25,6 +27,7 @@ mod callsite;
 mod dependencies;
 pub mod mutation;
 mod recursive;
+mod simple_args;
 
 /// The output of the information flow analysis.
 ///
