@@ -234,7 +234,7 @@ impl RustcPlugin for FlowistryPlugin {
   }
 }
 
-fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
+pub(crate) fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
   let result = match result {
     Ok(output) => Ok(output),
     Err(e) => match e {
