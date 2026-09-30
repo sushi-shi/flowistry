@@ -15,9 +15,9 @@ use rustc_span::Span;
 use rustc_utils::source_map::range::{CharPos, CharRange};
 use serde::{Deserialize, Serialize};
 
-use crate::focus::{FocusOutput, PlaceInfo};
+use crate::focus::{FocusOutput, ParameterAlias, PlaceInfo};
 
-const SCHEMA: u32 = 3;
+const SCHEMA: u32 = 4;
 const MAX_ENTRY: u64 = 32 * 1024 * 1024;
 
 struct Regions(Vec<String>);
@@ -449,6 +449,8 @@ struct Entry {
   ranges: Vec<PortableRange>,
   containers: Vec<PortableRange>,
   places: Vec<PortablePlace>,
+  comments: Vec<u32>,
+  parameter_aliases: Vec<ParameterAlias>,
 }
 impl Entry {
   fn checksum(&self) -> Option<String> {
@@ -458,6 +460,8 @@ impl Entry {
       &self.ranges,
       &self.containers,
       &self.places,
+      &self.comments,
+      &self.parameter_aliases,
     ))
     .ok()?;
     Some(fingerprint(|h| bytes.hash(h)))
@@ -480,6 +484,8 @@ impl Entry {
       integrity: String::new(),
       ranges: list(&output.ranges)?,
       containers: list(&output.containers)?,
+      comments: output.comments.clone(),
+      parameter_aliases: output.parameter_aliases.clone(),
       places: output
         .place_info
         .iter()
@@ -501,6 +507,20 @@ impl Entry {
     if self.checksum()? != self.integrity {
       return None;
     }
+    if self
+      .comments
+      .iter()
+      .copied()
+      .chain(
+        self
+          .parameter_aliases
+          .iter()
+          .flat_map(|alias| [alias.range, alias.target]),
+      )
+      .any(|index| index as usize >= self.ranges.len())
+    {
+      return None;
+    }
     let list = |ranges: &[PortableRange]| {
       ranges
         .iter()
@@ -519,6 +539,8 @@ impl Entry {
       }
     }
     Some(FocusOutput {
+      comments: self.comments.clone(),
+      parameter_aliases: self.parameter_aliases.clone(),
       ranges: list(&self.ranges)?,
       containers: list(&self.containers)?,
       place_info: self

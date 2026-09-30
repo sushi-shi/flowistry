@@ -33,6 +33,170 @@ fn snippet(tcx: TyCtxt<'_>, range: &CharRange) -> String {
 }
 
 #[test]
+fn source_selection_uses_compiler_parameters_and_comment_tokens() {
+  let source = r###"
+fn parameters<'a>(map: &'a Vec<i32>, mut saved: i32, (left, right): (i32, i32)) -> i32 {
+  // enter_map_travel_screen is a comment, not a dependency
+  let text = r#"// not a comment /* either */"#;
+  /* outer /* nested */ café */ saved += map[0];
+  let closure = |value: &i32| *value;
+  saved + left + right + closure(&saved) + text.len() as i32
+}
+fn main() {}
+"###;
+  borrowck_facts::enable_mir_simplification();
+  CompileBuilder::new(source).compile(|result| {
+    let tcx = result.tcx;
+    let id = body_named(tcx, "parameters");
+    let session = AnalysisSession::new(tcx, EvalMode::default());
+    let output = super::focus_with_session(&session, id).unwrap();
+    let aliases = output
+      .parameter_aliases
+      .iter()
+      .map(|alias| {
+        (
+          snippet(tcx, &output.ranges[alias.range as usize]),
+          snippet(tcx, &output.ranges[alias.target as usize]),
+        )
+      })
+      .collect::<Vec<_>>();
+    assert_eq!(aliases, vec![
+      ("&'a Vec<i32>".into(), "map".into()),
+      ("i32".into(), "saved".into())
+    ]);
+    let comments = output
+      .comments
+      .iter()
+      .map(|index| snippet(tcx, &output.ranges[*index as usize]))
+      .collect::<Vec<_>>();
+    assert_eq!(comments, vec![
+      "// enter_map_travel_screen is a comment, not a dependency",
+      "/* outer /* nested */ café */"
+    ]);
+  });
+}
+
+#[test]
+fn forward_constructor_focus_excludes_independent_fields() {
+  let source = r#"
+struct State { health: i32, timer: i32 }
+fn restore(saved: &State) -> State {
+  let state = State {
+    health: saved.health,
+    timer: 0,
+  };
+  state
+}
+
+fn main() {}
+"#;
+  borrowck_facts::enable_mir_simplification();
+  CompileBuilder::new(source).compile(|result| {
+    let tcx = result.tcx;
+    let session = AnalysisSession::new(tcx, EvalMode::default());
+    let output = super::focus_with_session(&session, body_named(tcx, "restore")).unwrap();
+    let selected = output
+      .place_info
+      .iter()
+      .find(|place| snippet(tcx, &output.ranges[place.range as usize]) == "saved")
+      .unwrap();
+    let slice = selected
+      .slice
+      .iter()
+      .map(|i| snippet(tcx, &output.ranges[*i as usize]))
+      .collect::<Vec<_>>()
+      .join("\n");
+    assert!(slice.contains("saved.health"), "{slice}");
+    assert!(!slice.contains("timer: 0"), "{slice}");
+  });
+}
+
+#[test]
+fn constructor_refinement_preserves_backward_effectful_and_controlled_inputs() {
+  let source = r#"
+struct State { health: i32, timer: i32, other: i32 }
+fn effect() -> i32 { 5 }
+fn reordered(saved: i32, other: i32) -> State {
+  let state = State { other: other, timer: 0, health: saved };
+  state
+}
+fn effectful(saved: i32) -> State {
+  let state = State { health: saved, timer: effect(), other: 0 };
+  state
+}
+fn controlled(flag: bool) -> State {
+  let state = if flag { State { health: 1, timer: 2, other: 3 } }
+    else { State { health: 4, timer: 5, other: 6 } };
+  state
+}
+fn updated(saved: i32, base: State) -> State {
+  let state = State { health: saved, timer: 0, ..base };
+  state
+}
+fn main() {}
+"#;
+  borrowck_facts::enable_mir_simplification();
+  CompileBuilder::new(source).compile(|result| {
+    let tcx = result.tcx;
+    for context_mode in [ContextMode::SigOnly, ContextMode::Recurse] {
+      let session = AnalysisSession::new(tcx, EvalMode {
+        context_mode,
+        ..EvalMode::default()
+      });
+      for (function, target, includes, excludes) in [
+        ("reordered", "saved", vec!["health: saved"], vec![
+          "timer: 0",
+          "other: other",
+        ]),
+        (
+          "reordered",
+          "state",
+          vec!["health: saved", "timer: 0", "other: other"],
+          vec![],
+        ),
+        (
+          "effectful",
+          "saved",
+          vec!["health: saved", "timer: effect()"],
+          vec!["other: 0"],
+        ),
+        ("controlled", "flag", vec!["timer: 2", "timer: 5"], vec![]),
+        ("updated", "saved", vec!["health: saved", "..base"], vec![
+          "timer: 0",
+        ]),
+      ] {
+        let output =
+          super::focus_with_session(&session, body_named(tcx, function)).unwrap();
+        let selected = output
+          .place_info
+          .iter()
+          .filter(|place| snippet(tcx, &output.ranges[place.range as usize]) == target)
+          .min_by_key(|place| output.ranges[place.range as usize].start)
+          .unwrap();
+        let slice = selected
+          .slice
+          .iter()
+          .map(|i| snippet(tcx, &output.ranges[*i as usize]))
+          .collect::<Vec<_>>()
+          .join("\n");
+        for text in includes {
+          assert!(
+            slice.contains(text),
+            "{function}/{target}/{context_mode:?} missing {text}: {slice}"
+          );
+        }
+        for text in excludes {
+          assert!(
+            !slice.contains(text),
+            "{function}/{target}/{context_mode:?} includes {text}: {slice}"
+          );
+        }
+      }
+    }
+  });
+}
+
+#[test]
 fn focus_output_preserves_protocol_and_field_precision() {
   let source = r#"
 struct State { a: i32, b: i32 }

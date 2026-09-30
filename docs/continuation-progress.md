@@ -3,6 +3,15 @@
 The [full plan](continuation-plan.md) remains the objective. No milestone is
 complete merely because tooling or a subset of its tests passes.
 
+The live highlighting report was addressed after #51 in
+[#52](https://github.com/sushi-shi/flowistry/pull/52) and
+[editor #5](https://github.com/sushi-shi/flowistry.nvim/pull/5): independent
+constructor fields, comment colors, parameter-type selection and rustfmt-save
+redraw. [Source-selection evidence](source-selection.md) includes the actual
+gameplay constructor. These fixes do not complete the remaining milestones.
+The coordinator remains uncommitted WIP in `/tmp/flowistry-project-coordinator`;
+preserve it and bring it onto #52 before its next PR.
+
 | Step | State | Evidence / next gate |
 |---|---|---|
 | 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Full #17/integrated coverage: 2,827 equal successful pairs, 48 paired benign selections and five reference-OOM/integrated-success outcomes; see [combined-corpus-results.md](combined-corpus-results.md). Independent reference coverage is complete but five checks remain resource-limited. Full file-focus/cache comparison now running. |
