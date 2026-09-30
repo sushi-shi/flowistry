@@ -357,7 +357,12 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
-  fn after_analysis<'tcx>(
+  /// Runs the analysis as soon as the crate is expanded and resolved, instead of after
+  /// rustc's whole-crate `analysis` pass. rustc's queries are demand-driven, so only
+  /// the target body and what the analysis needs (in `Recurse` mode, its callees) are
+  /// type-checked and borrow-checked, with borrowck facts collected for those only.
+  /// Errors elsewhere in the crate therefore do not stop the analysis.
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
     tcx: TyCtxt<'tcx>,
@@ -371,6 +376,17 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
       debug!("target span: {target:?}");
       let mut bodies = find_enclosing_bodies(tcx, target);
       let body = bodies.next().context("Selection did not map to a body")?;
+      // The whole-crate pass used to stop on errors before the analysis ran. Keep
+      // the analysis away from bodies that do not type-check; the errors are
+      // reported and fail the request as before.
+      if let Some(guar) = tcx
+        .typeck(tcx.hir_body_owner_def_id(body))
+        .tainted_by_errors
+      {
+        return Err(anyhow::Error::msg(format!(
+          "the selected function does not type-check: {guar:?}"
+        )));
+      }
       analysis.analyze(tcx, body)
     })());
 

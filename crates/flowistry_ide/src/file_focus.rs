@@ -42,18 +42,10 @@ struct Callbacks {
 impl rustc_driver::Callbacks for Callbacks {
   fn config(&mut self, config: &mut rustc_interface::Config) {
     borrowck_facts::enable_mir_simplification();
-    if matches!(
-      self.eval_mode.context_mode,
-      flowistry::extensions::ContextMode::SigOnly
-    ) {
-      crate::scoped_borrowck::configure(self.filename.clone(), self.position);
-      config.override_queries = Some(crate::scoped_borrowck::override_queries);
-    } else {
-      config.override_queries = Some(borrowck_facts::override_queries);
-    }
+    config.override_queries = Some(borrowck_facts::override_queries);
   }
 
-  fn after_analysis<'tcx>(
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
     tcx: TyCtxt<'tcx>,
@@ -97,10 +89,11 @@ impl rustc_driver::Callbacks for Callbacks {
         bodies.push(BodyOutput {
           range,
           focus: if self.position.is_none() || selected == Some(id) {
-            Some(
-              crate::focus::focus_with_session(&session, id)
-                .map_err(|error| error.to_string()),
-            )
+            Some(if tcx.typeck(tcx.hir_body_owner_def_id(id)).tainted_by_errors.is_some() {
+              Err("the selected function does not type-check".to_string())
+            } else {
+              crate::focus::focus_with_session(&session, id).map_err(|error| error.to_string())
+            })
           } else {
             None
           },

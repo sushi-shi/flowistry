@@ -12,7 +12,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::{BytePos, Span, SpanData};
 use rustc_utils::{
   SpanExt, block_timer,
-  mir::{borrowck_facts::get_body_with_borrowck_facts, location_or_arg::LocationOrArg},
+  mir::location_or_arg::LocationOrArg,
   source_map::{
     range::CharRange,
     spanner::{EnclosingHirSpans, Spanner},
@@ -73,7 +73,7 @@ pub(crate) fn focus_with_session<'tcx>(
 ) -> Result<FocusOutput> {
   let tcx = session.tcx();
   let def_id = tcx.hir_body_owner_def_id(body_id);
-  let body_with_facts = get_body_with_borrowck_facts(tcx, def_id);
+  let body_with_facts = flowistry::mir::borrowck::body_with_borrowck_facts(tcx, def_id);
   let body = &body_with_facts.body;
   let results = &infoflow::compute_flow_with_session(session, body_id, body_with_facts);
   let shared_results =

@@ -29,7 +29,6 @@ mod focus;
 mod playground;
 mod plugin;
 mod positions;
-mod scoped_borrowck;
 mod spans;
 
 pub use plugin::FlowistryPlugin;

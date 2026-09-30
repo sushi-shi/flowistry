@@ -1,9 +1,10 @@
 use anyhow::Result;
+use flowistry::mir::borrowck::body_with_borrowck_facts as get_body_with_borrowck_facts;
 use log::debug;
 use rustc_data_structures::fx::FxHashSet as HashSet;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
-use rustc_utils::{BodyExt, mir::borrowck_facts::get_body_with_borrowck_facts};
+use rustc_utils::BodyExt;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Default)]

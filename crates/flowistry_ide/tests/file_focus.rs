@@ -141,16 +141,18 @@ fn module_file() {
   assert_eq!(bodies(&output), vec![(0, 2, true)]);
 }
 
-/// Borrowck facts are only collected for the requested bodies, but rustc still
-/// borrow-checks the others: an error there fails the request as before.
+/// Demand-driven file focus checks only the selected bodies. Errors in another
+/// file do not prevent either a position request or analysis of the whole file.
 #[test]
-fn borrowck_errors_outside_the_scope_are_still_reported() {
+fn borrowck_errors_in_other_files_do_not_block_file_focus() {
   let dir = setup(
     "borrowck_error",
     "pub fn other() -> usize {\n    let v = vec![1];\n    let r = &v;\n    drop(v);\n    r.len()\n}\n",
   );
   for position in [Some((7, 8)), None] {
-    let stderr = file_focus(&dir, "src/lib.rs", position).unwrap_err();
-    assert!(stderr.contains("error[E0505]"), "{stderr}");
+    let output = file_focus(&dir, "src/lib.rs", position).unwrap();
+    assert!(!bodies(&output).is_empty());
   }
+  let stderr = file_focus(&dir, "src/other.rs", None).unwrap_err();
+  assert!(stderr.contains("error[E0505]"), "{stderr}");
 }
