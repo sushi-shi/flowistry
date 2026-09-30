@@ -1,4 +1,4 @@
-use std::{cell::RefCell, iter};
+use std::{cell::RefCell, collections::HashMap, iter};
 
 use either::Either;
 use log::{debug, trace};
@@ -12,6 +12,7 @@ use rustc_utils::{
 
 use super::{FlowDomain, FlowResults, mutation::ModularMutationVisitor};
 use crate::{
+  extensions::ContextMode,
   infoflow::mutation::Mutation,
   mir::{bitset::IndexSetExt, placeinfo::PlaceInfo},
 };
@@ -102,6 +103,15 @@ pub fn compute_dependencies<'tcx>(
   all_targets: Vec<Vec<(Place<'tcx>, LocationOrArg)>>,
   direction: Direction,
 ) -> Vec<LocationOrArgSet> {
+  compute_dependencies_inner(results, all_targets, direction, None)
+}
+
+fn compute_dependencies_inner<'tcx>(
+  results: &FlowResults<'_, 'tcx>,
+  all_targets: Vec<Vec<(Place<'tcx>, LocationOrArg)>>,
+  direction: Direction,
+  precomputed: Option<&[TargetDeps]>,
+) -> Vec<LocationOrArgSet> {
   block_timer!("compute_dependencies");
   log::info!("Computing dependencies for {} targets", all_targets.len());
   debug!("all_targets={all_targets:#?}");
@@ -118,10 +128,17 @@ pub fn compute_dependencies<'tcx>(
   );
 
   let forward = || {
-    let all_target_deps = all_targets
-      .iter()
-      .map(|targets| TargetDeps::new(targets, results))
-      .collect::<Vec<_>>();
+    let owned;
+    let all_target_deps = match precomputed {
+      Some(targets) => targets,
+      None => {
+        owned = all_targets
+          .iter()
+          .map(|targets| TargetDeps::new(targets, results))
+          .collect::<Vec<_>>();
+        &owned
+      }
+    };
     log::info!(
       "sub-targets: {}",
       all_target_deps
@@ -133,8 +150,7 @@ pub fn compute_dependencies<'tcx>(
 
     for arg in body.args_iter() {
       let location = LocationOrArg::Arg(arg);
-      for (target_deps, outputs) in
-        iter::zip(&all_target_deps, &mut *outputs.borrow_mut())
+      for (target_deps, outputs) in iter::zip(all_target_deps, &mut *outputs.borrow_mut())
       {
         if target_deps
           .all_forward
@@ -152,7 +168,7 @@ pub fn compute_dependencies<'tcx>(
         let deps = deps(state, aliases, place);
 
         for (target_deps, outputs) in
-          iter::zip(&all_target_deps, &mut *outputs.borrow_mut())
+          iter::zip(all_target_deps, &mut *outputs.borrow_mut())
         {
           if target_deps
             .all_forward
@@ -171,6 +187,30 @@ pub fn compute_dependencies<'tcx>(
         }) => {
           if let Some(place) = discr.as_place() {
             check(place);
+          }
+        }
+        // In Recurse mode, the mutations of a terminator are those of the analysis
+        // (e.g. from a callee summary), and it may read a target without writing
+        // anything that depends on it (e.g. a call returning `()`).
+        Either::Right(terminator)
+          if results.analysis.place_info.mode().context_mode == ContextMode::Recurse =>
+        {
+          let effects = results.analysis.effects_at(terminator, location);
+          for mutation in &effects.mutations {
+            check(mutation.mutated);
+          }
+          if let Some(reads) = results.analysis.call_reads.borrow().get(&location) {
+            for (target_deps, outputs) in
+              iter::zip(all_target_deps, &mut *outputs.borrow_mut())
+            {
+              if target_deps
+                .all_forward
+                .iter()
+                .any(|fwd| reads.is_superset(fwd))
+              {
+                outputs.insert(location);
+              }
+            }
           }
         }
         _ => ModularMutationVisitor::new(&results.analysis.place_info, |_, mutations| {
@@ -241,4 +281,125 @@ pub fn compute_dependency_spans<'tcx>(
       merged_spans
     })
     .collect::<Vec<_>>()
+}
+
+/// Human-facing focus ranges: each target's forward and backward slice, with the
+/// independent inputs of forward-only calls removed.
+///
+/// In `f(target, other)`, when the call is only in the forward slice, `other` is not
+/// highlighted unless it depends on the target. Backward dependencies retain the
+/// complete call: all its inputs may be needed to explain its result. Only
+/// side-effect-free reads with trustworthy source spans are candidates for removal
+/// (see [`super::simple_args::collect`]).
+pub fn compute_focus_spans<'tcx>(
+  results: &FlowResults<'_, 'tcx>,
+  targets: Vec<Vec<(Place<'tcx>, LocationOrArg)>>,
+  spanner: &Spanner,
+) -> Vec<Vec<Span>> {
+  block_timer!("compute_focus_spans");
+  let body = results.analysis.body;
+  let simple_args = super::simple_args::collect(
+    results.analysis.tcx,
+    results.analysis.def_id.expect_local(),
+  );
+  let target_deps = targets
+    .iter()
+    .map(|target| TargetDeps::new(target, results))
+    .collect::<Vec<_>>();
+  let forward = compute_dependencies_inner(
+    results,
+    targets.clone(),
+    Direction::Forward,
+    Some(&target_deps),
+  );
+  let backward = compute_dependencies(results, targets, Direction::Backward);
+
+  // Argument provenance and MIR-to-source conversion do not depend on the
+  // selected variable. Compute them once per function, rather than per slice.
+  let calls = body
+    .all_locations()
+    .filter_map(|location| {
+      let Either::Right(Terminator {
+        kind: TerminatorKind::Call { args, .. },
+        ..
+      }) = body.stmt_at(location)
+      else {
+        return None;
+      };
+      // state_at includes this instruction's effects. Call effects conservatively
+      // mix the arguments; read their provenance BEFORE the call instead.
+      let incoming = if location.statement_index > 0 {
+        vec![Location {
+          block: location.block,
+          statement_index: location.statement_index - 1,
+        }]
+      } else {
+        body.basic_blocks.predecessors()[location.block]
+          .iter()
+          .map(|block| body.terminator_loc(*block))
+          .collect()
+      };
+      if incoming.is_empty() {
+        return None;
+      }
+      let inputs = args
+        .iter()
+        .filter_map(|arg| {
+          if !simple_args.contains(&arg.span) {
+            return None;
+          }
+          let place = arg.node.as_place()?;
+          let mut deps = LocationOrArgSet::new(results.analysis.location_domain());
+          for previous in &incoming {
+            deps.union(
+              &results
+                .analysis
+                .deps_for(results.state_at(*previous), place),
+            );
+          }
+          Some((arg.span, deps))
+        })
+        .collect::<Vec<_>>();
+      Some((LocationOrArg::Location(location), inputs))
+    })
+    .collect::<Vec<_>>();
+  let mut span_cache = HashMap::new();
+  for deps in forward.iter().chain(&backward) {
+    for location in deps.iter() {
+      span_cache.entry(*location).or_insert_with(|| {
+        spanner.location_to_spans(*location, body, EnclosingHirSpans::OuterOnly)
+      });
+    }
+  }
+
+  forward
+    .into_iter()
+    .zip(backward)
+    .zip(target_deps)
+    .map(|((forward, mut backward), target)| {
+      let excluded = calls
+        .iter()
+        .filter(|(location, _)| {
+          forward.contains(*location) && !backward.contains(*location)
+        })
+        .flat_map(|(_, inputs)| inputs.iter())
+        .filter(|(_, deps)| {
+          !target
+            .all_forward
+            .iter()
+            .any(|source| deps.is_superset(source))
+        })
+        .map(|(span, _)| *span)
+        .collect::<Vec<_>>();
+      backward.union(&forward);
+      let spans = backward
+        .iter()
+        .flat_map(|location| span_cache[location].iter().copied())
+        .collect::<Vec<_>>();
+      Span::merge_overlaps(spans)
+        .into_iter()
+        .flat_map(|span| span.subtract(excluded.clone()))
+        .collect()
+    })
+    .collect()
 }
