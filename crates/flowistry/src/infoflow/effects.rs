@@ -42,8 +42,26 @@ pub(crate) struct CallEffects<'tcx> {
 }
 
 impl<'tcx> FlowAnalysis<'_, 'tcx> {
-  /// The mutations of a statement.
+  /// The mutations of a statement (cached).
   pub(crate) fn statement_mutations(
+    &self,
+    statement: &Statement<'tcx>,
+    location: Location,
+  ) -> Rc<[Mutation<'tcx>]> {
+    if let Some(mutations) = self.caches.statement_mutations.borrow().get(&location) {
+      return Rc::clone(mutations);
+    }
+    let mutations =
+      Rc::<[_]>::from(self.compute_statement_mutations(statement, location));
+    self
+      .caches
+      .statement_mutations
+      .borrow_mut()
+      .insert(location, Rc::clone(&mutations));
+    mutations
+  }
+
+  fn compute_statement_mutations(
     &self,
     statement: &Statement<'tcx>,
     location: Location,

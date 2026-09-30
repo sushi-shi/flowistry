@@ -4,8 +4,8 @@ use std::{
 };
 
 use indexical::{IndexedValue, bitset::rustc::IndexSet};
-use log::{debug, trace};
-use rustc_data_structures::fx::FxHashMap as HashMap;
+use log::debug;
+use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::{visit::Visitor, *},
@@ -14,6 +14,7 @@ use rustc_middle::{
 use rustc_mir_dataflow::Analysis;
 use rustc_utils::{
   BodyExt, OperandExt, PlaceExt,
+  cache::Cache,
   mir::{
     control_dependencies::ControlDependencies,
     location_or_arg::{
@@ -104,6 +105,7 @@ pub struct FlowAnalysis<'a, 'tcx> {
 
   /// Counters of the transfer function.
   pub(crate) counters: TransferCounters,
+  pub(crate) caches: TransferCaches<'tcx>,
   /// The rows of argument places at the start of the body, shared by every state.
   pub(crate) seeds: Rc<SeedRows<NormPlace<'tcx>, LocationOrArg>>,
 }
@@ -113,6 +115,37 @@ pub struct FlowAnalysis<'a, 'tcx> {
 pub(crate) struct TransferCounters {
   pub(crate) transfers: Cell<usize>,
   pub(crate) mutations: Cell<usize>,
+}
+
+/// Memoized computations of the transfer function. Each depends only on its key (a
+/// place or a location of the body), so it is computed at its first use, with the
+/// same queries in the same order as without the cache, and reused afterwards.
+#[derive(Default)]
+pub(crate) struct TransferCaches<'tcx> {
+  /// The batches of mutations of each location per the modular approximation.
+  modular_mutations: RefCell<HashMap<Location, Rc<[Vec<Mutation<'tcx>>]>>>,
+  /// The mutations of each statement (see [`FlowAnalysis::statement_mutations`]).
+  pub(crate) statement_mutations: RefCell<HashMap<Location, Rc<[Mutation<'tcx>]>>>,
+  /// The rows whose values influence a place (see [`FlowAnalysis::influences`]).
+  influence_keys: Cache<Place<'tcx>, Box<[NormPlace<'tcx>]>>,
+  /// The rows of the children of a place, which a strong update of it clears.
+  children_keys: Cache<Place<'tcx>, Box<[NormPlace<'tcx>]>>,
+  /// The rows of the aliases of a place that a mutation of it writes (see
+  /// [`FlowAnalysis::written_aliases`]).
+  written_alias_keys: Cache<Place<'tcx>, Box<[NormPlace<'tcx>]>>,
+}
+
+/// The distinct normalized places of `places`.
+fn distinct_keys<'tcx>(
+  place_info: &PlaceInfo<'_, 'tcx>,
+  places: impl IntoIterator<Item = Place<'tcx>>,
+) -> Box<[NormPlace<'tcx>]> {
+  let mut seen = HashSet::default();
+  places
+    .into_iter()
+    .map(|place| place_info.normalize(place))
+    .filter(|key| seen.insert(*key))
+    .collect()
 }
 
 impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
@@ -163,6 +196,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       call_reads: RefCell::default(),
       shared_handles: None,
       counters: TransferCounters::default(),
+      caches: TransferCaches::default(),
       seeds: Rc::new(seeds),
     }
   }
@@ -190,6 +224,52 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     conflicts.chain(provenance).copied().collect()
   }
 
+  /// The distinct rows of the places that influence `place` (cached).
+  pub(crate) fn influence_keys(&self, place: Place<'tcx>) -> &[NormPlace<'tcx>] {
+    self.caches.influence_keys.get(&place, |place| {
+      distinct_keys(&self.place_info, self.influences(place))
+    })
+  }
+
+  /// The distinct rows of the children of `place` (cached).
+  fn children_keys(&self, place: Place<'tcx>) -> &[NormPlace<'tcx>] {
+    self.caches.children_keys.get(&place, |place| {
+      distinct_keys(&self.place_info, self.place_info.children(place))
+    })
+  }
+
+  /// The distinct rows of the aliases of `place` that a mutation of `place` writes
+  /// (cached, see [`written_aliases`](Self::written_aliases)).
+  pub(crate) fn written_alias_keys(&self, place: Place<'tcx>) -> &[NormPlace<'tcx>] {
+    self.caches.written_alias_keys.get(&place, |place| {
+      let written = self.written_aliases(place);
+      debug!("  Mutable aliases of {place:?}: {written:?}");
+      distinct_keys(&self.place_info, written)
+    })
+  }
+
+  /// The batches of mutations at `location` per the modular approximation (cached).
+  pub(crate) fn modular_mutations(
+    &self,
+    location: Location,
+  ) -> Rc<[Vec<Mutation<'tcx>>]> {
+    if let Some(batches) = self.caches.modular_mutations.borrow().get(&location) {
+      return Rc::clone(batches);
+    }
+    let mut batches = Vec::new();
+    ModularMutationVisitor::new(&self.place_info, |_, mutations| {
+      batches.push(mutations);
+    })
+    .visit_location(self.body, location);
+    let batches = Rc::<[_]>::from(batches);
+    self
+      .caches
+      .modular_mutations
+      .borrow_mut()
+      .insert(location, Rc::clone(&batches));
+    batches
+  }
+
   /// Returns all the dependencies of `place` within `state`.
   ///
   /// Prefer using this method instead of accessing `FlowDomain` directly,
@@ -200,13 +280,10 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     place: Place<'tcx>,
   ) -> LocationOrArgSet {
     let mut deps = LocationOrArgSet::new(self.location_domain());
-    for subplace in self
-      .place_info
-      .reachable_values(place, Mutability::Not)
-      .iter()
-      .flat_map(|place| self.influences(*place))
-    {
-      deps.union(state.row_set(&self.place_info.normalize(subplace)));
+    for reachable in self.place_info.reachable_values(place, Mutability::Not) {
+      for key in self.influence_keys(*reachable) {
+        deps.union(state.row_set(key));
+      }
     }
     deps
   }
@@ -219,8 +296,8 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
   ) -> IndexSet<C> {
     let mut deps = IndexSet::new(state.col_domain());
     for input in inputs {
-      for relevant in self.influences(*input) {
-        deps.union(state.row_set(&self.place_info.normalize(relevant)));
+      for key in self.influence_keys(*input) {
+        deps.union(state.row_set(key));
       }
     }
     deps
@@ -306,10 +383,8 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
 
     // Add every influence on `input` to `deps`.
     let add_deps = |state: &M, input, target_deps: &mut IndexSet<C>| {
-      for relevant in self.influences(input) {
-        let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
-        trace!("    For relevant {relevant:?} for input {input:?}");
-        target_deps.union(relevant_deps);
+      for key in self.influence_keys(input) {
+        target_deps.union(state.row_set(key));
       }
     };
 
@@ -344,35 +419,43 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       if mt.status() == MutationStatus::Definitely
         && self.place_info.aliases(mt.mutated).len() == 1
       {
-        for sub in self.place_info.children(mt.mutated).iter() {
-          state.clear_row(&self.place_info.normalize(*sub));
+        for key in self.children_keys(mt.mutated) {
+          state.clear_row(key);
         }
       }
 
       // Add deps of mutated to include provenance of mutated pointers
       add_deps(state, mt.mutated, deps);
 
-      let mutable_aliases = self.written_aliases(mt.mutated);
-
-      debug!("  Mutated places: {mutable_aliases:?}");
       debug!("    with deps {deps:?}");
-
-      for alias in &mutable_aliases {
-        state.union_into_row(self.place_info.normalize(*alias), deps);
+      for key in self.written_alias_keys(mt.mutated) {
+        state.union_into_row(*key, deps);
       }
 
       // Pessimistic analysis only: other handles to the same interior-mutable
       // state may point to the object that was just written.
-      if let Some(handles) = &self.shared_handles {
-        let shared = mutable_aliases
-          .iter()
-          .flat_map(|alias| handles.possibly_shared(mt, *alias, &self.place_info))
-          .collect::<SmallVec<[_; 8]>>();
-        for row in shared {
-          state.union_into_row(row, deps);
-        }
+      for row in self.possibly_shared_rows(mt) {
+        state.union_into_row(row, deps);
       }
     }
+  }
+
+  /// In the pessimistic analysis of
+  /// [`compute_flow_with_shared_handles`](super::compute_flow_with_shared_handles),
+  /// the states of the other handles that `mutation` may also write (see
+  /// [`SharedHandles::possibly_shared`]). Empty in the exact analysis.
+  fn possibly_shared_rows(
+    &self,
+    mutation: &Mutation<'tcx>,
+  ) -> SmallVec<[NormPlace<'tcx>; 8]> {
+    let Some(handles) = &self.shared_handles else {
+      return SmallVec::new();
+    };
+    self
+      .written_aliases(mutation.mutated)
+      .iter()
+      .flat_map(|alias| handles.possibly_shared(mutation, *alias, &self.place_info))
+      .collect()
   }
 
   fn recurse(&self) -> bool {
@@ -444,11 +527,10 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
         .or_insert(reads);
       self.transfer_function(state, &effects.mutations, location);
     } else {
-      ModularMutationVisitor::new(&self.place_info, |_, mutations| {
-        debug_assert!(definite_writes_disjoint(&mutations), "{mutations:?}");
-        self.transfer_function(state, &mutations, location)
-      })
-      .visit_terminator(terminator, location);
+      for mutations in self.modular_mutations(location).iter() {
+        debug_assert!(definite_writes_disjoint(mutations), "{mutations:?}");
+        self.transfer_function(state, mutations, location)
+      }
     }
 
     terminator.edges()

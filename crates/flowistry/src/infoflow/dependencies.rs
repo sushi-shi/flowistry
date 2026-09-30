@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, iter};
 
 use either::Either;
 use log::{debug, trace};
-use rustc_middle::mir::{visit::Visitor, *};
+use rustc_middle::mir::*;
 use rustc_span::Span;
 use rustc_utils::{
   BodyExt, OperandExt, SpanExt, block_timer,
@@ -10,7 +10,7 @@ use rustc_utils::{
   source_map::spanner::{EnclosingHirSpans, Spanner},
 };
 
-use super::{FlowDomain, FlowResults, mutation::ModularMutationVisitor};
+use super::{FlowDomain, FlowResults};
 use crate::{
   extensions::ContextMode,
   infoflow::mutation::Mutation,
@@ -213,12 +213,13 @@ fn compute_dependencies_inner<'tcx>(
             }
           }
         }
-        _ => ModularMutationVisitor::new(&results.analysis.place_info, |_, mutations| {
-          for Mutation { mutated, .. } in mutations {
-            check(mutated);
+        _ => {
+          for mutations in results.analysis.modular_mutations(location).iter() {
+            for Mutation { mutated, .. } in mutations {
+              check(*mutated);
+            }
           }
-        })
-        .visit_location(body, location),
+        }
       }
     }
   };
