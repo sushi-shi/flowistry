@@ -5,4 +5,5 @@ data
 .ipynb_checkpoints
 .Rhistory
 .cache
-*.so__pycache__/
+*.so
+__pycache__/

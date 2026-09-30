@@ -31,7 +31,7 @@ pinned nightly toolchain, so run it inside the dev shell, e.g.
 
 Exit status is 1 if any run crashed, timed out or ran out of memory (or, with
 --compare, if the two backends disagree; with --budgets, if a budget is
-exceeded), else 0.
+exceeded), or if a corpus entry was skipped, else 0.
 """
 
 import argparse
@@ -1122,10 +1122,25 @@ def run_positions(report, entry_dir, dest, args, backends):
     envs = [(name, dict(backend_env(bin_dir, target_root / "target" / ("smoke-base" if i == 0 else "smoke-cmp")),
                         **report.get("env", {})))
             for i, (name, bin_dir) in enumerate(backends)]
+    checkpoints = getattr(args, "checkpoints", None)
+    source_identity = None
+    if checkpoints:
+        from smoke_checkpoint import tree_digest
+        source_identity = tree_digest(target_root)
     started = time.monotonic()
     for idx, (rel, line, col, modes) in enumerate(runs):
         for mode in modes:
             rec = {"crate": label, "file": rel, "line": line, "column": col, "mode": mode}
+            checkpoint_key = dict(rec, source=source_identity)
+            if checkpoints:
+                if tree_digest(target_root) != source_identity:
+                    raise RuntimeError(f"{label}: source inputs changed during validation")
+                previous = checkpoints.load(checkpoint_key)
+                if previous is not None:
+                    previous["checkpoint_reused"] = True
+                    report["records"].append(previous)
+                    continue
+            rec["recorded_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             for name, env in envs:
                 # Inside a workspace member, cargo-flowistry resolves relative paths from the
                 # package but the driver from the workspace root; an absolute path works for both.
@@ -1143,7 +1158,13 @@ def run_positions(report, entry_dir, dest, args, backends):
                 rec["same"] = same
             if not args.keep_outputs:
                 for name, _ in envs:
-                    rec[name].pop("output", None)
+                    output = rec[name].pop("output", None)
+                    if isinstance(output, dict) and "digest" in output:
+                        rec[name]["output_digest"] = output["digest"]
+            if checkpoints:
+                if tree_digest(target_root) != source_identity:
+                    raise RuntimeError(f"{label}: source inputs changed during validation")
+                checkpoints.save(checkpoint_key, rec)
             report["records"].append(rec)
         if (idx + 1) % 10 == 0:
             log(f"[{label}] {idx + 1}/{len(runs)} positions")
@@ -1363,11 +1384,20 @@ def main():
     parser.add_argument("--skip", action="append", default=[], metavar="NAME",
                         help="leave the corpus entry NAME out (repeatable)")
     parser.add_argument("--json", type=Path, metavar="FILE", help="write every run record to FILE")
+    parser.add_argument("--checkpoint-dir", type=Path,
+                        help="resume correctness runs with the same binaries, inputs and settings; not for timing")
     parser.add_argument("--keep-outputs", action="store_true", help="include full focus outputs in --json")
     parser.add_argument("--examples", type=int, default=5, help="example positions shown per problem group")
     args = parser.parse_args()
 
     args.modes = [m.strip() for m in args.modes.split(",") if m.strip()]
+    if args.checkpoint_dir:
+        # Nix launchers allocate fresh temporary paths each time. Use one real,
+        # stable directory for the compiler rather than ignoring observable env.
+        scratch = args.checkpoint_dir.resolve() / "tmp"
+        scratch.mkdir(parents=True, exist_ok=True)
+        for name in ("TMPDIR", "TMP", "TEMP", "TEMPDIR", "NIX_BUILD_TOP"):
+            os.environ[name] = str(scratch)
     if args.memory_limit and shutil.which("systemd-run") is None:
         parser.error("--memory-limit needs systemd-run")
     if args.budgets:
@@ -1426,6 +1456,14 @@ def main():
     if args.budgets is not None:
         budgeted = {b["crate"] for b in args.budgets}
         specs = [s for s in specs if isinstance(s, dict) and s["name"] in budgeted]
+    args.checkpoints = None
+    if args.checkpoint_dir:
+        if args.update_corpus or args.prepare_only or args.keep_outputs or args.repeat != 1:
+            parser.error("checkpoints require a fixed correctness run (no update, prepare, full output, or repeats)")
+        if any(not isinstance(spec, dict) for spec in specs):
+            parser.error("checkpoints require locked corpus entries")
+        from smoke_checkpoint import Checkpoints, manifest
+        args.checkpoints = Checkpoints(args.checkpoint_dir, manifest(args, backends, CORPUS_DIR, __file__))
     started = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         reports = list(pool.map(lambda s: smoke_crate(s, args, registries, backends), specs))
@@ -1443,14 +1481,19 @@ def main():
             "backends": {n: str(d) for n, d in backends},
             "seed": args.seed, "positions": args.positions, "modes": args.modes,
             "total_seconds": round(total, 1),
+            "validation_manifest": args.checkpoints.manifest if args.checkpoints else None,
+            "checkpoint_id": args.checkpoints.identity if args.checkpoints else None,
             "crates": reports,
         }, indent=1))
 
-    bad = any(rec[n]["status"] in FAILURES for r in reports for rec in r["records"]
+    bad = any(r["skipped"] for r in reports)
+    bad |= any(rec[n]["status"] in FAILURES for r in reports for rec in r["records"]
               for n, _ in backends)
     bad |= any(not rec.get("same", True) for r in reports for rec in r["records"])
     if args.budgets is not None:
         bad |= budget_summary(reports, [n for n, _ in backends], args.budgets)[1]
+    if args.checkpoints:
+        args.checkpoints.close()
     sys.exit(1 if bad else 0)
 
 
