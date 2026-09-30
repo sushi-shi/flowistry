@@ -5,6 +5,7 @@ test:
 	nvim --headless -u NONE -i NONE -l tests/background_scheduler.lua
 	nvim --headless -u NONE -i NONE -l tests/background.lua
 	nvim --headless -u NONE -i NONE -l tests/inputs.lua
+	nvim --headless -u NONE -i NONE -l tests/cancellation.lua
 
 test-ui:
 	nvim --headless -n -i NONE --cmd 'let g:coc_start_at_startup=0' -c 'luafile tests/ui.lua'

@@ -119,6 +119,26 @@ local ok, err = xpcall(function()
   local huge = {}; for i = 1, 8200 do huge[i] = root .. "/file" .. i end
   watch:observe(project, { schema = 1, roots = {}, files = huge })
   check(watch:matches(project, "/outside/unlisted"), "watch budget overflow falls back conservatively")
+
+  -- Source snapshots are an undo optimization, not a history of every visited
+  -- file. Inspect retention while exercising real read/unload/wipe events.
+  local snapshots
+  for _, command in ipairs(vim.api.nvim_get_autocmds({ group = 'Flowistry', event = 'TextChanged' })) do
+    for i = 1, 40 do
+      local name, value = debug.getupvalue(command.callback, i)
+      if not name then break end
+      if name == 'saved_sources' then snapshots = value end
+    end
+  end
+  check(snapshots ~= nil, 'source retention table is observable')
+  for i = 1, 8 do
+    local path = root .. '/retention-' .. i .. '.txt'
+    vim.fn.writefile({ string.rep('x', 32768) }, path)
+    local visited = load(path)
+    check(type(snapshots[visited]) == 'string', 'loaded source has an undo snapshot')
+    vim.api.nvim_buf_delete(visited, { force = true, unload = i % 2 == 0 })
+    check(snapshots[visited] == nil, 'unloaded or wiped source is released')
+  end
 end, debug.traceback)
 flow.stop()
 backend.context = original_context
