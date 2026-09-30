@@ -463,7 +463,7 @@ function M.setup(opts)
       observed_names[buf] = vim.api.nvim_buf_get_name(buf)
       local name = observed_names[buf]
       if name ~= "" and vim.bo[buf].buftype == "" then
-        saved_sources[name] = disk_source(name)
+        saved_sources[buf] = disk_source(name)
       end
     end
   end
@@ -488,7 +488,7 @@ function M.setup(opts)
       -- inputs. Reloads of known buffers still invalidate stale analysis.
       if args.event == "BufReadPost" and previous_tick == nil then
         if name ~= "" and vim.bo[args.buf].buftype == "" then
-          saved_sources[name] = disk_source(name)
+          saved_sources[args.buf] = disk_source(name)
         end
         return
       end
@@ -517,7 +517,7 @@ function M.setup(opts)
           if configuration then state.context = nil end
           if args.event == "BufWritePost" then state.refresh_after_save = true end
           if state.retained and state.retained.inputs[name] == nil then
-            state.retained.inputs[name] = saved_sources[name] or false
+            state.retained.inputs[name] = saved_sources[args.buf] or false
           end
         end
         if args.event == "BufFilePost" and state.buf == args.buf then
@@ -528,7 +528,9 @@ function M.setup(opts)
           end
         end
       end
-      if args.event == "BufWritePost" or args.event == "BufReadPost" then saved_sources[name] = disk_source(name) end
+      if args.event == "BufWritePost" or args.event == "BufReadPost" or args.event == "BufFilePost" then
+        saved_sources[args.buf] = disk_source(name)
+      end
       -- :wall and nvim_buf_call temporarily switch the current buffer while
       -- writing a dependency. Resolve the active editor after that switch ends.
       vim.schedule(function()
@@ -565,6 +567,7 @@ function M.setup(opts)
   vim.api.nvim_create_autocmd({ "BufUnload", "BufWipeout" }, {
     group = group, callback = function(args)
       dispose(args.buf)
+      saved_sources[args.buf] = nil
       if args.event == "BufWipeout" then
         observed_ticks[args.buf], observed_names[args.buf], disabled[args.buf] = nil, nil, nil
       end
