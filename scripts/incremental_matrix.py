@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import signal
 import subprocess
+import sys
 import time
 
 from smoke_checkpoint import atomic_json, digest, file_digest
@@ -102,6 +103,12 @@ def observation(completed, seconds):
     if value and isinstance(value.get('Ok'), dict):
         result['semantic_digest'] = digest(smoke.canonical(value['Ok']))
         result['cache'] = value['Ok'].get('cache', {})
+        def maybe_count(node):
+            if isinstance(node, dict):
+                return sum(len(v) if k == 'maybe_slice' and isinstance(v, list) else maybe_count(v)
+                           for k, v in node.items())
+            return sum(map(maybe_count, node)) if isinstance(node, list) else 0
+        result['maybe_slice_indices'] = maybe_count(value['Ok'])
     return result
 
 
@@ -118,13 +125,15 @@ def assert_equivalent(reused, fresh):
 
 
 class Matrix:
-    def __init__(self, backend, root, timeout=120):
+    def __init__(self, backend, root, timeout=120, files=None, anchor='let untouched', offset=0):
         self.backend = Path(backend).resolve()
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=False)
         self.project = self.root / 'project'
         self.source = self.project / 'src/lib.rs'
         self.timeout = timeout
+        self.files = FILES if files is None else files
+        self.anchor, self.offset = anchor, offset
         self.changed = set()
         self.environment = {}
         self.rustfmt = 'rustfmt'
@@ -134,7 +143,10 @@ class Matrix:
     def write(self, name, text):
         path = self.root / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+        if isinstance(text, bytes):
+            path.write_bytes(text)
+        else:
+            path.write_text(text)
         self.changed.add(name)
 
     def replace(self, name, old, new):
@@ -144,10 +156,10 @@ class Matrix:
         self.write(name, text.replace(old, new))
 
     def reset(self):
-        for name in self.changed - FILES.keys():
+        for name in self.changed - self.files.keys():
             (self.root / name).unlink(missing_ok=True)
         self.changed.clear()
-        for name, text in FILES.items():
+        for name, text in self.files.items():
             self.write(name, text)
         self.environment = {}
 
@@ -162,9 +174,10 @@ class Matrix:
     def command(self, mode, source=None):
         source = source or self.source
         lines = source.read_text().splitlines()
-        line = next(i for i, text in enumerate(lines) if 'let untouched' in text)
+        line = next(i for i, text in enumerate(lines) if self.anchor in text) + self.offset
+        column = len(lines[line]) - len(lines[line].lstrip())
         return [str(self.backend / 'cargo-flowistry'), 'flowistry', '--context-mode', mode,
-                'file-focus', str(source), str(line), str(lines[line].index('untouched'))]
+                'file-focus', str(source), str(line), str(column)]
 
     def env(self, case, cache_mode, extra=None):
         # Oracle and reused runs have identical compiler settings and source paths.
@@ -176,19 +189,78 @@ class Matrix:
                     FLOWISTRY_CACHE=cache_mode, FLOWISTRY_MATRIX_ENV='one',
                     RUST_LOG='flowistry::audit=info,flowistry_ide::cache=info') | self.environment | (extra or {})
 
-    def run(self, case, mode, cache_mode='on', source=None, extra=None):
+    def begin(self, case, mode, cache_mode='on', source=None, extra=None):
         start = time.monotonic()
         proc = subprocess.Popen(self.command(mode, source), cwd=self.project,
                                 env=self.env(case, cache_mode, extra), stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, start_new_session=True)
+        return proc, start
+
+    def finish(self, request):
+        proc, start = request
         try:
-            stdout, stderr = proc.communicate(timeout=self.timeout)
+            stdout, stderr = proc.communicate(timeout=max(.01, self.timeout - (time.monotonic() - start)))
         except subprocess.TimeoutExpired:
             os.killpg(proc.pid, signal.SIGKILL)
             proc.communicate()
             raise
-        return observation(subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr),
-                           round(time.monotonic() - start, 6))
+        result = observation(subprocess.CompletedProcess(proc.args, proc.returncode, stdout, stderr),
+                             round(time.monotonic() - start, 6))
+        result.update(pid=proc.pid, started=start, completed=time.monotonic())
+        return result
+
+    def cancel(self, request):
+        proc, _ = request
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        return self.finish(request)
+
+    def run(self, case, mode, cache_mode='on', source=None, extra=None):
+        return self.finish(self.begin(case, mode, cache_mode, source, extra))
+
+    def compiler_gate(self):
+        """Pause our fixture before rustc reads it, without modifying backend code."""
+        gate = self.root / 'gate'
+        gate.mkdir(exist_ok=True)
+        wrapper = self.root / 'compiler-gate.py'
+        wrapper.write_text(f'''#!{sys.executable}
+import json, os, pathlib, sys, time
+gate = pathlib.Path({str(gate)!r})
+args = sys.argv[1:]
+fixture = any(args[i:i+2] == ['--crate-name', 'matrix_fixture'] for i in range(len(args)))
+if fixture and (gate / 'armed').exists():
+    try:
+        fd = os.open(gate / 'claim', os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        pass
+    else:
+        os.close(fd)
+        ready = gate / 'ready.tmp'
+        ready.write_text(json.dumps({{'pid': os.getpid()}}))
+        ready.rename(gate / 'ready')
+        deadline = time.monotonic() + 90
+        while not (gate / 'release').exists():
+            if time.monotonic() > deadline:
+                sys.exit('compiler gate timed out')
+            time.sleep(.01)
+os.execvp(args[0], args)
+''')
+        wrapper.chmod(0o700)
+        self.environment.update(RUSTC_WRAPPER=str(wrapper), FLOWISTRY_NO_REPLAY='1')
+        return gate
+
+    def wait_gate(self, request, gate):
+        deadline = time.monotonic() + min(60, self.timeout)
+        while time.monotonic() < deadline:
+            if (gate / 'ready').is_file():
+                return json.loads((gate / 'ready').read_text())
+            if request[0].poll() is not None:
+                result = self.finish(request)
+                raise AssertionError('request exited before compiler gate: ' + result['stderr'][-3000:])
+            time.sleep(.02)
+        raise AssertionError('compiler gate was not reached')
 
     def pair(self, name, mode, edit, expectation='any', setup=None):
         self.reset()
@@ -201,6 +273,8 @@ class Matrix:
             raise AssertionError(f'{case}: initial analysis failed: {start["stderr"][-2000:]}')
         if start['compiler_invocations'] < 1 or not start['solved_bodies']:
             raise AssertionError('backend lacks working compiler/solver audit instrumentation')
+        if self.files is FILES and not start.get('maybe_slice_indices'):
+            raise AssertionError('controlled fixture did not exercise indexed maybe-slices')
         warm = self.run(case, mode)
         assert_equivalent(warm, start)
         if warm['compiler_invocations'] or warm['solved_bodies'] or warm.get('cache', {}).get('validation') != 'snapshot':

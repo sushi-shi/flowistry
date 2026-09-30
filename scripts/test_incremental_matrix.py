@@ -1,4 +1,5 @@
 import base64
+import copy
 import gzip
 import json
 import subprocess
@@ -8,6 +9,24 @@ from incremental_matrix import assert_equivalent, observation
 
 
 class OracleTests(unittest.TestCase):
+    def test_indexed_maybe_slice_changes_are_semantic(self):
+        first = {'Ok': {'bodies': [{'range': {'filename': 'lib.rs'}, 'focus': {'Ok': {
+            'ranges': [{'filename': 'lib.rs', 'start': [1, 0], 'end': [1, 8]},
+                       {'filename': 'lib.rs', 'start': [2, 0], 'end': [2, 8]}],
+            'place_info': [{'range': 0, 'ranges': [0], 'slice': [0],
+                            'direct_influence': [], 'maybe_slice': [1]}],
+            'containers': []}}}]}}
+        changed = copy.deepcopy(first)
+        changed['Ok']['bodies'][0]['focus']['Ok']['place_info'][0]['maybe_slice'] = []
+        def observe(value):
+            wire = base64.b64encode(gzip.compress(json.dumps(value).encode()))
+            return observation(subprocess.CompletedProcess([], 0, wire, b''), .1)
+        original, modified = observe(first), observe(changed)
+        self.assertEqual(original['maybe_slice_indices'], 1)
+        self.assertEqual(modified['maybe_slice_indices'], 0)
+        with self.assertRaisesRegex(AssertionError, 'differs'):
+            assert_equivalent(original, modified)
+
     def test_cache_hit_metadata_cannot_hide_stale_semantics(self):
         fresh = {'exit_code': 0, 'semantic_digest': 'new'}
         stale = {'exit_code': 0, 'semantic_digest': 'old', 'cache': {'hits': 1}}

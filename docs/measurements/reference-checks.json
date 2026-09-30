@@ -1,0 +1,453 @@
+{
+  "cache_counts": {
+    "base": {}
+  },
+  "checkpoint_id": "636cd331b26e111236b3c2f7f485ce7b80bebfea956bd1bf99a3a8ef62f4152d",
+  "coverage_complete": true,
+  "crates": [
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "itertools",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "either",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "smallvec",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "indexmap",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "hashbrown",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "serde_json",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "regex-syntax",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "anyhow",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "bitflags",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "memchr",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "just",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "tokei",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "alacritty",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "niri",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "helix",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "bevy",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "brains",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "local_lru",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "cargo-inspect",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "biodiff",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "objdiff",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "boxxy",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "sudo-rs",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "bosminer",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    }
+  ],
+  "failures": [
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/analyzer.rs",
+        177,
+        4,
+        "Recurse"
+      ],
+      "result": {
+        "max_rss_mb": 0,
+        "message": "timed out after 600s",
+        "seconds": 600.91,
+        "status": "timeout"
+      }
+    },
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/analyzer.rs",
+        324,
+        10,
+        "Recurse"
+      ],
+      "result": {
+        "max_rss_mb": 6223,
+        "message": "no decodable response: ",
+        "returncode": 1,
+        "seconds": 519.69,
+        "status": "crash",
+        "stderr_tail": ""
+      }
+    },
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/compiler.rs",
+        13,
+        4,
+        "Recurse"
+      ],
+      "result": {
+        "max_rss_mb": 6226,
+        "message": "no decodable response: ",
+        "returncode": 1,
+        "seconds": 124.2,
+        "status": "crash",
+        "stderr_tail": ""
+      }
+    },
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/error.rs",
+        926,
+        10,
+        "SigOnly"
+      ],
+      "result": {
+        "max_rss_mb": 6250,
+        "message": "no decodable response: ",
+        "returncode": 1,
+        "seconds": 33.31,
+        "status": "crash",
+        "stderr_tail": ""
+      }
+    },
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/error.rs",
+        926,
+        10,
+        "Recurse"
+      ],
+      "result": {
+        "max_rss_mb": 6255,
+        "message": "no decodable response: ",
+        "returncode": 1,
+        "seconds": 17.29,
+        "status": "crash",
+        "stderr_tail": ""
+      }
+    }
+  ],
+  "missing_entries": [],
+  "needs_triage": true,
+  "output_differences": [],
+  "schema": 1,
+  "status_changes": [],
+  "status_counts": {
+    "base": {
+      "benign": 48,
+      "crash": 4,
+      "ok": 2827,
+      "timeout": 1
+    }
+  },
+  "validation_manifest": {
+    "backends": {
+      "base": {
+        "cargo-flowistry": "44c34bfe69753b0b8710a8f4730bbf20d29ddc5c249201ee5b9003b479613b69",
+        "flowistry-driver": "c90e739db702b0c4cf4872df1d01eb9a9955269889b59bca4ad5c4e289b95459"
+      }
+    },
+    "builds": {
+      "base": {
+        "binaries": {
+          "cargo-flowistry": "44c34bfe69753b0b8710a8f4730bbf20d29ddc5c249201ee5b9003b479613b69",
+          "flowistry-driver": "c90e739db702b0c4cf4872df1d01eb9a9955269889b59bca4ad5c4e289b95459"
+        },
+        "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+        "cargo_encoded_rustflags": "",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "-p",
+          "flowistry_ide",
+          "-j",
+          "4",
+          "--features",
+          "flowistry/engine-diff,flowistry/shadow-eager"
+        ],
+        "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+        "features": "flowistry/engine-diff,flowistry/shadow-eager",
+        "profile": {},
+        "recorded_at": "2026-09-30T02:19:40.657017+00:00",
+        "revision": "2630ee356d8f606e22a205527b4eea67cdab66d0",
+        "rustflags": "",
+        "tree": "f848bf714adc386ad185d18af8c8e1dd5abb9b28"
+      }
+    },
+    "cache_dir": null,
+    "checkpoint_implementation": "39a2a1cfafcf814052f37043e7ed73c9db86efe26b11d4e3b044669735d0263b",
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "configuration_inputs": {
+      "/.cargo/config": null,
+      "/.cargo/config.toml": null,
+      "/home/.cargo/config": null,
+      "/home/.cargo/config.toml": null,
+      "/home/rust-toolchain": null,
+      "/home/rust-toolchain.toml": null,
+      "/home/sheep/.cargo/config": null,
+      "/home/sheep/.cargo/config.toml": null,
+      "/home/sheep/Projects/.cargo/config": null,
+      "/home/sheep/Projects/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/rust-toolchain.toml": "704b46d5f5b659d1b649193366f9db98e2f1cd1570d6ce53526109131bcad831",
+      "/home/sheep/Projects/flowistry/target/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/engine/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/rust-toolchain.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/rust-toolchain.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/rust-toolchain.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/engine/rust-toolchain.toml": null,
+      "/home/sheep/Projects/flowistry/target/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/rust-toolchain.toml": null,
+      "/home/sheep/Projects/rust-toolchain": null,
+      "/home/sheep/Projects/rust-toolchain.toml": null,
+      "/home/sheep/rust-toolchain": null,
+      "/home/sheep/rust-toolchain.toml": null,
+      "/rust-toolchain": null,
+      "/rust-toolchain.toml": null
+    },
+    "corpus": "fef31dfe97db3c94748766e9c97edea7b39052d3436c69ab28a967c26f66fffd",
+    "environment_sha256": "71cfd326b5a9eb2e57b1ccc95a3a49dd17f878a04f3d1d4a475e44cf92dbcbe9",
+    "harness": "73806aa5f77f8e6b71e1fd32950ccf247b3a904f1c61451ae8295952aba92367",
+    "schema": 1,
+    "settings": {
+      "base_cache": "inherit",
+      "budgets": null,
+      "command": "focus",
+      "compare_cache": "inherit",
+      "memory_limit": "6G",
+      "modes": [
+        "SigOnly",
+        "Recurse"
+      ],
+      "phases": false,
+      "repeat": 1,
+      "timeout": 600
+    },
+    "work_dir": "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates"
+  }
+}

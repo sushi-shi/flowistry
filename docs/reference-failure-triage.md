@@ -2,7 +2,11 @@
 
 The combined `engine-diff,shadow-eager` executable (`2630ee356`, frozen in
 `target/continuation-validation/reference-checks`) runs considerably more work
-than the normal backend. The full reference corpus run is still incomplete.
+than the normal backend. The full reference corpus sweep has finished with exact
+coverage of all 2,880 locked positions/modes: 2,827 successes, 48 benign selections,
+four resource failures and one timeout. See the [coverage report](measurements/reference-checks.json).
+No successful request reported an engine or eager-reference mismatch. The five
+resource-limited checks remain unresolved, so this is not a passed reference gate.
 
 Four just requests initially appeared as `crash`, with no stderr and exit 1.
 Their recorded times match kernel memory-cgroup OOM events within approximately

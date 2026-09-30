@@ -5,12 +5,12 @@ complete merely because tooling or a subset of its tests passes.
 
 | Step | State | Evidence / next gate |
 |---|---|---|
-| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Frozen #17 and integrated builds; 26 validation regressions pass. Complete corpus comparison and independent engine/eager corpus running; full cache-mode/file-focus gates pending. Real cross-launch checkpoint reuse and equal file-focus snapshot replay proved on a small case. |
+| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Frozen #17 and integrated builds; 26 validation regressions pass. Reference sweep has full coverage with five resource-limited outcomes; missing comparison entries are rerunning after old-harness recovery. Full cache-mode/file-focus gates pending. |
 | 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Port prepared, [#43](https://github.com/sushi-shi/flowistry/pull/43); gates pending | Only experiment `ab7857370` ported; 107 core tests pass with engine-diff/shadow-eager. Bounded-scan integration, symmetric matrix equality and independent ungrouped checks added. See [recurse-row-groups.md](recurse-row-groups.md). Acceptance still depends on completed baseline gates and integrated corpus/performance evidence. |
 | 4. Seed rows | Candidate prepared, [#44](https://github.com/sushi-shi/flowistry/pull/44); gates pending | Fresh-root type templates preserve the traversal cutoff, with bounded temporary storage and shadow comparison to original seeds. 108 core tests pass; two-mode small-case comparison passes, full corpus and stress measurements pending. See [seed-row-experiment.md](seed-row-experiment.md). |
 | 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
-| 6. Edit/concurrency harness | Pending | Existing cache regression scripts are the starting fixtures. |
+| 6. Edit/concurrency harness | Current-backend matrix implemented; release gates pending | 84 serial, concurrency, recovery and real-project cases pass; 47 harness regressions pass. See [edit-concurrency-validation.md](edit-concurrency-validation.md). Add versioned-publication/background cases as those features land; full corpus gates remain required. |
 | 7. Shared result index | Pending | Versioned publication and bounded persistent storage. |
 | 8. Persisted summaries | Pending | Portable schema, dependency graph and invalidation. |
 | 9. Project command | Pending | Streaming, priorities and bounded workers. |
@@ -67,14 +67,21 @@ Do not delete active source/build inputs or preserved experiment work.
 
 ## Next concrete actions
 
-1. Continue the two live corpus gates (host PIDs 1319571 and 1785400 at the latest
-   inspection). They remain incomplete. Combined comparison has 1,520 recorded
-   pairs: 1,473 successful matching pairs, 42 paired benign results and five #17
-   OOM → integrated-success cases. No successful-output differences have appeared.
-   The independent reference has 1,674 records, including four kernel-confirmed
-   OOMs masked as crashes and one timeout. These are observations, not final totals.
-   Recover the first run's completed checkpoints under their original manifest if
-   its old symlink exception prevents final JSON output; rerun missing entries.
+1. The original combined run has ended. Its symlink exception canceled later queued
+   entries and prevented final report assembly. `equivalence-recovered.json`
+   retains 1,560 checksum-verified records under the original manifest: 1,513
+   successful matching pairs, 42 paired benign outcomes and five #17 OOM →
+   integrated-success cases. The recovery script also verified locked positions,
+   saved harness hashes and current source hashes; see `recover-equivalence.py`.
+   Eleven entries remain incomplete. Two capped corrected-harness runs now cover
+   them: `equivalence-symlinks.{log,json}` (Alacritty/Bevy, h19 corpus) and
+   `equivalence-remaining.{log,json}` (the other nine, now-idle engine corpus).
+   Preserve all three manifests when assembling coverage; do not present a new
+   harness manifest as the origin of old records.
+   The independent reference sweep has finished with complete coverage: 2,827
+   successes, 48 benign selections, four kernel-confirmed OOMs masked as crashes
+   and one timeout. [Its report](measurements/reference-checks.json) retains all
+   outcomes; five positions still lack successful reference validation.
 2. Cross-launch reuse is proven by `resume-proof-{first,second}.json`: identical
    checkpoint identity, reused second record, preserved original timestamp.
    `cache-proof-stable.json` proves equal file-focus output with one snapshot hit
@@ -88,8 +95,11 @@ Do not delete active source/build inputs or preserved experiment work.
    checks, then complete cache-off/fresh/warm and file-focus corpus equivalence.
    Keep raw failures and the kernel-backed classification, and distinguish partial
    evidence from a passed gate. Do not blindly repeat the same expensive failing run.
-5. Continue with the edit/concurrency matrix (step 6) and the versioned store,
+5. The existing-backend edit/concurrency matrix passes 84 cases, including ten
+   curated real-project edits. Its instrumented normal executable is frozen at
+   `edit-matrix-v1/` (`79930142f`); detailed results are `edit-matrix-complete.json`.
+   Continue with the versioned store,
    persisted summaries, project command, Neovim background work, saves and safe
-   relocation (steps 7–12). None of these features has been declared implemented.
+   relocation (steps 7–12). None of those features has been declared implemented.
    Finish all final gates in step 13. Current continuation PR order is #41 → #42 →
    #43 → #44 → #45 → #46; nothing has been merged.

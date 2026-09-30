@@ -6,7 +6,9 @@ import os
 from pathlib import Path
 import subprocess
 
-from incremental_matrix import FILES, Matrix
+from incremental_matrix import Matrix
+import incremental_races
+import incremental_projects
 from smoke_checkpoint import atomic_json, build_metadata, file_digest
 
 LIB = 'project/src/lib.rs'
@@ -97,6 +99,7 @@ def main():
     parser.add_argument('--modes', default='SigOnly,Recurse')
     parser.add_argument('--case', action='append', default=[])
     parser.add_argument('--rustfmt', default='rustfmt')
+    parser.add_argument('--real-projects-dir', type=Path, help='prepared locked corpus; copies sources only before editing')
     args = parser.parse_args()
     backend = args.backend_dir.resolve()
     build = build_metadata(backend)
@@ -107,13 +110,19 @@ def main():
     report = {'schema': 1, 'build': build,
               'binaries': {name: file_digest(backend / name) for name in ('cargo-flowistry', 'flowistry-driver')},
               'harness': {name: file_digest(Path(__file__).with_name(name)) for name in
-                          ('incremental_matrix.py', 'test-incremental-matrix.py', 'smoke-real-crates.py')},
+                          ('incremental_matrix.py', 'incremental_races.py', 'incremental_projects.py', 'test-incremental-matrix.py', 'smoke-real-crates.py')},
               'records': matrix.records, 'harness_failures': [],
-              'pending': ['real-project edit matrix', 'concurrent saves and cancellation',
+              'pending': ['real-project edit matrix',
                           'versioned publication / background-worker scenarios added with those features']}
-    names = {name for name, *_ in scenarios('Recurse')}
+    names = {name for name, *_ in scenarios('Recurse')} | set(incremental_races.NAMES) | incremental_projects.NAMES
     if set(args.case) - names:
         parser.error('unknown case: ' + ', '.join(sorted(set(args.case) - names)))
+    if set(args.case) & incremental_projects.NAMES and not args.real_projects_dir:
+        parser.error('real-project cases require --real-projects-dir')
+    available = names if args.real_projects_dir else names - incremental_projects.NAMES
+    report['expected_cases'] = sorted((mode, name) for mode in args.modes.split(',')
+                                      for name in available if not args.case or name in args.case)
+    report['scope'] = 'selected cases' if args.case else 'full current matrix'
     for mode in args.modes.split(','):
         if mode not in ('SigOnly', 'Recurse'):
             parser.error('invalid mode')
@@ -126,7 +135,27 @@ def main():
                 report['harness_failures'].append({'case': name, 'mode': mode, 'error': str(error)})
                 print(f'{mode}-{name}: HARNESS FAILURE: {error}', flush=True)
             atomic_json(args.json, report)
-    report['passed'] = bool(matrix.records) and not report['harness_failures'] and all(r['passed'] for r in matrix.records)
+        for name in incremental_races.NAMES:
+            if args.case and name not in args.case:
+                continue
+            incremental_races.run(matrix, name, mode)
+            atomic_json(args.json, report)
+    if args.real_projects_dir:
+        try:
+            def save_record(record):
+                matrix.records.append(record)
+                atomic_json(args.json, report)
+            _, provenance = incremental_projects.run(backend, matrix.root, args.real_projects_dir,
+                                                       args.modes.split(','), set(args.case), save_record)
+            report['real_projects'] = provenance
+            if all((mode, name) in {(r['mode'], r['case']) for r in matrix.records}
+                   for mode in ('SigOnly', 'Recurse') for name in incremental_projects.NAMES):
+                report['pending'].remove('real-project edit matrix')
+        except Exception as error:
+            report['harness_failures'].append({'case': 'real-projects', 'error': str(error)})
+    actual = sorted((r['mode'], r['case']) for r in matrix.records)
+    report['coverage_complete'] = actual == report['expected_cases']
+    report['passed'] = bool(matrix.records) and report['coverage_complete'] and not report['harness_failures'] and all(r['passed'] for r in matrix.records)
     atomic_json(args.json, report)
     raise SystemExit(0 if report['passed'] else 1)
 
