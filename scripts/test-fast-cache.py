@@ -78,6 +78,10 @@ def main():
             return value
 
         run(False)
+        # First discovery includes external build/dependency inputs that rustc's
+        # selected SourceMap cannot attest. Revalidate the recorded watch list
+        # once before allowing a compiler-free response.
+        run(False)
         run(True)
         source.write_text(source.read_text())
         run(True)  # Unchanged save changes stamps, not analysis inputs.

@@ -59,6 +59,7 @@ impl rustc_driver::Callbacks for Callbacks {
     tcx: TyCtxt<'tcx>,
   ) -> rustc_driver::Compilation {
     fluid_set!(EVAL_MODE, self.eval_mode);
+    let mut identities = Vec::new();
     self.output = Some((|| {
       let source_map = tcx.sess.source_map();
       let filename = Filename::intern(&self.filename);
@@ -95,6 +96,7 @@ impl rustc_driver::Callbacks for Callbacks {
         let Ok(range) = crate::positions::char_range(span, source_map) else {
           continue;
         };
+        identities.push(crate::fast_cache::BodyIdentity::new(tcx, id, &range));
         let previous_hits = cache.hits.get();
         let focus = if self.position.is_none() || selected == Some(id) {
           Some(
@@ -127,7 +129,7 @@ impl rustc_driver::Callbacks for Callbacks {
         },
       })
     })());
-    crate::fast_cache::record_inputs(tcx);
+    crate::fast_cache::record_inputs(tcx, identities);
     if tcx.dcx().has_errors().is_none() {
       if crate::plugin::postprocess(self.output.take().unwrap()).is_ok() {
         use std::io::Write;

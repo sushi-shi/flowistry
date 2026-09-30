@@ -1,14 +1,5 @@
 //! Persistent, compiler-validated focus results. No rustc identity is serialized.
-use std::{
-  cell::Cell,
-  fs,
-  hash::Hash,
-  io::Write,
-  path::PathBuf,
-  rc::Rc,
-  sync::OnceLock,
-  time::{SystemTime, UNIX_EPOCH},
-};
+use std::{cell::Cell, fs, hash::Hash, path::PathBuf, rc::Rc, sync::OnceLock};
 
 use flowistry::{
   extensions::ContextMode, infoflow::AnalysisSession,
@@ -28,7 +19,6 @@ use crate::focus::{FocusOutput, PlaceInfo};
 
 const SCHEMA: u32 = 2;
 const MAX_ENTRY: u64 = 32 * 1024 * 1024;
-const MAX_TOTAL: u64 = 256 * 1024 * 1024;
 
 struct Regions(Vec<String>);
 impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for Regions {
@@ -529,50 +519,12 @@ impl Entry {
 }
 
 fn store(path: &std::path::Path, entry: &Entry) -> std::io::Result<()> {
-  let directory = path.parent().unwrap();
-  fs::create_dir_all(directory)?;
   let data = serde_json::to_vec(entry)?;
-  if data.len() as u64 > MAX_ENTRY {
-    return Ok(());
-  }
-  let nonce = SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .unwrap_or_default()
-    .as_nanos();
-  let temp = path.with_extension(format!("{}.{}.tmp", std::process::id(), nonce));
-  let result = (|| {
-    let mut file = fs::OpenOptions::new()
-      .write(true)
-      .create_new(true)
-      .open(&temp)?;
-    file.write_all(&data)?;
-    fs::rename(&temp, path)
-  })();
-  let _ = fs::remove_file(&temp);
-  result?;
-  // Bound the shared cache; races may cause extra misses, never stale hits.
-  let mut entries = fs::read_dir(directory)?
-    .filter_map(Result::ok)
-    .filter_map(|e| {
-      let p = e.path();
-      if p.extension()?.to_str()? != "json" {
-        return None;
-      }
-      let m = e.metadata().ok()?;
-      Some((m.modified().ok()?, m.len(), p))
-    })
-    .collect::<Vec<_>>();
-  let mut total: u64 = entries.iter().map(|e| e.1).sum();
-  entries.sort_by_key(|e| e.0);
-  let mut count = entries.len();
-  for (_, size, old) in entries {
-    if total <= MAX_TOTAL && count <= 2048 {
-      break;
-    }
-    if old != path && fs::remove_file(old).is_ok() {
-      total -= size;
-      count -= 1;
-    }
-  }
+  crate::result_store::Store::open(path.parent().unwrap().parent().unwrap())?.put(
+    crate::result_store::Namespace::Focus,
+    &entry.key,
+    &data,
+    None,
+  )?;
   Ok(())
 }
