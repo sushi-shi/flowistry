@@ -12,10 +12,16 @@ classified as:
   error   any other {"Err": ...} answer (reported, but not a crash)
   crash   a panic / ICE on stderr, or no decodable response
   timeout the run exceeded --timeout
+  oom     the run was killed for exceeding --memory-limit
 
 With --compare, every run is repeated with a second backend build and the
 answers are compared after canonicalising the order of `place_info` (the IDE
 emits it in hash-map order).
+
+Every run records its peak resident memory (the largest RSS among cargo and the
+compiler processes it ran). With --budgets, only the stress positions listed in
+scripts/smoke-corpus/budgets.tsv are run, and each must stay within its budget
+of peak memory and seconds.
 
 The script only uses the Python standard library but needs `cargo` and the
 pinned nightly toolchain, so run it inside the dev shell, e.g.
@@ -23,12 +29,14 @@ pinned nightly toolchain, so run it inside the dev shell, e.g.
   nix develop github:sushi-shi/flowistry -c python3 scripts/smoke-real-crates.py \\
       target/smoke-worker/debug
 
-Exit status is 1 if any run crashed or timed out (or, with --compare, if the
-two backends disagree), else 0.
+Exit status is 1 if any run crashed, timed out or ran out of memory (or, with
+--compare, if the two backends disagree; with --budgets, if a budget is
+exceeded), else 0.
 """
 
 import argparse
 import base64
+import codecs
 import concurrent.futures
 import glob
 import gzip
@@ -77,8 +85,10 @@ BENIGN_ERRORS = [
 CRASH_MARKER = re.compile(r"^thread '[^']*'(?: \(\d+\))? panicked at |internal compiler error:", re.M)
 
 # Timer output of the backend: `[<time> INFO  rustc_utils::timer] <phase> took <n>s`.
-PHASE_LOG = "rustc_utils::timer=info,flowistry_ide=info"
+PHASE_LOG = "rustc_utils::timer=info,flowistry_ide=info,flowistry::stats=info"
 PHASE_LINE = re.compile(r"\] (.+?) took ([0-9.]+)s$", re.M)
+# Counters of the backend: `[<time> INFO  flowistry::stats] stat <name> = <n>`.
+STAT_LINE = re.compile(r"\] stat ([\w.]+) = (\d+)$", re.M)
 
 PROBE_FILE = "__flowistry_smoke_probe__.rs"
 
@@ -88,6 +98,15 @@ PROBE_FILE = "__flowistry_smoke_probe__.rs"
 # across time, machines and changes to this script's sampler.
 CORPUS_DIR = REPO_ROOT / "scripts" / "smoke-corpus"
 CORPUS_FILE = CORPUS_DIR / "corpus.json"
+
+# Stress positions of the corpus with their budgets (see read_budgets).
+BUDGETS_FILE = CORPUS_DIR / "budgets.tsv"
+
+# Run statuses that count as failures (exit status 1), worst first.
+FAILURES = ["crash", "oom", "timeout"]
+
+# cargo's report of a compiler process killed by SIGKILL, e.g. by the kernel's OOM killer.
+SIGKILL_MARKER = re.compile(r"signal: 9, SIGKILL")
 
 _print_lock = threading.Lock()
 
@@ -273,17 +292,91 @@ def strip_dev_only(sections):
         sections.append(["[workspace]", []])
 
 
-def run(cmd, cwd, env, timeout=None):
-    """subprocess.run, but a timeout kills the whole process group (cargo and its rustc children)."""
-    with subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          text=True, errors="replace", start_new_session=True) as proc:
-        try:
-            stdout, stderr = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
-            proc.communicate()
-            raise
-    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+def memory_scope(memory_limit):
+    """The command prefix that runs a command in a transient systemd scope whose memory
+    (without swap) is capped at `memory_limit` (e.g. "6G"). When the cap is hit, the kernel
+    kills the largest process in the scope (the compiler) and the rest keep running
+    (OOMPolicy=continue), so cargo reports the compiler's SIGKILL."""
+    if not memory_limit:
+        return []
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect",
+            "-p", f"MemoryMax={memory_limit}", "-p", "MemorySwapMax=0", "-p", "OOMPolicy=continue"]
+
+
+# Runs argv[2:] and writes the peak RSS (KiB) of its process tree to the file descriptor
+# argv[1]; exits like its child. A forked process starts with the peak RSS of its parent (the
+# kernel keeps the high-water mark of the pre-exec memory), so the harness, whose memory grows
+# with the outputs it decodes, cannot measure its children directly: this small process forks
+# the command instead.
+RSS_WRAPPER = """
+import os, signal, subprocess, sys
+fd = int(sys.argv[1])
+child = subprocess.Popen(sys.argv[2:])
+_, status, usage = os.wait4(child.pid, 0)
+os.write(fd, str(usage.ru_maxrss).encode())
+os.close(fd)
+code = os.waitstatus_to_exitcode(status)
+if code < 0:
+    signal.signal(-code, signal.SIG_DFL)
+    os.kill(os.getpid(), -code)
+sys.exit(code)
+"""
+
+
+def run(cmd, cwd, env, timeout=None, memory_limit=None):
+    """subprocess.run, but a timeout kills the whole process group (cargo and its rustc children),
+    and the result records the peak resident memory of the process tree (`max_rss_kb`: the
+    largest RSS of the command and the descendants it waited for, from wait4; 0 if the run
+    timed out).
+
+    With `memory_limit`, the command runs in a systemd scope capped at that much memory.
+    """
+    rss_read, rss_write = os.pipe()
+    cmd = [sys.executable, "-S", "-c", RSS_WRAPPER, str(rss_write)] + memory_scope(memory_limit) + list(cmd)
+    try:
+        proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, errors="replace", start_new_session=True, pass_fds=(rss_write,))
+    finally:
+        os.close(rss_write)
+    output = {}
+
+    def drain(name, stream):
+        output[name] = stream.read()
+        stream.close()
+
+    readers = [threading.Thread(target=drain, args=(name, stream), daemon=True)
+               for name, stream in (("stdout", proc.stdout), ("stderr", proc.stderr))]
+    for reader in readers:
+        reader.start()
+    lock = threading.Lock()
+    state = {"reaped": False, "timed_out": False}
+
+    def kill():
+        with lock:
+            if not state["reaped"]:
+                state["timed_out"] = True
+                os.killpg(proc.pid, signal.SIGKILL)
+
+    timer = threading.Timer(timeout, kill) if timeout is not None else None
+    if timer is not None:
+        timer.start()
+    proc.wait()
+    with lock:
+        state["reaped"] = True
+    if timer is not None:
+        timer.cancel()
+    for reader in readers:
+        reader.join()
+    with os.fdopen(rss_read, "rb") as rss:
+        reported = rss.read().decode()
+    max_rss_kb = int(reported) if reported.isdigit() else 0
+    if state["timed_out"]:
+        expired = subprocess.TimeoutExpired(cmd, timeout)
+        expired.max_rss_kb = max_rss_kb
+        raise expired
+    res = subprocess.CompletedProcess(cmd, proc.returncode, output.get("stdout", ""), output.get("stderr", ""))
+    res.max_rss_kb = max_rss_kb
+    return res
 
 
 def prepare_copy(src, dest, env, fresh, locked=None):
@@ -400,7 +493,140 @@ def crash_signature(stderr):
     return "no decodable response: " + last_lines(stderr, 2)
 
 
-def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=None, phases=False):
+OK_PREFIX = '{"Ok":{"place_info":['
+RANGE_LIST_FIELDS = ("ranges", "slice", "direct_influence", "maybe_slice")
+
+
+def canonical_entry(entry, table=None):
+    """The canonical JSON of one `place_info` entry (see `canonical`)."""
+    def key(x):
+        return json.dumps(x, sort_keys=True)
+
+    entry = dict(entry)
+    def resolve(index):
+        # Reject malformed references rather than accepting Python's negative indices.
+        if type(index) is not int or not 0 <= index < len(table):
+            raise ValueError(f"invalid range-table index: {index!r}")
+        return table[index]
+
+    if table is not None and "range" in entry:
+        entry["range"] = resolve(entry["range"])
+    for field in RANGE_LIST_FIELDS:
+        if field in entry:
+            ranges = entry[field]
+            if table is not None:
+                ranges = [resolve(index) for index in ranges]
+            # The editor treats highlight ranges as sets. Duplicate spans and
+            # their iteration order do not change the displayed analysis.
+            unique = {key(r): r for r in ranges}
+            entry[field] = [unique[value] for value in sorted(unique)]
+    return key(entry)
+
+
+def decode_response(encoded, keep_output):
+    """Decode a focus response (base64 of gzipped JSON).
+
+    With `keep_output`, returns the parsed response. Otherwise an `Ok` response is not
+    kept: it becomes {"Ok": {"digest": ..., "places": n}}, where the digest identifies the
+    canonical form of the output (`canonical`), so two outputs have the same digest if and
+    only if their canonical forms are equal (barring SHA-256 collisions). The output is
+    decompressed and parsed entry by entry, so the harness never holds a whole output: large
+    outputs (hundreds of MB of JSON) would otherwise take many GB of Python objects.
+    """
+    data = base64.b64decode(encoded, validate=True)
+    if keep_output:
+        return json.loads(gzip.decompress(data))
+    decompressor = zlib.decompressobj(wbits=31)
+    text_decoder = codecs.getincrementaldecoder("utf-8")()
+    chunks = (data[i:i + (1 << 20)] for i in range(0, len(data), 1 << 20))
+    finished = False
+
+    def more():
+        nonlocal finished
+        for chunk in chunks:
+            text = text_decoder.decode(decompressor.decompress(chunk))
+            if text:
+                return text
+        finished = True
+        return text_decoder.decode(decompressor.flush(), final=True)
+
+    buffer = ""
+    while len(buffer) < len(OK_PREFIX) and not finished:
+        buffer += more()
+    if not buffer.startswith(OK_PREFIX):
+        # Not the compact form the backend writes: parse it whole.
+        while not finished:
+            buffer += more()
+        response = json.loads(buffer)
+        if "Ok" not in response:
+            return response
+        tail = dict(response["Ok"])
+        entries = tail.pop("place_info", [])
+        table = tail.pop("ranges", None)
+        return output_digest([entry_digest(entry, table) for entry in entries], tail)
+
+    decoder = json.JSONDecoder()
+    digests = []
+    indexed_entries = []
+    pos = len(OK_PREFIX)
+    while True:
+        while pos < len(buffer) and buffer[pos] in " \t\r\n,":
+            pos += 1
+        if pos == len(buffer):
+            if finished:
+                raise ValueError("truncated focus output")
+            buffer = buffer[pos:] + more()
+            pos = 0
+            continue
+        if buffer[pos] == "]":
+            break
+        try:
+            entry, end = decoder.raw_decode(buffer, pos)
+        except json.JSONDecodeError:
+            if finished:
+                raise
+            # The entry is incomplete: drop what was parsed and read more.
+            buffer = buffer[pos:] + more()
+            pos = 0
+            continue
+        if type(entry.get("range")) is int:
+            # A reordered object can put its table after place_info. Retain only
+            # these compact index lists until the table is available.
+            indexed_entries.append(entry)
+        else:
+            digests.append(entry_digest(entry))
+        pos = end
+    rest = buffer[pos + 1:]
+    while not finished:
+        rest += more()
+    # `rest` is the end of the output object, e.g. `,"containers":[...]}}`.
+    tail = json.loads("{" + rest.lstrip().lstrip(",").rstrip()[:-1])
+    table = tail.pop("ranges", None)
+    if indexed_entries and table is None:
+        raise ValueError("indexed focus output has no range table")
+    digests.extend(entry_digest(entry, table) for entry in indexed_entries)
+    return output_digest(digests, tail)
+
+
+def entry_digest(entry, table=None):
+    return hashlib.sha256(canonical_entry(entry, table).encode()).hexdigest()
+
+
+def output_digest(entry_digests, tail):
+    """The digest of an output from the digests of its `place_info` entries and its other
+    fields (`tail`)."""
+    tail = dict(tail)
+    if "containers" in tail:
+        tail["containers"] = sorted(tail["containers"], key=lambda x: json.dumps(x, sort_keys=True))
+    digest = hashlib.sha256()
+    for entry in sorted(entry_digests):
+        digest.update(entry.encode())
+    digest.update(json.dumps(tail, sort_keys=True).encode())
+    return {"Ok": {"digest": digest.hexdigest(), "places": len(entry_digests)}}
+
+
+def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=None, phases=False,
+                    memory_limit=None, keep_output=True):
     if phases:
         env = dict(env, RUST_LOG=PHASE_LOG)
     # rustc_plugin clears cargo's cached metadata for library targets only; for a binary,
@@ -410,30 +636,40 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
     cmd = ["cargo", "flowistry", "--context-mode", mode, "focus", rel_file, str(line), str(col)]
     start = time.monotonic()
     try:
-        res = run(cmd, crate_dir, env, timeout)
-    except subprocess.TimeoutExpired:
+        res = run(cmd, crate_dir, env, timeout, memory_limit)
+    except subprocess.TimeoutExpired as expired:
         return {"status": "timeout", "message": f"timed out after {timeout}s",
-                "seconds": round(time.monotonic() - start, 2)}
+                "seconds": round(time.monotonic() - start, 2),
+                "max_rss_mb": round(getattr(expired, "max_rss_kb", 0) / 1024)}
     seconds = round(time.monotonic() - start, 2)
+    max_rss_mb = round(res.max_rss_kb / 1024)
     response = None
     tail = res.stdout.strip().splitlines()
     if tail:
         try:
-            response = json.loads(gzip.decompress(base64.b64decode(tail[-1].strip(), validate=True)))
+            response = decode_response(tail[-1].strip(), keep_output)
         except Exception:
             response = None
     stderr = res.stderr
+    if memory_limit and response is None and (SIGKILL_MARKER.search(stderr) or res.returncode in (-9, 137)):
+        return {"status": "oom", "message": f"killed at the memory limit of {memory_limit}",
+                "seconds": seconds, "max_rss_mb": max_rss_mb, "returncode": res.returncode,
+                "stderr_tail": stderr[-4000:]}
     if CRASH_MARKER.search(stderr) or response is None:
         return {"status": "crash", "message": crash_signature(stderr), "seconds": seconds,
-                "returncode": res.returncode, "stderr_tail": stderr[-4000:]}
+                "max_rss_mb": max_rss_mb, "returncode": res.returncode, "stderr_tail": stderr[-4000:]}
     timings = parse_phases(stderr) if phases else None
+    stats = parse_stats(stderr) if phases else None
     if "Ok" in response:
-        return {"status": "ok", "seconds": seconds, "output": response["Ok"], "phases": timings,
-                "places": len(response["Ok"].get("place_info", []))}
+        output = response["Ok"]
+        places = output["places"] if "digest" in output else len(output.get("place_info", []))
+        return {"status": "ok", "seconds": seconds, "max_rss_mb": max_rss_mb, "output": output,
+                "phases": timings, "stats": stats, "places": places}
     err = response.get("Err", response)
     message = err.get("error") or err.get("type") or json.dumps(err)
     status = "benign" if any(b in message for b in BENIGN_ERRORS) else "error"
-    return {"status": status, "message": message, "seconds": seconds, "phases": timings}
+    return {"status": status, "message": message, "seconds": seconds, "max_rss_mb": max_rss_mb,
+            "phases": timings, "stats": stats}
 
 
 def parse_phases(stderr):
@@ -448,12 +684,22 @@ def parse_phases(stderr):
     return {k: round(v, 4) for k, v in totals.items()}
 
 
+def parse_stats(stderr):
+    """Sum the backend's `stat <name> = <n>` counter lines by name (one line per analyzed body
+    and counter, see `FlowResults::stats`)."""
+    totals = {}
+    for m in STAT_LINE.finditer(stderr):
+        totals[m[1]] = totals.get(m[1], 0) + int(m[2])
+    return totals
+
+
 def focus_repeated(crate_dir, env, rel_file, line, col, mode, args, touch=None):
     """Run a position `--repeat` times; keep the fastest run (the least disturbed by noise),
     unless some run failed, in which case that failure is the result."""
-    runs = [flowistry_focus(crate_dir, env, rel_file, line, col, mode, args.timeout, touch, args.phases)
+    runs = [flowistry_focus(crate_dir, env, rel_file, line, col, mode, args.timeout, touch, args.phases,
+                            args.memory_limit, args.keep_outputs)
             for _ in range(max(1, args.repeat))]
-    worst = {"crash": 0, "timeout": 1, "error": 2}
+    worst = {"crash": 0, "oom": 1, "timeout": 2, "error": 3}
     failed = sorted((r for r in runs if r["status"] in worst), key=lambda r: worst[r["status"]])
     if failed:
         return failed[0]
@@ -468,16 +714,11 @@ def canonical(output):
     def key(x):
         return json.dumps(x, sort_keys=True)
 
-    if not isinstance(output, dict):
+    if not isinstance(output, dict) or "digest" in output:
         return output
-    places = []
-    for p in output.get("place_info", []):
-        p = dict(p)
-        for field in ["ranges", "slice", "direct_influence"]:
-            if field in p:
-                p[field] = sorted(p[field], key=key)
-        places.append(p)
     out = dict(output)
+    table = out.pop("ranges", None)
+    places = [json.loads(canonical_entry(p, table)) for p in output.get("place_info", [])]
     out["place_info"] = sorted(places, key=key)
     if "containers" in out:
         out["containers"] = sorted(out["containers"], key=key)
@@ -731,8 +972,8 @@ def smoke_crate(spec, args, registries, backends):
             log(f"[{label}] skipped: {e}")
             report["skipped"].append((label, str(e)))
             continue
-        report.update(crate=label, dir=str(dest), files=files, pruned=pruned,
-                      touch=str(touch) if touch else None)
+        report.update(crate=label, name=entry["name"] if entry is not None else None, dir=str(dest),
+                      files=files, pruned=pruned, touch=str(touch) if touch else None)
         if pruned:
             log(f"[{label}] pruned optional dependencies unavailable offline: {', '.join(pruned)}")
         break
@@ -845,8 +1086,8 @@ def smoke_git_entry(entry, args, backends):
         report["skipped"].append((entry["name"], str(e)))
         log(f"[{entry['name']}] skipped: {e}")
         return report
-    report.update(crate=label, dir=str(dest), target_root=str(checkout), files=files, pruned=[],
-                  env=entry.get("env", {}),
+    report.update(crate=label, name=entry["name"], dir=str(dest), target_root=str(checkout), files=files,
+                  pruned=[], env=entry.get("env", {}),
                   touch=str(touch) if touch else None)
     return run_positions(report, entry_dir, dest, args, backends)
 
@@ -867,7 +1108,13 @@ def run_positions(report, entry_dir, dest, args, backends):
         if positions_file is not None:
             entry_dir.mkdir(parents=True, exist_ok=True)
             write_positions(positions_file, positions)
-    log(f"[{label}] {len(report['files'])} compiled files, {len(positions)} positions")
+    if args.budgets is not None:
+        # Only the stress positions of this entry, each in its own mode.
+        runs = [(b["file"], b["line"], b["column"], [b["mode"]])
+                for b in args.budgets if b["crate"] == report.get("name")]
+    else:
+        runs = [(rel, line, col, args.modes) for rel, line, col in positions]
+    log(f"[{label}] {len(report['files'])} compiled files, {len(runs)} positions")
     if args.prepare_only:
         report["seconds"] = 0.0
         return report
@@ -876,8 +1123,8 @@ def run_positions(report, entry_dir, dest, args, backends):
                         **report.get("env", {})))
             for i, (name, bin_dir) in enumerate(backends)]
     started = time.monotonic()
-    for idx, (rel, line, col) in enumerate(positions):
-        for mode in args.modes:
+    for idx, (rel, line, col, modes) in enumerate(runs):
+        for mode in modes:
             rec = {"crate": label, "file": rel, "line": line, "column": col, "mode": mode}
             for name, env in envs:
                 # Inside a workspace member, cargo-flowistry resolves relative paths from the
@@ -885,7 +1132,7 @@ def run_positions(report, entry_dir, dest, args, backends):
                 file_arg = str(dest / rel) if report.get("target_root") not in (None, str(dest)) else rel
                 result = focus_repeated(dest, env, file_arg, line, col, mode, args, report.get("touch"))
                 rec[name] = result
-                if result["status"] in ("crash", "timeout"):
+                if result["status"] in FAILURES:
                     log(f"[{label}] {result['status'].upper()} ({name}) {mode} {rel}:{line}:{col}: "
                         f"{result['message']}")
             if len(envs) == 2:
@@ -899,7 +1146,7 @@ def run_positions(report, entry_dir, dest, args, backends):
                     rec[name].pop("output", None)
             report["records"].append(rec)
         if (idx + 1) % 10 == 0:
-            log(f"[{label}] {idx + 1}/{len(positions)} positions")
+            log(f"[{label}] {idx + 1}/{len(runs)} positions")
     report["seconds"] = round(time.monotonic() - started, 1)
     return report
 
@@ -918,7 +1165,7 @@ def summarize(reports, backends, args, total_seconds):
     names = [b[0] for b in backends]
     out = []
     header = f"{'crate':<22} {'files':>5} {'pos':>4} {'runs':>5} {'ok':>5} {'benign':>6} {'error':>5} " \
-             f"{'crash':>5} {'t/o':>4} {'secs':>7}"
+             f"{'crash':>5} {'oom':>4} {'t/o':>4} {'maxMB':>6} {'secs':>7}"
     if len(names) == 2:
         header += f" {'diff':>5}"
     for name in names:
@@ -930,11 +1177,12 @@ def summarize(reports, backends, args, total_seconds):
                 continue
             recs = r["records"]
             counts = {s: sum(1 for x in recs if x[name]["status"] == s)
-                      for s in ["ok", "benign", "error", "crash", "timeout"]}
+                      for s in ["ok", "benign", "error", "crash", "oom", "timeout"]}
             npos = len({(x["file"], x["line"], x["column"]) for x in recs})
+            max_rss = max((x[name].get("max_rss_mb", 0) for x in recs), default=0)
             row = f"{r['crate']:<22} {len(r['files']):>5} {npos:>4} {len(recs):>5} {counts['ok']:>5} " \
-                  f"{counts['benign']:>6} {counts['error']:>5} {counts['crash']:>5} {counts['timeout']:>4} " \
-                  f"{r.get('seconds', 0):>7}"
+                  f"{counts['benign']:>6} {counts['error']:>5} {counts['crash']:>5} {counts['oom']:>4} " \
+                  f"{counts['timeout']:>4} {max_rss:>6} {r.get('seconds', 0):>7}"
             if len(names) == 2:
                 row += f" {sum(1 for x in recs if not x['same']):>5}"
             out.append(row)
@@ -957,11 +1205,11 @@ def summarize(reports, backends, args, total_seconds):
                 key = (res["status"], name, short_message(res["message"]) if res["status"] != "crash"
                        else res["message"])
                 groups.setdefault(key, []).append(rec)
-    order = {"crash": 0, "timeout": 1, "error": 2, "benign": 3}
+    order = {"crash": 0, "oom": 1, "timeout": 2, "error": 3, "benign": 4}
     for (status, name, msg), recs in sorted(groups.items(), key=lambda kv: (order[kv[0][0]], -len(kv[1]))):
         suffix = f" [{name}]" if len(names) == 2 else ""
         out.append(f"{status.upper()}{suffix} x{len(recs)}: {msg}")
-        if status in ("crash", "timeout", "error"):
+        if status in FAILURES + ["error"]:
             for rec in recs[: args.examples]:
                 out.append(f"    {rec['crate']} {rec['mode']} {rec['file']}:{rec['line']}:{rec['column']}")
             first = recs[0]
@@ -979,29 +1227,39 @@ def summarize(reports, backends, args, total_seconds):
     if args.phases or args.repeat > 1 or len(names) == 2:
         out.append("")
         out += timing_summary(reports, names)
+    if args.budgets is not None:
+        out.append("")
+        out += budget_summary(reports, names, args.budgets)[0]
     out.append(f"total runtime: {total_seconds:.0f}s")
     return "\n".join(out)
 
 
 def timing_summary(reports, names):
-    """Wall time and per-phase totals over runs that succeeded for every backend.
+    """Wall time, peak memory, per-phase totals and backend counters over runs that succeeded
+    for every backend.
 
     With two backends, also the ratio of totals and the geometric mean of per-run ratios
-    (so a few huge positions do not hide a change on typical ones).
+    (so a few huge positions do not hide a change on typical ones). For peak memory, the
+    "total" is the largest peak over the runs.
     """
     runs = [rec for r in reports for rec in r["records"]
             if all(rec[n]["status"] == "ok" for n in names)]
     out = [f"timing over {len(runs)} run(s) that succeeded for every backend:"]
     phase_names = sorted({p for rec in runs for n in names for p in (rec[n].get("phases") or {})})
-    rows = [("wall", lambda res: res["seconds"])]
-    rows += [(p, lambda res, p=p: (res.get("phases") or {}).get(p, 0.0)) for p in phase_names]
+    stat_names = sorted({s for rec in runs for n in names for s in (rec[n].get("stats") or {})})
+    # (label, value of one run, unit, how to combine the runs)
+    rows = [("wall", lambda res: res["seconds"], "s", sum),
+            ("peak RSS", lambda res: res.get("max_rss_mb", 0), "M", max)]
+    rows += [(p, lambda res, p=p: (res.get("phases") or {}).get(p, 0.0), "s", sum) for p in phase_names]
+    rows += [(f"stat {s}", lambda res, s=s: (res.get("stats") or {}).get(s, 0), "", sum) for s in stat_names]
     header = f"  {'phase':<34}" + "".join(f" {n:>12}" for n in names)
     if len(names) == 2:
         header += f" {'ratio':>7} {'geomean':>8}"
     out.append(header)
-    for label, get in rows:
-        totals = [sum(get(rec[n]) for rec in runs) for n in names]
-        line = f"  {label:<34}" + "".join(f" {t:>11.2f}s" for t in totals)
+    for label, get, unit, combine in rows:
+        totals = [combine([get(rec[n]) for rec in runs] or [0]) for n in names]
+        line = f"  {label:<34}" + "".join(
+            f" {t:>11.2f}{unit}" if unit == "s" else f" {t:>11}{unit or ' '}" for t in totals)
         if len(names) == 2:
             pairs = [(get(rec[names[0]]), get(rec[names[1]])) for rec in runs]
             pairs = [(a, b) for a, b in pairs if a > 0 and b > 0]
@@ -1010,6 +1268,47 @@ def timing_summary(reports, names):
             line += f" {ratio:>7.3f} {geo:>8.3f}"
         out.append(line)
     return out
+
+
+def read_budgets(path):
+    """The stress positions and their budgets, one per line:
+    `crate<TAB>mode<TAB>file<TAB>line<TAB>column<TAB>max RSS (MiB)<TAB>max seconds`.
+
+    `crate` is a corpus entry name; `line` is 0-based, as passed to focus. A run within
+    budget answers {"Ok": ...} with a peak RSS and a wall time no larger than the budget.
+    """
+    budgets = []
+    for row in path.read_text().splitlines():
+        if not row.strip() or row.startswith("#"):
+            continue
+        crate, mode, rel, line, col, max_rss_mb, max_seconds = row.split("\t")
+        budgets.append({"crate": crate, "mode": mode, "file": rel, "line": int(line), "column": int(col),
+                        "max_rss_mb": int(max_rss_mb), "max_seconds": float(max_seconds)})
+    return budgets
+
+
+def budget_summary(reports, names, budgets):
+    """Check every stress run against its budget. Returns (report lines, any exceeded)."""
+    out = ["budgets (peak RSS MiB / seconds):"]
+    exceeded = False
+    records = {(r.get("name"), rec["mode"], rec["file"], rec["line"], rec["column"]): rec
+               for r in reports for rec in r["records"]}
+    for b in budgets:
+        rec = records.get((b["crate"], b["mode"], b["file"], b["line"], b["column"]))
+        where = f"{b['crate']} {b['mode']} {b['file']}:{b['line']}:{b['column']}"
+        for name in names:
+            res = rec[name] if rec is not None else None
+            if res is None:
+                verdict, detail = "MISSING", "not run"
+            else:
+                rss, secs = res.get("max_rss_mb", 0), res["seconds"]
+                ok = res["status"] == "ok" and rss <= b["max_rss_mb"] and secs <= b["max_seconds"]
+                verdict = "ok" if ok else "OVER"
+                detail = f"{res['status']} {rss}/{b['max_rss_mb']} MiB, {secs}/{b['max_seconds']} s"
+            exceeded |= verdict != "ok"
+            suffix = f" [{name}]" if len(names) == 2 else ""
+            out.append(f"  {verdict:<7} {where}{suffix}: {detail}")
+    return out, exceeded
 
 
 def main():
@@ -1055,12 +1354,30 @@ def main():
                              "added to the report; use release builds of the backend)")
     parser.add_argument("--repeat", type=int, default=1,
                         help="run every position N times and keep the fastest, to reduce timing noise")
+    parser.add_argument("--memory-limit", metavar="SIZE",
+                        help="cap the memory (without swap) of every focus run at SIZE, e.g. 6G, by running "
+                             "it in a systemd user scope; a run killed at the cap has the status `oom`")
+    parser.add_argument("--budgets", action="store_true",
+                        help=f"run only the stress positions in {BUDGETS_FILE.relative_to(REPO_ROOT)}, one crate "
+                             "at a time, and check each against its peak-memory and time budget")
+    parser.add_argument("--skip", action="append", default=[], metavar="NAME",
+                        help="leave the corpus entry NAME out (repeatable)")
     parser.add_argument("--json", type=Path, metavar="FILE", help="write every run record to FILE")
     parser.add_argument("--keep-outputs", action="store_true", help="include full focus outputs in --json")
     parser.add_argument("--examples", type=int, default=5, help="example positions shown per problem group")
     args = parser.parse_args()
 
     args.modes = [m.strip() for m in args.modes.split(",") if m.strip()]
+    if args.memory_limit and shutil.which("systemd-run") is None:
+        parser.error("--memory-limit needs systemd-run")
+    if args.budgets:
+        if args.update_corpus:
+            parser.error("--budgets cannot be combined with --update-corpus")
+        args.budgets = read_budgets(BUDGETS_FILE)
+        # Stress runs must never overlap: they are the runs most likely to exhaust memory.
+        args.jobs = 1
+    else:
+        args.budgets = None
     args.work_dir = args.work_dir.resolve()
     backends = [("base", args.backend.resolve())]
     if args.compare:
@@ -1104,6 +1421,11 @@ def main():
         corpus = {"seed": args.seed, "positions": args.positions}
     else:
         parser.error(f"{CORPUS_FILE} does not exist; create it with --update-corpus")
+    if args.skip and not args.update_corpus:
+        specs = [s for s in specs if not (isinstance(s, dict) and s["name"] in args.skip)]
+    if args.budgets is not None:
+        budgeted = {b["crate"] for b in args.budgets}
+        specs = [s for s in specs if isinstance(s, dict) and s["name"] in budgeted]
     started = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
         reports = list(pool.map(lambda s: smoke_crate(s, args, registries, backends), specs))
@@ -1124,9 +1446,11 @@ def main():
             "crates": reports,
         }, indent=1))
 
-    bad = any(rec[n]["status"] in ("crash", "timeout") for r in reports for rec in r["records"]
+    bad = any(rec[n]["status"] in FAILURES for r in reports for rec in r["records"]
               for n, _ in backends)
     bad |= any(not rec.get("same", True) for r in reports for rec in r["records"])
+    if args.budgets is not None:
+        bad |= budget_summary(reports, [n for n, _ in backends], args.budgets)[1]
     sys.exit(1 if bad else 0)
 
 
