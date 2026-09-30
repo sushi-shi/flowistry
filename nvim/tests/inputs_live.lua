@@ -36,7 +36,7 @@ local ok, err = xpcall(function()
     -- An external build input may require the backend's validated second pass.
     flow.refresh()
     await(function() return flow.status() == "active" end, mode .. ": validated watch paths")
-    local unrelated = root .. "/unrelated.txt"
+    local unrelated = root .. "/unrelated-" .. mode .. ".txt"
     vim.fn.writefile({ "unrelated" }, unrelated)
     local unrelated_buf = vim.fn.bufadd(unrelated); vim.fn.bufload(unrelated_buf)
     vim.api.nvim_buf_set_lines(unrelated_buf, 0, -1, false, { "unrelated edit" })
