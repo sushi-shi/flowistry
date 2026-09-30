@@ -28,7 +28,9 @@ mod file_focus;
 mod focus;
 mod playground;
 mod plugin;
+mod replay;
 mod positions;
 mod spans;
 
-pub use plugin::FlowistryPlugin;
+pub use plugin::{FlowistryPlugin, replay_request};
+pub use replay::{prepare as prepare_replay, try_replay};
