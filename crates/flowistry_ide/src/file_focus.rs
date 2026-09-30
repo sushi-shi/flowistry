@@ -25,11 +25,19 @@ use crate::{
 pub struct BodyOutput {
   range: CharRange,
   focus: Option<Result<FocusOutput, String>>,
+  cached: Option<bool>,
 }
 
 #[derive(Serialize)]
 pub struct FileOutput {
   bodies: Vec<BodyOutput>,
+  cache: CacheStats,
+}
+
+#[derive(Serialize)]
+struct CacheStats {
+  hits: usize,
+  misses: usize,
 }
 
 struct Callbacks {
@@ -78,6 +86,7 @@ impl rustc_driver::Callbacks for Callbacks {
       };
       // The bodies of the file share their callee summaries.
       let session = AnalysisSession::new(tcx, self.eval_mode);
+      let cache = crate::cache::FocusCache::new(tcx);
       let mut bodies = Vec::new();
       for (span, id) in candidates {
         if source_map.lookup_source_file(span.lo()).name != file.name {
@@ -86,21 +95,39 @@ impl rustc_driver::Callbacks for Callbacks {
         let Ok(range) = crate::positions::char_range(span, source_map) else {
           continue;
         };
-        bodies.push(BodyOutput {
-          range,
-          focus: if self.position.is_none() || selected == Some(id) {
-            Some(if tcx.typeck(tcx.hir_body_owner_def_id(id)).tainted_by_errors.is_some() {
+        let previous_hits = cache.hits.get();
+        let focus = if self.position.is_none() || selected == Some(id) {
+          Some(
+            if tcx
+              .typeck(tcx.hir_body_owner_def_id(id))
+              .tainted_by_errors
+              .is_some()
+            {
               Err("the selected function does not type-check".to_string())
             } else {
-              crate::focus::focus_with_session(&session, id).map_err(|error| error.to_string())
-            })
-          } else {
-            None
-          },
+              cache
+                .focus(tcx, id, session.clone())
+                .map_err(|error| error.to_string())
+            },
+          )
+        } else {
+          None
+        };
+        bodies.push(BodyOutput {
+          range,
+          cached: focus.as_ref().map(|_| cache.hits.get() > previous_hits),
+          focus,
         });
       }
-      Ok(FileOutput { bodies })
+      Ok(FileOutput {
+        bodies,
+        cache: CacheStats {
+          hits: cache.hits.get(),
+          misses: cache.misses.get(),
+        },
+      })
     })());
+    crate::fast_cache::record_inputs(tcx);
     if tcx.dcx().has_errors().is_none() {
       if crate::plugin::postprocess(self.output.take().unwrap()).is_ok() {
         use std::io::Write;
