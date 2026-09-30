@@ -22,7 +22,11 @@ pub use self::{
 };
 use crate::{
   extensions::{ContextMode, EvalMode},
-  mir::{engine, placeinfo::{PlaceCacheStats, PlaceInfo}, utils::MAX_ARG_POINTER_DEPTH},
+  mir::{
+    engine,
+    placeinfo::{PlaceCacheStats, PlaceInfo},
+    utils::MAX_ARG_POINTER_DEPTH,
+  },
 };
 
 mod analysis;
@@ -284,7 +288,11 @@ fn run_flow<'a, 'tcx>(
   }
 
   if log::log_enabled!(log::Level::Info) {
-    let FlowSizeStats { locations: nloc, rows: np, row_entries: nl } = results.size_stats();
+    let FlowSizeStats {
+      locations: nloc,
+      rows: np,
+      row_entries: nl,
+    } = results.size_stats();
     let pavg = np as f64 / (nloc as f64);
     let lavg = nl as f64 / (nloc as f64);
     log::info!(
@@ -301,4 +309,43 @@ fn run_flow<'a, 'tcx>(
   }
 
   results
+}
+
+#[cfg(test)]
+mod test {
+  use rustc_utils::BodyExt;
+
+  use super::*;
+  use crate::test_utils;
+
+  #[test]
+  fn test_flow_stats() {
+    let input = r#"
+fn f(x: i32, v: &mut Vec<i32>) -> i32 {
+  let mut y = x;
+  for i in 0 .. 3 {
+    y += i;
+    v.push(y);
+  }
+  y
+}
+"#;
+    test_utils::compile_body(input, |tcx, body_id, body_with_facts| {
+      let results = compute_flow(tcx, body_id, body_with_facts);
+      let stats = results.stats();
+      let locations = body_with_facts.body.all_locations().count();
+      assert_eq!(stats.locations, locations);
+      // Every location is visited at least once, and the loop more than once.
+      assert!(stats.location_visits > locations, "{stats:?}");
+      assert!(stats.changed_joins > 0, "{stats:?}");
+      assert!(stats.transfers > 0 && stats.transfers <= stats.location_visits);
+      assert!(stats.mutations >= stats.transfers);
+      let normalize = stats.place_caches.normalize;
+      assert!(normalize.misses > 0 && normalize.misses <= normalize.lookups);
+
+      let size = results.size_stats();
+      assert_eq!(size.locations, locations);
+      assert!(size.rows > 0 && size.row_entries >= size.rows, "{size:?}");
+    });
+  }
 }

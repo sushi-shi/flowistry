@@ -1,4 +1,7 @@
-use std::{cell::{Cell, RefCell}, rc::Rc};
+use std::{
+  cell::{Cell, RefCell},
+  rc::Rc,
+};
 
 use indexical::{
   IndexedValue,
@@ -81,7 +84,6 @@ pub struct FlowAnalysis<'a, 'tcx> {
   /// The metadata about places used in the analysis.
   pub place_info: PlaceInfo<'a, 'tcx>,
 
-  pub(crate) counters: TransferCounters,
   pub(crate) control_dependencies: ControlDependencies<BasicBlock>,
 
   /// The session providing callee summaries, with the same mode as `place_info`.
@@ -99,6 +101,9 @@ pub struct FlowAnalysis<'a, 'tcx> {
   /// [`compute_flow_with_shared_handles`](super::compute_flow_with_shared_handles),
   /// the handles that may share state.
   pub(crate) shared_handles: Option<SharedHandles<'tcx>>,
+
+  /// Counters of the transfer function.
+  pub(crate) counters: TransferCounters,
 }
 
 /// Counters of the transfer function, see [`FlowStats`](super::FlowStats).
@@ -139,11 +144,11 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       body,
       place_info,
       control_dependencies,
-      counters: TransferCounters::default(),
       session,
       call_effects: RefCell::default(),
       call_reads: RefCell::default(),
       shared_handles: None,
+      counters: TransferCounters::default(),
     }
   }
 
@@ -270,7 +275,9 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     debug!("  Applying mutations {mutations:?}");
     let counters = &self.counters;
     counters.transfers.set(counters.transfers.get() + 1);
-    counters.mutations.set(counters.mutations.get() + mutations.len());
+    counters
+      .mutations
+      .set(counters.mutations.get() + mutations.len());
 
     // Initialize dependencies to include current location of mutation.
     let mut all_deps = {
