@@ -598,7 +598,7 @@ local function run()
   local native_select, menu, choose = vim.ui.select
   vim.ui.select = function(items, opts, callback) menu, choose = items, callback end
   vim.cmd("Flow")
-  equal(menu, { "on", "off", "pin", "unpin", "toggle", "refresh", "log" }, "bare Flow offers its actions")
+  equal(menu, { "on", "off", "pin", "unpin", "toggle", "refresh", "types", "log" }, "bare Flow offers its actions")
   equal(flow.status(), "active", "opening the action menu does not toggle flow")
   choose(nil)
   equal(flow.status(), "active", "cancelling the action menu preserves state")
