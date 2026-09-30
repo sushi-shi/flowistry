@@ -1,5 +1,8 @@
 # Human-tool review — 2026-09-27
 
+This is a historical record from before the monorepo migration. Current packaging
+and validation are documented in [the migration guide](../../docs/neovim-monorepo.md).
+
 Reviewed the Neovim state lifecycle, protocol/error handling, source-range
 rendering, airline/CoC integration, and the packaged Flowistry backend. No
 agent-query interface was added.

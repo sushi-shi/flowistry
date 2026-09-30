@@ -359,7 +359,8 @@ function M.setup(opts)
   if progress_timer then progress_timer:stop(); progress_timer:close() end
   for _, state in pairs(all_states()) do stop(state); clear_pin(state); render.clear(state.buf) end
   states, suspended, disabled = {}, {}, {}
-  config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {})
+  local packaged_ok, packaged = pcall(require, "flowistry.packaged")
+  config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), packaged_ok and packaged or {}, opts or {})
   assert(type(config.debounce_ms) == "number" and config.debounce_ms >= 0, "debounce_ms must be nonnegative")
   assert(type(config.timeout_ms) == "number" and config.timeout_ms > 0, "timeout_ms must be positive")
   assert(type(config.auto_enable) == "boolean", "auto_enable must be a boolean")

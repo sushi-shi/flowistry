@@ -10,7 +10,10 @@ constructor fields, comment colors, parameter-type selection and rustfmt-save
 redraw. [Source-selection evidence](source-selection.md) includes the actual
 gameplay constructor. These fixes do not complete the remaining milestones.
 The coordinator remains uncommitted WIP in `/tmp/flowistry-project-coordinator`;
-preserve it and bring it onto #52 before its next PR.
+preserve it and bring it onto the Neovim migration tip before its next PR.
+The editor now lives under `nvim/` in this repository; backend and editor changes
+share one package source, lock file, CI suite and PR chain. See
+[neovim-monorepo.md](neovim-monorepo.md).
 
 | Step | State | Evidence / next gate |
 |---|---|---|
@@ -23,7 +26,7 @@ preserve it and bring it onto #52 before its next PR.
 | 7. Shared result index | Implemented in [#48](https://github.com/sushi-shi/flowistry/pull/48); final integration gates pending | Existing caches now share a publication lock and disk budget. Compiler-derived body index, revision/generation envelopes, cancellation, source-hash checks and interrupted-write recovery pass 16 new cases, plus all 84 edit cases. See [versioned-result-index.md](versioned-result-index.md). |
 | 8. Persisted summaries | Implemented in [#49](https://github.com/sushi-shi/flowistry/pull/49); full corpus gates pending | Portable schema, shared disk adapter/fingerprints and dependency/reverse snapshots pass 18 summary cases, all 84 edit cases, all 16 publication cases, workspace tests and 52 harness regressions at `9da7aba9f`. Full Recurse logical-summary/output comparison and quiet measurements remain. See [persisted-summary-progress.md](persisted-summary-progress.md). |
 | 9. Project command | Worker foundation in [#51](https://github.com/sushi-shi/flowistry/pull/51); coordinator pending | Explicit package/target selection, portable compiler inventories and body workers pass 137 process cases at `4b4915382`, plus IDE tests and 54 Python regressions. Public streaming, priorities, cancellation and bounded workers remain. See [project-analysis-progress.md](project-analysis-progress.md). |
-| 10. Neovim background work | Pending | Continue after editor #4; foreground priority and compatible pin. |
+| 10. Neovim background work | Pending | Continue under nvim/ after the monorepo migration; foreground priority and a shared backend package. |
 | 11. Incremental saves | Pending | Dependency-aware recomputation and rapid-save handling. |
 | 12. Layout reuse | Pending | Proven-safe cases only, compiler fallback otherwise. |
 | 13. Final release gates | Pending | Full corpus, edits, packaged editor and before/after evidence. |

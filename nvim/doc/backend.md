@@ -2,7 +2,7 @@
 
 This boundary is editor-independent. Neovim and a future Zed integration should
 invoke the same Flowistry Rust backend. No Rust semantics, ownership rules, borrow
-checking, or information-flow computation are implemented in this repository.
+checking, or information-flow computation are implemented in the Lua adapter; the Rust crates live alongside `nvim/`.
 
 ```text
                   cargo flowistry (Rust)
@@ -13,13 +13,10 @@ checking, or information-flow computation are implemented in this repository.
        Neovim transport + UI        future Zed adapter
 ```
 
-The integration targets Flowistry fork revision
-`ad859be49003040aac7f6767db6798d971d0d4a2` (0.5.44), with its locked
-`rustc_utils = 0.15.0-nightly-2026-05-01` dependency. This is a description of that
-protocol, not a claim of upstream version stability. The fork includes the
-combined command below, refined human-facing focus ranges, and optional
-[cached callee summaries](summaries.md). The package consumes this commit
-directly without build patches.
+The integration uses this repository's backend (0.5.44), with its locked
+`rustc_utils = 0.15.0-nightly-2026-05-01` dependency. The combined package builds
+both components from the same source tree. This document describes the protocol;
+changes to it and the editor decoder are reviewed and tested in one PR.
 
 The range refinement keeps simple independent arguments dimmed in forward uses of a value.
 For example, focusing `section` leaves `camera[0]` dim in a call whose other

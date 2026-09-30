@@ -8,6 +8,7 @@ COMMANDS                                                   *:Flowistry*
 :Flow unpin              Resume tracking the cursor.
 :Flow                    Show an action menu.
 :Flow toggle             Toggle focus; also accepts refresh and log.
+:Flow types              Toggle parameter-type selection (map: &LevelMap).
 
 The longer command names remain available:
 
@@ -38,12 +39,9 @@ not save buffers automatically. The first analysis can take several minutes.
 
 BACKEND                                                    *flowistry-backend*
 
-The default targets upstream Flowistry revision:
-693ceda925bd1d39d8de413ce239cfa6a87bb665 (0.5.44)
-
-Install its pinned nightly-2026-05-01 toolchain with rust-src, rustc-dev, and
-llvm-tools-preview. Then cargo install --locked from that revision's Git repo.
-See README.md for complete commands and doc/backend.md for the shared protocol.
+The plugin and Rust backend live in the same Flowistry repository. The root
+flake builds them together; its plugin package automatically chooses the paired
+backend and compiler environment. See README.md and doc/nix.md for installation.
 
 The backend performs Rust analysis independently of the editor. For a custom
 installation or Nix wrapper, pass a complete argv prefix through `command`:
@@ -71,9 +69,9 @@ inputs still require compiler validation before function-level reuse.
 
 On NixOS, the repository flake provides the matching backend/compiler libraries:
 >
-    nix run /path/to/flowistry.nvim -- /path/to/project/src/main.rs
+    nix run /path/to/flowistry#nvim -- /path/to/project/src/main.rs
 <
-The default app loads your usual Neovim config and adds Flowistry for this
+The nvim app loads your usual Neovim config and adds Flowistry for this
 session. Separate flake packages are available as #backend and #plugin.
 For this launcher, override settings in your Neovim config with:
 >

@@ -9,81 +9,57 @@ plugin computes ownership-aware information flow. Lua handles editor events,
 process transport, caching, and decorations. A future Zed frontend can use that
 same executable and protocol; see [the backend contract](doc/backend.md).
 
-## Requirements
+## Install the paired editor and backend
 
-- Neovim 0.10 or newer.
-- `gzip` on PATH, for decoding the backend's compressed JSON.
-- Flowistry and its matching Rust toolchain, installed separately.
-- A saved Rust file in a Cargo project that builds with that toolchain.
+The plugin lives in `nvim/` in the Flowistry repository. The root flake builds
+both the Rust backend and this plugin from the same source tree; there is no
+separate backend revision to update. The installed plugin automatically selects
+that build's backend, even when loaded without the launcher.
 
-## Backend installation
-
-The package targets Flowistry fork revision
-[`ad859be49003040aac7f6767db6798d971d0d4a2`](https://github.com/sushi-shi/flowistry/tree/ad859be49003040aac7f6767db6798d971d0d4a2),
-which identifies itself as **0.5.44** and pins **nightly-2026-05-01**. The compiler
-API and wire format are version-sensitive. Install that revision, rather than
-assuming an arbitrary published version or latest nightly is compatible:
+From your Rust project's development environment:
 
 ```sh
-rustup toolchain install nightly-2026-05-01 \
-  --component rust-src --component rustc-dev --component llvm-tools-preview
-cargo +nightly-2026-05-01 install --locked \
-  --git https://github.com/sushi-shi/flowistry \
-  --rev ad859be49003040aac7f6767db6798d971d0d4a2 flowistry_ide
+nix run github:sushi-shi/flowistry#nvim -- /path/to/project/src/main.rs
 ```
 
-Make sure Cargo's bin directory is on Neovim's PATH. The frontend discovers the
-compiler sysroot and dynamic library path before launching the backend. It does
-not install tools or change your project's toolchain file.
+For a local Flowistry checkout, use `nix run /path/to/flowistry#nvim -- FILE`, or
+`/path/to/flowistry/tools/flowistry FILE`. The launcher loads your existing Neovim
+configuration and supplies the plugin, backend, compiler libraries and gzip.
+Project-specific native libraries still come from your project's shell.
+Neovim 0.10 or newer and a saved Rust file are required; the launcher supplies a
+pinned Neovim if none is on PATH. It does not modify the project's toolchain.
 
-On NixOS, the flake supplies the backend with its matching compiler and libraries:
+Root flake outputs:
 
-```sh
-nix run github:sushi-shi/flowistry.nvim -- /path/to/project/src/main.rs
-```
+- `.#nvim`: configured `flowistry-nvim` launcher.
+- `.#plugin`: Neovim plugin with its matching backend bound automatically.
+- `.#backend` (also the default package): editor-independent Rust backend.
+- `.#toolchain`: matching Rust compiler.
 
-This loads your existing Neovim configuration and adds Flowistry for the session.
-The packages are separate: `.#backend` is the editor-independent executable,
-`.#plugin` is the Neovim plugin, and the default package is the configured launcher.
-For example, `nix build .#backend` exposes `result/bin/flowistry-backend` for use
-by either an editor adapter or a command-line client. Inputs and the compiler
-manifest are pinned. Build the source revision, not the older prebuilt release
-that happens to carry the same upstream version number.
+See [NixOS and Home Manager setup](doc/nix.md) for installation. Linux packages
+exist for x86_64 and aarch64. [Callee analysis](doc/summaries.md) explains the
+optional `context_mode = "Recurse"` mode; signature-based analysis is the default.
 
-See [NixOS and Home Manager setup](doc/nix.md) to install the launcher or add the
-plugin to your existing Neovim configuration. Linux packages are exposed for
-`x86_64-linux` and `aarch64-linux`; the latter is evaluated but not build-tested.
-Private repositories require authenticated Git access; the guide includes an
-SSH URL. The first backend build may take several minutes.
+## Load the plugin directly
 
-The Nix backend also includes the fork's cached callee summaries. Opt in with
-`context_mode = "Recurse"`; the default remains signature-based analysis.
-See [callee analysis](doc/summaries.md) for scope, caching, and limitations.
+Install the root flake's `packages.<system>.plugin` into your Neovim configuration
+and call `require("flowistry").setup()`. Backend selection is automatic. You can
+still override `command` explicitly for backend development.
 
-Projects with native libraries should launch from their development environment.
-For the local `stalker-mobile` checkout, `./tools/flowistry` handles that setup and
-opens `crates/stalker-engine/src/gameplay.rs`. `FLOWISTRY_WORKSPACE` optionally sets the full
-Cargo workspace root for the session launcher.
-
-## Load the plugin
-
-With lazy.nvim:
+For frontend development, enter `nix develop /path/to/flowistry#nvim`, add
+`/path/to/flowistry/nvim` to `runtimepath`, and configure:
 
 ```lua
-{
-  "sushi-shi/flowistry.nvim",
-  ft = "rust",
-  cmd = { "Flow", "Flowistry" },
-  opts = {},
-  keys = {
-    { "<leader>ft", "<Cmd>Flowistry toggle<CR>", desc = "Toggle Flowistry" },
-    { "<leader>fm", "<Cmd>Flowistry mark<CR>", desc = "Pin Flowistry focus" },
-    { "<leader>fu", "<Cmd>Flowistry unmark<CR>", desc = "Unpin Flowistry focus" },
-  },
-}
+require("flowistry").setup({
+  command = { assert(vim.env.FLOWISTRY_BACKEND_EXE) },
+  batch = true,
+})
 ```
 
-Or add this directory to `runtimepath`, then call `require("flowistry").setup()`.
+Re-enter the development shell after backend changes to rebuild the paired
+backend. The old `sushi-shi/flowistry.nvim` repository is historical; use this
+repository for code, issues and PRs.
+
 No mappings are installed on ordinary keys. `<Plug>(FlowistryToggle)`,
 `<Plug>(FlowistryMark)`, `<Plug>(FlowistryUnmark)`, and `<Plug>(FlowistryRefresh)`
 are available.
@@ -219,8 +195,9 @@ vim.api.nvim_set_hl(0, "FlowistryMaybe", { fg = "#c49a55", italic = true })
 Dimmed code uses a dedicated muted blue-gray foreground, distinct from comments,
 with a 256-color terminal fallback. Focus links to `Visual`. Direct-influence
 backgrounds link to `CursorLine` and are disabled by default to avoid resembling
-extra selections. Related code keeps its ordinary syntax colors; a struct may
-stay bright as a whole when one of its fields depends on the selected variable.
+extra selections. Related code keeps its ordinary syntax colors. Independent plain
+constructor fields are dimmed when following an input forward; backward selection
+retains the constructor inputs. Comments keep their syntax colors.
 Punctuation and whitespace do not select an enclosing expression. On a variable
 or method name, the selection background covers only the word under the cursor;
 the dependency analysis can still include a larger expression.
@@ -234,12 +211,14 @@ Neovim uses a foreground color for dimming rather than VS Code's text opacity.
 
 ## Development and validation
 
+Run the following commands from the `nvim/` directory:
+
 ```sh
 nvim --headless -u NONE -i NONE -l tests/run.lua
 ```
 
-With Nix, `nix flake check` runs the frontend and real-compiler callee-summary
-checks in isolated build environments. `nix develop` provides Neovim, Make,
+From the repository root, `nix flake check` runs the frontend and real-compiler callee-summary
+checks in isolated build environments. `nix develop .#nvim` provides Neovim, Make,
 gzip, and the packaged backend; run `make test-summaries` there to verify field
 precision, nested calls, both request protocols, and invalidation after a save.
 `make test-cache` checks real compiler cache reuse, moved pins, off/on, refresh,
@@ -273,7 +252,7 @@ nvim --headless -n -i NONE --cmd 'let g:coc_start_at_startup=0' -c 'luafile test
 `make test-save` uses the configured rust.vim formatter and the real backend
 (`rustfmt` on PATH, `g:rustfmt_autosave=1`, and `FLOWISTRY_BACKEND_EXE` required).
 It pins `dy` in a nested closure at line 5000 of a temporary crate, inserts blank
-lines, changes indentation, and verifies the focus through ten actual saves.
+lines, changes indentation, and verifies the focus through eleven actual saves.
 The user's project files are never edited by this test.
 
 `tests/performance.lua FILE ROW COLUMN` alternates baseline/current backend runs,

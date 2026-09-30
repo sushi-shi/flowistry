@@ -19,15 +19,10 @@ cached results so different analysis modes cannot share stale results.
 
 ## Packaging and backend ownership
 
-The flake pins [Flowistry fork commit
-`ad859be49003040aac7f6767db6798d971d0d4a2`](https://github.com/sushi-shi/flowistry/commit/ad859be49003040aac7f6767db6798d971d0d4a2)
-directly. It contains the combined command, precise source ranges, and cached
-callee summaries, so the Neovim package needs no build patches.
-
-The backend implementation is reviewed in [Flowistry PR #1](https://github.com/sushi-shi/flowistry/pull/1),
-against its `fork-base` branch. The Lua adapter only selects the analysis mode;
-the implementation and its regression tests remain editor-independent in Rust.
-The full commit pin makes builds independent of branch movement or merge timing.
+The root flake builds the Lua adapter and Rust backend from one source tree.
+The installed plugin selects that backend automatically. The Lua adapter chooses
+the analysis mode; the implementation and its regression tests remain in the
+Rust crates. A backend change and its editor support belong in the same PR.
 
 ## Cache and precision boundaries
 
@@ -54,4 +49,4 @@ really read the selected field.
 the default and explicit `SigOnly` retain signature effects, `Recurse` separates
 untouched fields, nested writes remain relevant, and saving an altered callee
 changes the dependent field. It covers whole-file, selected-body and unbatched
-requests. Run `nix develop -c make test-summaries` for the same test interactively.
+requests. Run `nix develop .#nvim -c make -C nvim test-summaries` from the repository root for the same test interactively.

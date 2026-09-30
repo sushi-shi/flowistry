@@ -7,7 +7,9 @@ function M.check()
     if vim.fn.executable(executable) == 1 then vim.health.ok(executable .. " is available")
     else vim.health.warn(executable .. " is missing from PATH (unless a custom backend command supplies it)") end
   end
-  vim.health.info("Default backend: Flowistry 0.5.44 at 693ceda925bd1d39d8de413ce239cfa6a87bb665; nightly-2026-05-01")
+  local ok, packaged = pcall(require, "flowistry.packaged")
+  if ok then vim.health.ok("Paired backend: " .. packaged.command[1])
+  else vim.health.info("Source checkout: use the matching backend from nix develop .#nvim") end
   vim.health.info("See :help flowistry-backend for installation and custom commands.")
 end
 return M
