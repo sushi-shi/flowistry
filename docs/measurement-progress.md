@@ -33,3 +33,27 @@ Harness validation: 42 Python regression tests pass, including repeated-output
 stability, alternating order, unavailable/partial counters, missing repetitions,
 tail latency/peak memory preservation, checkpoint rejection and missing phases.
 See [smoke-tests.md](smoke-tests.md) for reproducible commands and interpretation.
+
+
+## Acceptance work above #59
+
+The [guarded measurement queue](acceptance-measurement-queue.md) now has a pinned,
+reviewable 16-job plan for row groups and seed rows, including typical requests
+and just/niri stress cases in both modes. Normal interleaved counters/latency/RSS
+runs are separate from phase/storage diagnostics. All 61 harness regressions pass;
+a real three-build probe confirms the diagnostic parser works. No optimization
+acceptance or quiet latency result is claimed before the jobs finish and their
+outcomes are reviewed.
+
+Exact commands, build/predecessor identities, quiet thresholds and prerequisite
+process identities are retained in [the queue manifest](measurements/optimization-acceptance-queue.json).
+The live plan/state/log are under `target/continuation-validation/optimization-acceptance-v1/`.
+At launch, runner PID 480300 (Linux start tick 98440171) was waiting for corpus
+PIDs 282293 and 298836. Revalidate the actual process and its state before acting;
+never start a duplicate merely because an observation handle expired.
+
+After both full reports pass coverage/status audit, the runner waits for quiet
+conditions and executes one job at a time. Do not launch another build, corpus
+or stress measurement while it is waiting for quiet or measuring. It stops for
+review on failure or contamination and preserves the raw attempt. Remaining
+whole-project/save distributions and measured budgets still need their own work.

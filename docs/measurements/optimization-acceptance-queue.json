@@ -1,0 +1,1218 @@
+{
+  "jobs": [
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/baseline",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--crate",
+        "either",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/row-groups-either-performance",
+        "--warmup",
+        "2",
+        "--repeat",
+        "8",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-either-performance.json",
+        "--position",
+        "src/into_either.rs:58:8",
+        "--perf",
+        "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf"
+      ],
+      "expected_positions": [
+        [
+          "src/into_either.rs",
+          58,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/into_either.rs",
+          58,
+          8,
+          "Recurse"
+        ]
+      ],
+      "kind": "performance",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-either-performance.log",
+      "name": "row-groups-either-performance",
+      "repeat": 8,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-either-performance.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/baseline",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--crate",
+        "serde_json",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/row-groups-serde_json-performance",
+        "--warmup",
+        "2",
+        "--repeat",
+        "8",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-serde_json-performance.json",
+        "--position",
+        "src/de.rs:329:8",
+        "--perf",
+        "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf"
+      ],
+      "expected_positions": [
+        [
+          "src/de.rs",
+          329,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/de.rs",
+          329,
+          8,
+          "Recurse"
+        ]
+      ],
+      "kind": "performance",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-serde_json-performance.log",
+      "name": "row-groups-serde_json-performance",
+      "repeat": 8,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-serde_json-performance.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/baseline",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--crate",
+        "just",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/row-groups-just-performance",
+        "--warmup",
+        "2",
+        "--repeat",
+        "8",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-just-performance.json",
+        "--position",
+        "src/analyzer.rs:177:4",
+        "--position",
+        "src/compiler.rs:13:4",
+        "--position",
+        "src/error.rs:926:10",
+        "--perf",
+        "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf"
+      ],
+      "expected_positions": [
+        [
+          "src/analyzer.rs",
+          177,
+          4,
+          "SigOnly"
+        ],
+        [
+          "src/analyzer.rs",
+          177,
+          4,
+          "Recurse"
+        ],
+        [
+          "src/compiler.rs",
+          13,
+          4,
+          "SigOnly"
+        ],
+        [
+          "src/compiler.rs",
+          13,
+          4,
+          "Recurse"
+        ],
+        [
+          "src/error.rs",
+          926,
+          10,
+          "SigOnly"
+        ],
+        [
+          "src/error.rs",
+          926,
+          10,
+          "Recurse"
+        ]
+      ],
+      "kind": "performance",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-just-performance.log",
+      "name": "row-groups-just-performance",
+      "repeat": 8,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-just-performance.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/baseline",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--crate",
+        "niri",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/row-groups-niri-performance",
+        "--warmup",
+        "2",
+        "--repeat",
+        "8",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-niri-performance.json",
+        "--position",
+        "src/niri.rs:1605:8",
+        "--position",
+        "src/backend/tty.rs:649:20",
+        "--perf",
+        "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf"
+      ],
+      "expected_positions": [
+        [
+          "src/niri.rs",
+          1605,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/niri.rs",
+          1605,
+          8,
+          "Recurse"
+        ],
+        [
+          "src/backend/tty.rs",
+          649,
+          20,
+          "SigOnly"
+        ],
+        [
+          "src/backend/tty.rs",
+          649,
+          20,
+          "Recurse"
+        ]
+      ],
+      "kind": "performance",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-niri-performance.log",
+      "name": "row-groups-niri-performance",
+      "repeat": 8,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-niri-performance.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/baseline",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--crate",
+        "either",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/row-groups-either-diagnostics",
+        "--warmup",
+        "2",
+        "--repeat",
+        "1",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-either-diagnostics.json",
+        "--position",
+        "src/into_either.rs:58:8",
+        "--phases"
+      ],
+      "expected_positions": [
+        [
+          "src/into_either.rs",
+          58,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/into_either.rs",
+          58,
+          8,
+          "Recurse"
+        ]
+      ],
+      "kind": "diagnostics",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-either-diagnostics.log",
+      "name": "row-groups-either-diagnostics",
+      "repeat": 1,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-either-diagnostics.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/baseline",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--crate",
+        "serde_json",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/row-groups-serde_json-diagnostics",
+        "--warmup",
+        "2",
+        "--repeat",
+        "1",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-serde_json-diagnostics.json",
+        "--position",
+        "src/de.rs:329:8",
+        "--phases"
+      ],
+      "expected_positions": [
+        [
+          "src/de.rs",
+          329,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/de.rs",
+          329,
+          8,
+          "Recurse"
+        ]
+      ],
+      "kind": "diagnostics",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-serde_json-diagnostics.log",
+      "name": "row-groups-serde_json-diagnostics",
+      "repeat": 1,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-serde_json-diagnostics.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/baseline",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--crate",
+        "just",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/row-groups-just-diagnostics",
+        "--warmup",
+        "2",
+        "--repeat",
+        "1",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-just-diagnostics.json",
+        "--position",
+        "src/analyzer.rs:177:4",
+        "--position",
+        "src/compiler.rs:13:4",
+        "--position",
+        "src/error.rs:926:10",
+        "--phases"
+      ],
+      "expected_positions": [
+        [
+          "src/analyzer.rs",
+          177,
+          4,
+          "SigOnly"
+        ],
+        [
+          "src/analyzer.rs",
+          177,
+          4,
+          "Recurse"
+        ],
+        [
+          "src/compiler.rs",
+          13,
+          4,
+          "SigOnly"
+        ],
+        [
+          "src/compiler.rs",
+          13,
+          4,
+          "Recurse"
+        ],
+        [
+          "src/error.rs",
+          926,
+          10,
+          "SigOnly"
+        ],
+        [
+          "src/error.rs",
+          926,
+          10,
+          "Recurse"
+        ]
+      ],
+      "kind": "diagnostics",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-just-diagnostics.log",
+      "name": "row-groups-just-diagnostics",
+      "repeat": 1,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-just-diagnostics.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/baseline",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--crate",
+        "niri",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/row-groups-niri-diagnostics",
+        "--warmup",
+        "2",
+        "--repeat",
+        "1",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-niri-diagnostics.json",
+        "--position",
+        "src/niri.rs:1605:8",
+        "--position",
+        "src/backend/tty.rs:649:20",
+        "--phases"
+      ],
+      "expected_positions": [
+        [
+          "src/niri.rs",
+          1605,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/niri.rs",
+          1605,
+          8,
+          "Recurse"
+        ],
+        [
+          "src/backend/tty.rs",
+          649,
+          20,
+          "SigOnly"
+        ],
+        [
+          "src/backend/tty.rs",
+          649,
+          20,
+          "Recurse"
+        ]
+      ],
+      "kind": "diagnostics",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-niri-diagnostics.log",
+      "name": "row-groups-niri-diagnostics",
+      "repeat": 1,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/row-groups-niri-diagnostics.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows",
+        "--crate",
+        "either",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/seed-rows-either-performance",
+        "--warmup",
+        "2",
+        "--repeat",
+        "8",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-either-performance.json",
+        "--position",
+        "src/into_either.rs:58:8",
+        "--perf",
+        "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf"
+      ],
+      "expected_positions": [
+        [
+          "src/into_either.rs",
+          58,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/into_either.rs",
+          58,
+          8,
+          "Recurse"
+        ]
+      ],
+      "kind": "performance",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-either-performance.log",
+      "name": "seed-rows-either-performance",
+      "repeat": 8,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-either-performance.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows",
+        "--crate",
+        "serde_json",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/seed-rows-serde_json-performance",
+        "--warmup",
+        "2",
+        "--repeat",
+        "8",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-serde_json-performance.json",
+        "--position",
+        "src/de.rs:329:8",
+        "--perf",
+        "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf"
+      ],
+      "expected_positions": [
+        [
+          "src/de.rs",
+          329,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/de.rs",
+          329,
+          8,
+          "Recurse"
+        ]
+      ],
+      "kind": "performance",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-serde_json-performance.log",
+      "name": "seed-rows-serde_json-performance",
+      "repeat": 8,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-serde_json-performance.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows",
+        "--crate",
+        "just",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/seed-rows-just-performance",
+        "--warmup",
+        "2",
+        "--repeat",
+        "8",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-just-performance.json",
+        "--position",
+        "src/analyzer.rs:177:4",
+        "--position",
+        "src/compiler.rs:13:4",
+        "--position",
+        "src/error.rs:926:10",
+        "--perf",
+        "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf"
+      ],
+      "expected_positions": [
+        [
+          "src/analyzer.rs",
+          177,
+          4,
+          "SigOnly"
+        ],
+        [
+          "src/analyzer.rs",
+          177,
+          4,
+          "Recurse"
+        ],
+        [
+          "src/compiler.rs",
+          13,
+          4,
+          "SigOnly"
+        ],
+        [
+          "src/compiler.rs",
+          13,
+          4,
+          "Recurse"
+        ],
+        [
+          "src/error.rs",
+          926,
+          10,
+          "SigOnly"
+        ],
+        [
+          "src/error.rs",
+          926,
+          10,
+          "Recurse"
+        ]
+      ],
+      "kind": "performance",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-just-performance.log",
+      "name": "seed-rows-just-performance",
+      "repeat": 8,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-just-performance.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows",
+        "--crate",
+        "niri",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/seed-rows-niri-performance",
+        "--warmup",
+        "2",
+        "--repeat",
+        "8",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-niri-performance.json",
+        "--position",
+        "src/niri.rs:1605:8",
+        "--position",
+        "src/backend/tty.rs:649:20",
+        "--perf",
+        "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf"
+      ],
+      "expected_positions": [
+        [
+          "src/niri.rs",
+          1605,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/niri.rs",
+          1605,
+          8,
+          "Recurse"
+        ],
+        [
+          "src/backend/tty.rs",
+          649,
+          20,
+          "SigOnly"
+        ],
+        [
+          "src/backend/tty.rs",
+          649,
+          20,
+          "Recurse"
+        ]
+      ],
+      "kind": "performance",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-niri-performance.log",
+      "name": "seed-rows-niri-performance",
+      "repeat": 8,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-niri-performance.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows",
+        "--crate",
+        "either",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/seed-rows-either-diagnostics",
+        "--warmup",
+        "2",
+        "--repeat",
+        "1",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-either-diagnostics.json",
+        "--position",
+        "src/into_either.rs:58:8",
+        "--phases"
+      ],
+      "expected_positions": [
+        [
+          "src/into_either.rs",
+          58,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/into_either.rs",
+          58,
+          8,
+          "Recurse"
+        ]
+      ],
+      "kind": "diagnostics",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-either-diagnostics.log",
+      "name": "seed-rows-either-diagnostics",
+      "repeat": 1,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-either-diagnostics.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows",
+        "--crate",
+        "serde_json",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/seed-rows-serde_json-diagnostics",
+        "--warmup",
+        "2",
+        "--repeat",
+        "1",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-serde_json-diagnostics.json",
+        "--position",
+        "src/de.rs:329:8",
+        "--phases"
+      ],
+      "expected_positions": [
+        [
+          "src/de.rs",
+          329,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/de.rs",
+          329,
+          8,
+          "Recurse"
+        ]
+      ],
+      "kind": "diagnostics",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-serde_json-diagnostics.log",
+      "name": "seed-rows-serde_json-diagnostics",
+      "repeat": 1,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-serde_json-diagnostics.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows",
+        "--crate",
+        "just",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/seed-rows-just-diagnostics",
+        "--warmup",
+        "2",
+        "--repeat",
+        "1",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-just-diagnostics.json",
+        "--position",
+        "src/analyzer.rs:177:4",
+        "--position",
+        "src/compiler.rs:13:4",
+        "--position",
+        "src/error.rs:926:10",
+        "--phases"
+      ],
+      "expected_positions": [
+        [
+          "src/analyzer.rs",
+          177,
+          4,
+          "SigOnly"
+        ],
+        [
+          "src/analyzer.rs",
+          177,
+          4,
+          "Recurse"
+        ],
+        [
+          "src/compiler.rs",
+          13,
+          4,
+          "SigOnly"
+        ],
+        [
+          "src/compiler.rs",
+          13,
+          4,
+          "Recurse"
+        ],
+        [
+          "src/error.rs",
+          926,
+          10,
+          "SigOnly"
+        ],
+        [
+          "src/error.rs",
+          926,
+          10,
+          "Recurse"
+        ]
+      ],
+      "kind": "diagnostics",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-just-diagnostics.log",
+      "name": "seed-rows-just-diagnostics",
+      "repeat": 1,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-just-diagnostics.json"
+    },
+    {
+      "command": [
+        "/nix/store/rgnappqqc5vbq60gza5fflyk84sylwl6-python3-3.14.6/bin/python3",
+        "/tmp/flowistry-acceptance/scripts/smoke-real-crates.py",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/row-groups",
+        "--compare",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/seed-rows",
+        "--crate",
+        "niri",
+        "--work-dir",
+        "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates",
+        "--modes",
+        "SigOnly,Recurse",
+        "--base-cache",
+        "off",
+        "--compare-cache",
+        "off",
+        "--cargo-replay",
+        "on",
+        "--cache-dir",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/caches/seed-rows-niri-diagnostics",
+        "--warmup",
+        "2",
+        "--repeat",
+        "1",
+        "--timeout",
+        "600",
+        "--memory-limit",
+        "6G",
+        "-j",
+        "1",
+        "--json",
+        "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-niri-diagnostics.json",
+        "--position",
+        "src/niri.rs:1605:8",
+        "--position",
+        "src/backend/tty.rs:649:20",
+        "--phases"
+      ],
+      "expected_positions": [
+        [
+          "src/niri.rs",
+          1605,
+          8,
+          "SigOnly"
+        ],
+        [
+          "src/niri.rs",
+          1605,
+          8,
+          "Recurse"
+        ],
+        [
+          "src/backend/tty.rs",
+          649,
+          20,
+          "SigOnly"
+        ],
+        [
+          "src/backend/tty.rs",
+          649,
+          20,
+          "Recurse"
+        ]
+      ],
+      "kind": "diagnostics",
+      "log": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-niri-diagnostics.log",
+      "name": "seed-rows-niri-diagnostics",
+      "repeat": 1,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/seed-rows-niri-diagnostics.json"
+    }
+  ],
+  "pending": [
+    "actual row-group and seed measurements and retention decisions",
+    "full final reference coverage and five previous resource-limited checks",
+    "whole-project/editor save distributions and resource budgets",
+    "remaining full plan release gates"
+  ],
+  "plan": {
+    "path": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/plan.json",
+    "sha256": "ab5db4cba80cfb4064a5a71ee1f8945df408b1b098ae221ea506e7be5124a515"
+  },
+  "predecessor_proof": [
+    {
+      "archive": "baseline",
+      "build_revision": "2630ee356d8f606e22a205527b4eea67cdab66d0",
+      "feature": "row-groups",
+      "pr_branch": "perf/combined-chain-measurements",
+      "pr_revision": "6b45b1c163b6daabe8b5398ba41e0e1e2adc25b4",
+      "runtime_diff_empty": true
+    },
+    {
+      "archive": "row-groups",
+      "build_revision": "3199b4095063d9fe7a7adbecd711630fe4a26f83",
+      "feature": "row-groups",
+      "pr_branch": "perf/integrated-recurse-groups",
+      "pr_revision": "715bc53573f82c352e7517796d48657406a2bd6f",
+      "runtime_diff_empty": true
+    },
+    {
+      "archive": "row-groups",
+      "build_revision": "3199b4095063d9fe7a7adbecd711630fe4a26f83",
+      "feature": "seed-rows",
+      "pr_branch": "perf/integrated-recurse-groups",
+      "pr_revision": "715bc53573f82c352e7517796d48657406a2bd6f",
+      "runtime_diff_empty": true
+    },
+    {
+      "archive": "seed-rows",
+      "build_revision": "f1163469c9f0e3d6f79cc71d59bb70dca573b936",
+      "feature": "seed-rows",
+      "pr_branch": "perf/integrated-seed-rows",
+      "pr_revision": "2198569cf352f8b5c3ddd05a38faecf226664436",
+      "runtime_diff_empty": true
+    }
+  ],
+  "prerequisites": [
+    {
+      "name": "python3",
+      "pid": 282293,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-cache-warm.json",
+      "start": 98301514,
+      "summary": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/prerequisite-282293-summary.json"
+    },
+    {
+      "name": "python3",
+      "pid": 298836,
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-cache-refresh.json",
+      "start": 98310159,
+      "summary": "/home/sheep/Projects/flowistry/target/continuation-validation/optimization-acceptance-v1/prerequisite-298836-summary.json"
+    }
+  ],
+  "quiet_policy": {
+    "consecutive": 4,
+    "interval_seconds": 5,
+    "max_background_cores": 0.5,
+    "max_busy_fraction": 0.05,
+    "max_load1": 2.0,
+    "monitor_seconds": 2
+  },
+  "reference_build": {
+    "binaries": {
+      "cargo-flowistry": "bf059afef99fa463a455887f3acdefc2fcad5e8b6ce9d25400b272beef46ab73",
+      "flowistry-driver": "a25b3fd788981f6f2d64128c2e0a92dc327e5e0eff57e44f642929c5ff750617"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4",
+      "--features",
+      "flowistry/engine-diff,flowistry/shadow-eager"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "flowistry/engine-diff,flowistry/shadow-eager",
+    "profile": {},
+    "recorded_at": "2026-09-30T16:13:30.355885+00:00",
+    "revision": "0c4947745dbb25c8d76ec41046af641222a18bd9",
+    "rustflags": "",
+    "tree": "9d2035c599c851d925129bad9c4fb2f59c463575"
+  },
+  "reference_probe": {
+    "modes": [
+      "SigOnly",
+      "Recurse"
+    ],
+    "passed": true,
+    "path": "/home/sheep/Projects/flowistry/target/continuation-validation/final-reference-probe-v1.json",
+    "recurse_grouped_rows": 54,
+    "recurse_row_groups": 3,
+    "sha256": "5c43021758b52270e7a492db8f95375bcf822fe28e66aaf0428c6ddf32d5f31c"
+  },
+  "regressions": {
+    "passed": 61,
+    "path": "/home/sheep/Projects/flowistry/target/continuation-validation/acceptance-harness-tests-v2.log",
+    "sha256": "218b476b0fc28a9bfb21aadcd40228e6e56b018199813bbb731c99e628f99dfc"
+  },
+  "runner_observation": {
+    "pid": 480300,
+    "plan_sha256": "ab5db4cba80cfb4064a5a71ee1f8945df408b1b098ae221ea506e7be5124a515",
+    "runner_sha256": "8d3611306c9f33b974086d047022f1ab82b5a70e6e77d068630e2a3c00fa8d12",
+    "start": 98440171,
+    "status": "waiting-prerequisites",
+    "updated_at": "2026-09-30T16:18:37Z"
+  },
+  "schema": 1,
+  "source_revision": "0c4947745dbb25c8d76ec41046af641222a18bd9",
+  "status": "prepared and launched; measurement results pending",
+  "storage_probe": {
+    "path": "/home/sheep/Projects/flowistry/target/continuation-validation/acceptance-storage-probe-v1.json",
+    "sha256": "a546509f54558c5e586bc16067fcf14a2565a3c4f557a1157fe76c37a213bb45"
+  }
+}
