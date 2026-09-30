@@ -62,8 +62,9 @@ impl RangeTable {
 }
 
 pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
-  let session = AnalysisSession::new(tcx, EvalMode::from_ambient());
-  crate::cache::FocusCache::new(tcx).focus(tcx, body_id, session)
+  let cache = crate::cache::FocusCache::new(tcx);
+  let session = cache.session(tcx, EvalMode::from_ambient());
+  cache.focus(tcx, body_id, session)
 }
 
 /// Like [`focus`], sharing the callee summaries of `session` (and in its mode).

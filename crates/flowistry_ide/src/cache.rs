@@ -2,14 +2,14 @@
 use std::{cell::Cell, fs, hash::Hash, path::PathBuf, rc::Rc, sync::OnceLock};
 
 use flowistry::{
-  extensions::ContextMode, infoflow::AnalysisSession,
+  extensions::EvalMode, infoflow::AnalysisSession,
   mir::borrowck::body_with_borrowck_facts as get_body_with_borrowck_facts,
 };
 use rustc_data_structures::{
   fingerprint::Fingerprint,
   stable_hasher::{HashStable, StableHasher},
 };
-use rustc_hir::{self as hir, BodyId, HirId, OwnerNode};
+use rustc_hir::{self as hir, BodyId, HirId, OwnerNode, def_id::LocalDefId};
 use rustc_middle::ty::{self, TyCtxt, TypeVisitable, TypeVisitor};
 use rustc_span::Span;
 use rustc_utils::source_map::range::{CharPos, CharRange};
@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::focus::{FocusOutput, PlaceInfo};
 
-const SCHEMA: u32 = 2;
+const SCHEMA: u32 = 3;
 const MAX_ENTRY: u64 = 32 * 1024 * 1024;
 
 struct Regions(Vec<String>);
@@ -27,15 +27,16 @@ impl<'tcx> TypeVisitor<TyCtxt<'tcx>> for Regions {
   }
 }
 
-pub struct FocusCache {
+pub struct FocusCache<'tcx> {
   directory: Option<PathBuf>,
   context: String,
   refresh: bool,
+  semantic: Rc<crate::summary_cache::SemanticCache<'tcx>>,
   pub hits: Cell<usize>,
   pub misses: Cell<usize>,
 }
 
-fn fingerprint(f: impl FnOnce(&mut StableHasher)) -> String {
+pub(crate) fn fingerprint(f: impl FnOnce(&mut StableHasher)) -> String {
   let mut h = StableHasher::new();
   f(&mut h);
   let value: Fingerprint = h.finish();
@@ -47,7 +48,11 @@ fn engine() -> Option<&'static str> {
   ENGINE
     .get_or_init(|| {
       let data = fs::read(std::env::current_exe().ok()?).ok()?;
-      Some(fingerprint(|h| data.hash(h)))
+      let compiler = rustc_interface::util::rustc_version_str()?;
+      Some(fingerprint(|h| {
+        compiler.hash(h);
+        data.hash(h);
+      }))
     })
     .as_deref()
 }
@@ -156,8 +161,32 @@ fn context(tcx: TyCtxt<'_>) -> String {
   })
 }
 
-impl FocusCache {
-  pub fn new(tcx: TyCtxt<'_>) -> Self {
+/// The shared semantic body fingerprint used by focus results, callee summaries
+/// and dependency snapshots. Source relocation tokens remain specific to focus.
+pub(crate) fn semantic_body(tcx: TyCtxt<'_>, def: LocalDefId) -> String {
+  tcx.with_stable_hashing_context(|mut hcx| {
+    fingerprint(|h| {
+      hcx.while_hashing_spans(false, |hcx| {
+        def.hash_stable(hcx, h);
+        let facts = get_body_with_borrowck_facts(tcx, def);
+        let mut regions = Regions(Vec::new());
+        facts.body.visit_with(&mut regions);
+        regions.0.hash(h);
+        tcx
+          .erase_and_anonymize_regions(facts.body.clone())
+          .hash_stable(hcx, h);
+        format!("{:?}", facts.input_facts).hash(h);
+        let owner = tcx.local_def_id_to_hir_id(def).owner;
+        for body in tcx.hir_owner_nodes(owner).bodies.values() {
+          body.hash_stable(hcx, h);
+        }
+      })
+    })
+  })
+}
+
+impl<'tcx> FocusCache<'tcx> {
+  pub fn new(tcx: TyCtxt<'tcx>) -> Self {
     let mode = std::env::var("FLOWISTRY_CACHE").unwrap_or_default();
     let directory = if mode == "off" || engine().is_none() {
       None
@@ -174,20 +203,39 @@ impl FocusCache {
         })
         .map(|root| root.join("focus-v1"))
     };
+    let context = if directory.is_some() {
+      context(tcx)
+    } else {
+      String::new()
+    };
+    let semantic = Rc::new(crate::summary_cache::SemanticCache::new(
+      tcx,
+      directory
+        .as_ref()
+        .and_then(|path| path.parent())
+        .map(ToOwned::to_owned),
+      context.clone(),
+      mode == "refresh",
+    ));
     Self {
-      context: if directory.is_some() {
-        context(tcx)
-      } else {
-        String::new()
-      },
+      context,
       directory,
       refresh: mode == "refresh",
+      semantic,
       hits: Cell::new(0),
       misses: Cell::new(0),
     }
   }
 
-  fn key<'tcx>(
+  pub fn session(&self, tcx: TyCtxt<'tcx>, mode: EvalMode) -> Rc<AnalysisSession<'tcx>> {
+    if self.directory.is_some() {
+      AnalysisSession::with_summary_store(tcx, mode, self.semantic.clone())
+    } else {
+      AnalysisSession::new(tcx, mode)
+    }
+  }
+
+  fn key(
     &self,
     tcx: TyCtxt<'tcx>,
     id: BodyId,
@@ -195,47 +243,19 @@ impl FocusCache {
     source: &Source,
   ) -> String {
     let root = tcx.hir_body_owner_def_id(id);
-    let mut dependencies = if session.mode().context_mode == ContextMode::Recurse {
-      session.dependencies(root)
-    } else {
-      vec![root]
-    };
-    dependencies
-      .sort_by_cached_key(|def| format!("{:?}", tcx.def_path_hash(def.to_def_id())));
-    tcx.with_stable_hashing_context(|mut hcx| {
-      fingerprint(|h| {
-        self.context.hash(h);
-        session.mode().hash(h);
-        source
-          .tokens
-          .iter()
-          .map(|&(lo, hi)| &source.text[lo .. hi])
-          .collect::<Vec<_>>()
-          .hash(h);
-        hcx.while_hashing_spans(false, |hcx| {
-          for def in dependencies {
-            def.hash_stable(hcx, h);
-            let facts = get_body_with_borrowck_facts(tcx, def);
-            let mut regions = Regions(Vec::new());
-            facts.body.visit_with(&mut regions);
-            regions.0.hash(h);
-            tcx
-              .erase_and_anonymize_regions(facts.body.clone())
-              .hash_stable(hcx, h);
-            // The alias model consumes these compiler-produced region relations.
-            format!("{:?}", facts.input_facts).hash(h);
-            // HIR mapping and nested closure bodies also affect source output.
-            let owner = tcx.local_def_id_to_hir_id(def).owner;
-            for body in tcx.hir_owner_nodes(owner).bodies.values() {
-              body.hash_stable(hcx, h);
-            }
-          }
-        });
-      })
+    let semantic_key = self.semantic.key(session, root);
+    fingerprint(|h| {
+      semantic_key.hash(h);
+      source
+        .tokens
+        .iter()
+        .map(|&(lo, hi)| &source.text[lo .. hi])
+        .collect::<Vec<_>>()
+        .hash(h);
     })
   }
 
-  pub fn focus<'tcx>(
+  pub fn focus(
     &self,
     tcx: TyCtxt<'tcx>,
     id: BodyId,
@@ -249,7 +269,7 @@ impl FocusCache {
       Some((directory.join(format!("{key}.json")), key, source))
     });
     if let Some((path, key, source)) = &prepared {
-      if !self.refresh {
+      if !self.refresh && !crate::summary_cache::verify_summaries() {
         let cached = (|| {
           if fs::metadata(path).ok()?.len() > MAX_ENTRY {
             return None;

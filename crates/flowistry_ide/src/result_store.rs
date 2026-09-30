@@ -23,12 +23,16 @@ const STATE: &str = ".generations";
 pub(crate) enum Namespace {
   Focus,
   Responses,
+  Summaries,
+  Dependencies,
 }
 impl Namespace {
   fn name(self) -> &'static str {
     match self {
       Self::Focus => "focus-v1",
       Self::Responses => "responses-v1",
+      Self::Summaries => "summaries-v1",
+      Self::Dependencies => "dependencies-v1",
     }
   }
 }
@@ -219,7 +223,12 @@ impl Store {
       }
     }
     let mut entries = Vec::new();
-    for namespace in [Namespace::Focus, Namespace::Responses] {
+    for namespace in [
+      Namespace::Focus,
+      Namespace::Responses,
+      Namespace::Summaries,
+      Namespace::Dependencies,
+    ] {
       let directory = self.root.join(namespace.name());
       fs::create_dir_all(&directory)?;
       for item in fs::read_dir(directory)? {
@@ -346,11 +355,12 @@ mod tests {
         let root = fixture.0.clone();
         std::thread::spawn(move || {
           let store = Store::with_limit(&root, 8192).unwrap();
-          let ns = if i % 2 == 0 {
-            Namespace::Focus
-          } else {
-            Namespace::Responses
-          };
+          let ns = [
+            Namespace::Focus,
+            Namespace::Responses,
+            Namespace::Summaries,
+            Namespace::Dependencies,
+          ][i as usize % 4];
           assert!(store.put(ns, &i.to_string(), &vec![i; 2048], None).unwrap());
         })
       })
@@ -358,14 +368,19 @@ mod tests {
     for worker in workers {
       worker.join().unwrap();
     }
-    let bytes: u64 = [Namespace::Focus, Namespace::Responses]
-      .iter()
-      .flat_map(|ns| {
-        fs::read_dir(fixture.0.join(ns.name()))
-          .unwrap()
-          .map(|e| e.unwrap().metadata().unwrap().len())
-      })
-      .sum();
+    let bytes: u64 = [
+      Namespace::Focus,
+      Namespace::Responses,
+      Namespace::Summaries,
+      Namespace::Dependencies,
+    ]
+    .iter()
+    .flat_map(|ns| {
+      fs::read_dir(fixture.0.join(ns.name()))
+        .unwrap()
+        .map(|e| e.unwrap().metadata().unwrap().len())
+    })
+    .sum();
     assert!(bytes <= 8192);
     let store = fixture.open();
     assert!(

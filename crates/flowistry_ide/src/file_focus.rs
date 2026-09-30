@@ -1,8 +1,5 @@
 //! Editor-independent batch analysis: reuse one compiler session for a file.
-use flowistry::{
-  extensions::{EVAL_MODE, EvalMode},
-  infoflow::AnalysisSession,
-};
+use flowistry::extensions::{EVAL_MODE, EvalMode};
 use fluid_let::fluid_set;
 use rustc_middle::ty::TyCtxt;
 use rustc_utils::{
@@ -86,8 +83,8 @@ impl rustc_driver::Callbacks for Callbacks {
         None
       };
       // The bodies of the file share their callee summaries.
-      let session = AnalysisSession::new(tcx, self.eval_mode);
       let cache = crate::cache::FocusCache::new(tcx);
+      let session = cache.session(tcx, self.eval_mode);
       let mut bodies = Vec::new();
       for (span, id) in candidates {
         if source_map.lookup_source_file(span.lo()).name != file.name {

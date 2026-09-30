@@ -10,6 +10,16 @@ spec.loader.exec_module(smoke)
 
 
 class MeasurementTests(unittest.TestCase):
+    def test_summary_audit_distinguishes_disabled_logs_from_no_summary_work(self):
+        self.assertIsNone(smoke.summary_activity('unrelated compiler output'))
+        prefix = '[2026-09-30T10:00:00Z INFO  flowistry::audit] audit '
+        quiet = smoke.summary_activity(prefix + 'compiler fixture\n')
+        self.assertEqual(quiet, {'compiler_invocations': 1, 'computations': [], 'hits': [], 'verified': []})
+        result = smoke.summary_activity(prefix + 'compiler fixture\n' + prefix + 'summary-hit leaf\n'
+                                        + prefix + 'summary-compute leaf\n' + prefix + 'summary-verified leaf\n')
+        self.assertEqual(result, {'compiler_invocations': 1, 'computations': ['leaf'],
+                                  'hits': ['leaf'], 'verified': ['leaf']})
+
     def args(self):
         return SimpleNamespace(repeat=3, timeout=20, phases=False, memory_limit='6G', keep_outputs=False)
 

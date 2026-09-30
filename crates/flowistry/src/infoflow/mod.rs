@@ -20,7 +20,8 @@ pub use self::{
     merge_spans,
   },
   domain::{LazyMatrix, RowGroups, SeedRows},
-  session::{AnalysisSession, SummaryStats},
+  session::{AnalysisSession, SummaryStats, SummaryStore},
+  summary_wire::PortableSummary,
 };
 use crate::{
   extensions::{ContextMode, EvalMode},
@@ -44,6 +45,7 @@ mod session;
 mod shared_handles;
 mod simple_args;
 mod summary;
+mod summary_wire;
 
 /// The output of the information flow analysis.
 ///
