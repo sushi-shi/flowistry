@@ -64,6 +64,8 @@ def main():
     parser.add_argument('--line', type=int, default=3)
     parser.add_argument('--column', type=int, default=4)
     parser.add_argument('--kind', choices=['lib', 'bin'], action='append')
+    parser.add_argument('--compiler-validated-cache', action='store_true',
+                        help='append an EOF newline before each run to defeat snapshot replay while allowing semantic reuse')
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error('--repeat must be positive')
@@ -108,12 +110,16 @@ def main():
         backend = args.reference_dir if variant == 'reference' else args.backend_dir
         inc = matrix.root / 'incremental' / f'{kind}-{mode}-{variant}'
         source = matrix.project / (args.source or ('src/lib.rs' if kind == 'lib' else 'src/main.rs'))
+        if args.compiler_validated_cache:
+            with source.open('a') as out:
+                out.write('\n')
         command = [str(backend.resolve() / 'cargo-flowistry'), 'flowistry', '--context-mode', mode,
                    '--package', package, '--target-kind', kind, '--target-name', target]
         if feature:
             command += ['--features', feature]
         command += ['file-focus', str(source), str(args.line), str(args.column)]
-        environment = matrix.env(f'{kind}-{mode}-{variant}', 'off', {
+        policy = 'on' if args.compiler_validated_cache and variant != 'reference' else 'off'
+        environment = matrix.env(f'{kind}-{mode}-{variant}', policy, {
             'FLOWISTRY_NO_REPLAY': '1', 'CARGO_INCREMENTAL': '0',
             'FLOWISTRY_EXPERIMENT_INCREMENTAL': '' if variant == 'reference' else variant,
             'FLOWISTRY_EXPERIMENT_INCREMENTAL_DIR': str(inc),
@@ -146,6 +152,8 @@ def main():
                   'seconds': seconds, 'counters': counters,
                   'compiler_invocations': result.stderr.count(b'audit compiler'),
                   'solver_invocations': result.stderr.count(b'audit solve '),
+                  'semantic_cache':value['Ok'].get('cache') if value and 'Ok' in value else None,
+                  'cache_policy':policy,
                   'analyzed_bodies':sum(bool(b.get('focus')) for b in value['Ok']['bodies']) if value and 'Ok' in value else 0,
                   'stderr_path': str(prefix.with_suffix('.stderr')),
                   'stderr_sha256': hashlib.sha256(result.stderr).hexdigest(), 'incremental': snapshot(inc)}
@@ -154,6 +162,9 @@ def main():
         print(kind, mode, variant, stage, result.returncode, record['equal'], record['incremental']['bytes'], flush=True)
         return record
 
+    if args.compiler_validated_cache:
+        report['controls']['FLOWISTRY_CACHE'] = 'on for candidates; off for independent reference'
+        report['controls']['snapshot_replay'] = 'defeated by an appended EOF newline before every request; require compiler_invocations == 1'
     for kind in kinds:
         for mode in ('SigOnly', 'Recurse'):
             baseline = run(kind, mode, 'reference', 'reference')
