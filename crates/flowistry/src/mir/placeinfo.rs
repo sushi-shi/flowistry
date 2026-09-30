@@ -1,6 +1,6 @@
 //! Utilities for analyzing places: children, aliases, etc.
 
-use std::{ops::ControlFlow, rc::Rc};
+use std::{cell::Cell, ops::ControlFlow, rc::Rc};
 
 use indexical::ToIndex;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
@@ -61,6 +61,80 @@ impl<'tcx> NormPlace<'tcx> {
   }
 }
 
+/// How often one of the [`PlaceInfo`] caches was queried, and how often it had to
+/// compute the answer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CacheStats {
+  /// Number of queries.
+  pub lookups: usize,
+  /// Number of queries whose answer was not cached yet.
+  pub misses: usize,
+}
+
+#[derive(Default)]
+struct CacheCounter {
+  lookups: Cell<usize>,
+  misses: Cell<usize>,
+}
+
+impl CacheCounter {
+  fn lookup(&self) {
+    self.lookups.set(self.lookups.get() + 1);
+  }
+
+  fn miss(&self) {
+    self.misses.set(self.misses.get() + 1);
+  }
+
+  fn stats(&self) -> CacheStats {
+    CacheStats {
+      lookups: self.lookups.get(),
+      misses: self.misses.get(),
+    }
+  }
+}
+
+/// Counters of the place queries of a [`PlaceInfo`], see [`PlaceInfo::cache_stats`].
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PlaceCacheStats {
+  /// [`PlaceInfo::normalize`].
+  pub normalize: CacheStats,
+  /// [`PlaceInfo::aliases`].
+  pub aliases: CacheStats,
+  /// [`PlaceInfo::conflicts`].
+  pub conflicts: CacheStats,
+  /// [`PlaceInfo::reachable_values`].
+  pub reachable: CacheStats,
+  /// [`PlaceInfo::children`] (not cached: every lookup is a miss).
+  pub children: CacheStats,
+}
+
+impl PlaceCacheStats {
+  /// The counters as `(name, value)` pairs, in a fixed order.
+  pub fn counters(&self) -> Vec<(&'static str, usize)> {
+    vec![
+      ("normalize.lookups", self.normalize.lookups),
+      ("normalize.misses", self.normalize.misses),
+      ("aliases.lookups", self.aliases.lookups),
+      ("aliases.misses", self.aliases.misses),
+      ("conflicts.lookups", self.conflicts.lookups),
+      ("conflicts.misses", self.conflicts.misses),
+      ("reachable.lookups", self.reachable.lookups),
+      ("reachable.misses", self.reachable.misses),
+      ("children.computed", self.children.misses),
+    ]
+  }
+}
+
+#[derive(Default)]
+struct PlaceCacheCounters {
+  normalize: CacheCounter,
+  aliases: CacheCounter,
+  conflicts: CacheCounter,
+  reachable: CacheCounter,
+  children: CacheCounter,
+}
+
 /// Utilities for analyzing places: children, aliases, etc.
 pub struct PlaceInfo<'a, 'tcx> {
   pub(crate) tcx: TyCtxt<'tcx>,
@@ -77,6 +151,7 @@ pub struct PlaceInfo<'a, 'tcx> {
   aliases_cache: Cache<NormPlace<'tcx>, PlaceSet<'tcx>>,
   conflicts_cache: Cache<Place<'tcx>, PlaceSet<'tcx>>,
   reachable_cache: Cache<(Place<'tcx>, Mutability), PlaceSet<'tcx>>,
+  counters: PlaceCacheCounters,
 }
 
 impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
@@ -124,6 +199,19 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
       normalized_cache: CopyCache::default(),
       conflicts_cache: Cache::default(),
       reachable_cache: Cache::default(),
+      counters: PlaceCacheCounters::default(),
+    }
+  }
+
+  /// How often the place queries were made and computed so far.
+  pub fn cache_stats(&self) -> PlaceCacheStats {
+    let c = &self.counters;
+    PlaceCacheStats {
+      normalize: c.normalize.stats(),
+      aliases: c.aliases.stats(),
+      conflicts: c.conflicts.stats(),
+      reachable: c.reachable.stats(),
+      children: c.children.stats(),
     }
   }
 
@@ -138,7 +226,9 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
   /// [`FlowDomain`](crate::infoflow::FlowDomain).
   /// See the `PlaceExt` documentation for details on how normalization works.
   pub fn normalize(&self, place: Place<'tcx>) -> NormPlace<'tcx> {
+    self.counters.normalize.lookup();
     self.normalized_cache.get(&place, |place| {
+      self.counters.normalize.miss();
       NormPlace(place.normalize(self.tcx, self.def_id))
     })
   }
@@ -160,15 +250,19 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
   pub fn aliases(&self, place: Place<'tcx>) -> &PlaceSet<'tcx> {
     // note: important that aliases are computed on the unnormalized place
     // which contains region information
-    self
-      .aliases_cache
-      .get(&self.normalize(place), move |_| self.aliases.aliases(place))
+    self.counters.aliases.lookup();
+    self.aliases_cache.get(&self.normalize(place), move |_| {
+      self.counters.aliases.miss();
+      self.aliases.aliases(place)
+    })
   }
 
   /// Returns all reachable fields of `place` without going through references.
   ///
   /// For example, if `x = (0, 1)` then `children(x) = {x, x.0, x.1}`.
   pub fn children(&self, place: Place<'tcx>) -> PlaceSet<'tcx> {
+    self.counters.children.lookup();
+    self.counters.children.miss();
     PlaceSet::from_iter(place.interior_places(self.tcx, self.body, self.def_id))
   }
 
@@ -180,7 +274,9 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
   /// For indirect places, this function follows conflicting parents up until a reference point.
   /// So if `x = (0, &(box 1, 2))` then conflicts(*(*(x.1).0)) = {*(*(x.1).0), *(x.1).0, *(x.1)}
   pub fn conflicts(&self, place: Place<'tcx>) -> &PlaceSet<'tcx> {
+    self.counters.conflicts.lookup();
     self.conflicts_cache.get(&place, |place| {
+      self.counters.conflicts.miss();
       let children = self.children(place);
       let parents = place
         .projection
@@ -212,7 +308,9 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
     place: Place<'tcx>,
     mutability: Mutability,
   ) -> &PlaceSet<'tcx> {
+    self.counters.reachable.lookup();
     self.reachable_cache.get(&(place, mutability), |_| {
+      self.counters.reachable.miss();
       let ty = place.ty(self.body.local_decls(), self.tcx).ty;
       let loans = self.collect_loans(ty, mutability);
       loans
