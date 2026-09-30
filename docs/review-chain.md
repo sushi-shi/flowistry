@@ -106,3 +106,9 @@ measurements, and future background/project analysis are described in
 The next work is specified in the [feature-by-feature continuation plan](continuation-plan.md).
 It extends this chain with validation, the remaining optimization experiments,
 and background/project analysis plus incremental save handling.
+
+## Implementation continuation
+
+The chain now continues after #40 with [#41](https://github.com/sushi-shi/flowistry/pull/41),
+resumable corpus validation and exact coverage auditing (draft while full gates run).
+Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
