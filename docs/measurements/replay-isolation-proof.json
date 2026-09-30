@@ -1,0 +1,868 @@
+{
+  "cache_modes": {
+    "base": "inherit",
+    "compare": "inherit"
+  },
+  "command": "focus",
+  "measurement": {
+    "ambient_cache": "off",
+    "cargo_replay": "on",
+    "cpu_count": 24,
+    "kernel": "6.18.52",
+    "load_end": [
+      16.95654296875,
+      20.287109375,
+      20.22998046875
+    ],
+    "load_start": [
+      13.03515625,
+      19.58251953125,
+      20.00439453125
+    ],
+    "machine": "x86_64",
+    "perf": "/nix/store/ffj2ywbsjb0f36ig34qs2c1knmmlpmia-perf-linux-7.1.5/bin/perf",
+    "perf_sha256": "43d508493bdeb390fb43a9de4759aa7470aad9060a1dced5a30818963311146b",
+    "phases": true,
+    "repeat": 4,
+    "sample_order": "alternating A/B, B/A",
+    "warmup": 1
+  },
+  "measurement_valid": true,
+  "note": "Nearest-rank p95; small samples are exploratory. Wall time includes the harness memory-scope launcher. Validity does not imply a quiet host, representative coverage, or a performance improvement.",
+  "positions": [
+    {
+      "backends": {
+        "base": {
+          "cache_samples": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "cargo_replay_observed": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "cycles": {
+            "max": 220537230,
+            "median": 208420662.0,
+            "min": 195058741,
+            "n": 4,
+            "p95": 220537230
+          },
+          "instructions": {
+            "max": 231780641,
+            "median": 231768448.0,
+            "min": 231750198,
+            "n": 4,
+            "p95": 231780641
+          },
+          "peak_rss_mb": 97,
+          "phases": {
+            "Flow": {
+              "max": 0.0065,
+              "median": 0.00605,
+              "min": 0.0051,
+              "n": 4,
+              "p95": 0.0065
+            },
+            "aliases": {
+              "max": 0.0002,
+              "median": 0.0002,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0002
+            },
+            "compute_dependencies": {
+              "max": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0
+            },
+            "compute_focus_spans": {
+              "max": 0.0003,
+              "median": 0.0002,
+              "min": 0.0002,
+              "n": 4,
+              "p95": 0.0003
+            },
+            "find_bodies": {
+              "max": 0.0067,
+              "median": 0.0051,
+              "min": 0.0048,
+              "n": 4,
+              "p95": 0.0067
+            },
+            "fixpoint": {
+              "max": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0
+            },
+            "focus: dependency spans": {
+              "max": 0.0002,
+              "median": 0.0001,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0002
+            },
+            "focus: direct influence": {
+              "max": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0
+            },
+            "focus: maybe spans": {
+              "max": 0.0002,
+              "median": 0.0001,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0002
+            },
+            "focus: slice ranges": {
+              "max": 0.0001,
+              "median": 0.0001,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0001
+            },
+            "focus: span tree": {
+              "max": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0
+            },
+            "get_bodies_with_borrowck_facts": {
+              "max": 0.0018,
+              "median": 0.0016,
+              "min": 0.0016,
+              "n": 4,
+              "p95": 0.0018
+            },
+            "output: serialize and compress": {
+              "max": 0.0002,
+              "median": 0.0002,
+              "min": 0.0002,
+              "n": 4,
+              "p95": 0.0002
+            },
+            "relation construction": {
+              "max": 0.0001,
+              "median": 0.0001,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0001
+            },
+            "rustc": {
+              "max": 0.0282,
+              "median": 0.02615,
+              "min": 0.0203,
+              "n": 4,
+              "p95": 0.0282
+            }
+          },
+          "sample_count": 4,
+          "seconds": {
+            "max": 0.24,
+            "median": 0.16999999999999998,
+            "min": 0.16,
+            "n": 4,
+            "p95": 0.24
+          },
+          "stats": {
+            "aliases.lookups": {
+              "max": 97,
+              "median": 97.0,
+              "min": 97,
+              "n": 4,
+              "p95": 97
+            },
+            "aliases.misses": {
+              "max": 24,
+              "median": 24.0,
+              "min": 24,
+              "n": 4,
+              "p95": 24
+            },
+            "block_visits": {
+              "max": 20,
+              "median": 20.0,
+              "min": 20,
+              "n": 4,
+              "p95": 20
+            },
+            "by_block": {
+              "max": 2,
+              "median": 2.0,
+              "min": 2,
+              "n": 4,
+              "p95": 2
+            },
+            "changed_joins": {
+              "max": 18,
+              "median": 18.0,
+              "min": 18,
+              "n": 4,
+              "p95": 18
+            },
+            "children.computed": {
+              "max": 48,
+              "median": 48.0,
+              "min": 48,
+              "n": 4,
+              "p95": 48
+            },
+            "conflicts.lookups": {
+              "max": 26,
+              "median": 26.0,
+              "min": 26,
+              "n": 4,
+              "p95": 26
+            },
+            "conflicts.misses": {
+              "max": 24,
+              "median": 24.0,
+              "min": 24,
+              "n": 4,
+              "p95": 24
+            },
+            "focus.aliases.lookups": {
+              "max": 51,
+              "median": 51.0,
+              "min": 51,
+              "n": 4,
+              "p95": 51
+            },
+            "focus.aliases.misses": {
+              "max": 12,
+              "median": 12.0,
+              "min": 12,
+              "n": 4,
+              "p95": 12
+            },
+            "focus.children.computed": {
+              "max": 51,
+              "median": 51.0,
+              "min": 51,
+              "n": 4,
+              "p95": 51
+            },
+            "focus.conflicts.lookups": {
+              "max": 13,
+              "median": 13.0,
+              "min": 13,
+              "n": 4,
+              "p95": 13
+            },
+            "focus.conflicts.misses": {
+              "max": 12,
+              "median": 12.0,
+              "min": 12,
+              "n": 4,
+              "p95": 12
+            },
+            "focus.normalize.lookups": {
+              "max": 129,
+              "median": 129.0,
+              "min": 129,
+              "n": 4,
+              "p95": 129
+            },
+            "focus.normalize.misses": {
+              "max": 15,
+              "median": 15.0,
+              "min": 15,
+              "n": 4,
+              "p95": 15
+            },
+            "focus.reachable.lookups": {
+              "max": 113,
+              "median": 113.0,
+              "min": 113,
+              "n": 4,
+              "p95": 113
+            },
+            "focus.reachable.misses": {
+              "max": 21,
+              "median": 21.0,
+              "min": 21,
+              "n": 4,
+              "p95": 21
+            },
+            "location_visits": {
+              "max": 34,
+              "median": 34.0,
+              "min": 34,
+              "n": 4,
+              "p95": 34
+            },
+            "locations": {
+              "max": 34,
+              "median": 34.0,
+              "min": 34,
+              "n": 4,
+              "p95": 34
+            },
+            "mutations": {
+              "max": 26,
+              "median": 26.0,
+              "min": 26,
+              "n": 4,
+              "p95": 26
+            },
+            "normalize.lookups": {
+              "max": 207,
+              "median": 207.0,
+              "min": 207,
+              "n": 4,
+              "p95": 207
+            },
+            "normalize.misses": {
+              "max": 32,
+              "median": 32.0,
+              "min": 32,
+              "n": 4,
+              "p95": 32
+            },
+            "reachable.lookups": {
+              "max": 24,
+              "median": 24.0,
+              "min": 24,
+              "n": 4,
+              "p95": 24
+            },
+            "reachable.misses": {
+              "max": 16,
+              "median": 16.0,
+              "min": 16,
+              "n": 4,
+              "p95": 16
+            },
+            "seed_rows": {
+              "max": 4,
+              "median": 4.0,
+              "min": 4,
+              "n": 4,
+              "p95": 4
+            },
+            "transfers": {
+              "max": 16,
+              "median": 16.0,
+              "min": 16,
+              "n": 4,
+              "p95": 16
+            },
+            "unstable_locations": {
+              "max": 0,
+              "median": 0.0,
+              "min": 0,
+              "n": 4,
+              "p95": 0
+            }
+          },
+          "valid": true,
+          "wire_bytes": {
+            "max": 536,
+            "median": 534.0,
+            "min": 528,
+            "n": 4,
+            "p95": 536
+          }
+        },
+        "compare": {
+          "cache_samples": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "cargo_replay_observed": [
+            true,
+            true,
+            true,
+            true
+          ],
+          "cycles": {
+            "max": 198658451,
+            "median": 191122622.0,
+            "min": 173888139,
+            "n": 4,
+            "p95": 198658451
+          },
+          "instructions": {
+            "max": 231761369,
+            "median": 231724514.0,
+            "min": 231716797,
+            "n": 4,
+            "p95": 231761369
+          },
+          "peak_rss_mb": 97,
+          "phases": {
+            "Flow": {
+              "max": 0.0073,
+              "median": 0.006,
+              "min": 0.0045,
+              "n": 4,
+              "p95": 0.0073
+            },
+            "aliases": {
+              "max": 0.0002,
+              "median": 0.0001,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0002
+            },
+            "compute_dependencies": {
+              "max": 0.0001,
+              "median": 0.0,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0001
+            },
+            "compute_focus_spans": {
+              "max": 0.0004,
+              "median": 0.0002,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0004
+            },
+            "find_bodies": {
+              "max": 0.0061,
+              "median": 0.005,
+              "min": 0.0033,
+              "n": 4,
+              "p95": 0.0061
+            },
+            "fixpoint": {
+              "max": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0
+            },
+            "focus: dependency spans": {
+              "max": 0.0002,
+              "median": 0.0001,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0002
+            },
+            "focus: direct influence": {
+              "max": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0
+            },
+            "focus: maybe spans": {
+              "max": 0.0003,
+              "median": 0.0001,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0003
+            },
+            "focus: slice ranges": {
+              "max": 0.0001,
+              "median": 0.0001,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0001
+            },
+            "focus: span tree": {
+              "max": 0.0,
+              "median": 0.0,
+              "min": 0.0,
+              "n": 4,
+              "p95": 0.0
+            },
+            "get_bodies_with_borrowck_facts": {
+              "max": 0.0015,
+              "median": 0.00145,
+              "min": 0.0011,
+              "n": 4,
+              "p95": 0.0015
+            },
+            "output: serialize and compress": {
+              "max": 0.0002,
+              "median": 0.0002,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0002
+            },
+            "relation construction": {
+              "max": 0.0002,
+              "median": 0.0001,
+              "min": 0.0001,
+              "n": 4,
+              "p95": 0.0002
+            },
+            "rustc": {
+              "max": 0.029,
+              "median": 0.02205,
+              "min": 0.016,
+              "n": 4,
+              "p95": 0.029
+            }
+          },
+          "sample_count": 4,
+          "seconds": {
+            "max": 0.18,
+            "median": 0.175,
+            "min": 0.16,
+            "n": 4,
+            "p95": 0.18
+          },
+          "stats": {
+            "aliases.lookups": {
+              "max": 97,
+              "median": 97.0,
+              "min": 97,
+              "n": 4,
+              "p95": 97
+            },
+            "aliases.misses": {
+              "max": 24,
+              "median": 24.0,
+              "min": 24,
+              "n": 4,
+              "p95": 24
+            },
+            "block_visits": {
+              "max": 20,
+              "median": 20.0,
+              "min": 20,
+              "n": 4,
+              "p95": 20
+            },
+            "by_block": {
+              "max": 2,
+              "median": 2.0,
+              "min": 2,
+              "n": 4,
+              "p95": 2
+            },
+            "changed_joins": {
+              "max": 18,
+              "median": 18.0,
+              "min": 18,
+              "n": 4,
+              "p95": 18
+            },
+            "children.computed": {
+              "max": 48,
+              "median": 48.0,
+              "min": 48,
+              "n": 4,
+              "p95": 48
+            },
+            "conflicts.lookups": {
+              "max": 26,
+              "median": 26.0,
+              "min": 26,
+              "n": 4,
+              "p95": 26
+            },
+            "conflicts.misses": {
+              "max": 24,
+              "median": 24.0,
+              "min": 24,
+              "n": 4,
+              "p95": 24
+            },
+            "focus.aliases.lookups": {
+              "max": 51,
+              "median": 51.0,
+              "min": 51,
+              "n": 4,
+              "p95": 51
+            },
+            "focus.aliases.misses": {
+              "max": 12,
+              "median": 12.0,
+              "min": 12,
+              "n": 4,
+              "p95": 12
+            },
+            "focus.children.computed": {
+              "max": 51,
+              "median": 51.0,
+              "min": 51,
+              "n": 4,
+              "p95": 51
+            },
+            "focus.conflicts.lookups": {
+              "max": 13,
+              "median": 13.0,
+              "min": 13,
+              "n": 4,
+              "p95": 13
+            },
+            "focus.conflicts.misses": {
+              "max": 12,
+              "median": 12.0,
+              "min": 12,
+              "n": 4,
+              "p95": 12
+            },
+            "focus.normalize.lookups": {
+              "max": 129,
+              "median": 129.0,
+              "min": 129,
+              "n": 4,
+              "p95": 129
+            },
+            "focus.normalize.misses": {
+              "max": 15,
+              "median": 15.0,
+              "min": 15,
+              "n": 4,
+              "p95": 15
+            },
+            "focus.reachable.lookups": {
+              "max": 113,
+              "median": 113.0,
+              "min": 113,
+              "n": 4,
+              "p95": 113
+            },
+            "focus.reachable.misses": {
+              "max": 21,
+              "median": 21.0,
+              "min": 21,
+              "n": 4,
+              "p95": 21
+            },
+            "location_visits": {
+              "max": 34,
+              "median": 34.0,
+              "min": 34,
+              "n": 4,
+              "p95": 34
+            },
+            "locations": {
+              "max": 34,
+              "median": 34.0,
+              "min": 34,
+              "n": 4,
+              "p95": 34
+            },
+            "mutations": {
+              "max": 26,
+              "median": 26.0,
+              "min": 26,
+              "n": 4,
+              "p95": 26
+            },
+            "normalize.lookups": {
+              "max": 207,
+              "median": 207.0,
+              "min": 207,
+              "n": 4,
+              "p95": 207
+            },
+            "normalize.misses": {
+              "max": 32,
+              "median": 32.0,
+              "min": 32,
+              "n": 4,
+              "p95": 32
+            },
+            "reachable.lookups": {
+              "max": 24,
+              "median": 24.0,
+              "min": 24,
+              "n": 4,
+              "p95": 24
+            },
+            "reachable.misses": {
+              "max": 16,
+              "median": 16.0,
+              "min": 16,
+              "n": 4,
+              "p95": 16
+            },
+            "seed_rows": {
+              "max": 4,
+              "median": 4.0,
+              "min": 4,
+              "n": 4,
+              "p95": 4
+            },
+            "transfers": {
+              "max": 16,
+              "median": 16.0,
+              "min": 16,
+              "n": 4,
+              "p95": 16
+            },
+            "unstable_locations": {
+              "max": 0,
+              "median": 0.0,
+              "min": 0,
+              "n": 4,
+              "p95": 0
+            }
+          },
+          "valid": true,
+          "wire_bytes": {
+            "max": 532,
+            "median": 528.0,
+            "min": 524,
+            "n": 4,
+            "p95": 532
+          }
+        }
+      },
+      "compare_over_base": {
+        "cycles": 0.9170041979811003,
+        "instructions": 0.999810440116508,
+        "seconds": 1.0294117647058825
+      },
+      "crate": "either-1.18.0",
+      "position": [
+        "src/into_either.rs",
+        58,
+        8,
+        "SigOnly"
+      ],
+      "source_sha256": "93c1007a1e058a567ca97ddb7e861b899c4bd3667083f27f2f8e053e5e4199f1"
+    }
+  ],
+  "problems": [],
+  "schema": 1,
+  "validation_manifest": {
+    "backends": {
+      "base": {
+        "cargo-flowistry": "be7e85bcdced54e101efdffea75eb879f1e6702eca8ceac0d16745ac667a5648",
+        "flowistry-driver": "f3b26952781cbefa01e99b57e9c9b5605612ce527cc1b951cc0c407b40dbb1a2"
+      },
+      "compare": {
+        "cargo-flowistry": "be7e85bcdced54e101efdffea75eb879f1e6702eca8ceac0d16745ac667a5648",
+        "flowistry-driver": "f3b26952781cbefa01e99b57e9c9b5605612ce527cc1b951cc0c407b40dbb1a2"
+      }
+    },
+    "builds": {
+      "base": {
+        "binaries": {
+          "cargo-flowistry": "be7e85bcdced54e101efdffea75eb879f1e6702eca8ceac0d16745ac667a5648",
+          "flowistry-driver": "f3b26952781cbefa01e99b57e9c9b5605612ce527cc1b951cc0c407b40dbb1a2"
+        },
+        "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+        "cargo_encoded_rustflags": "",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "-p",
+          "flowistry_ide",
+          "-j",
+          "4"
+        ],
+        "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+        "features": "",
+        "profile": {},
+        "recorded_at": "2026-09-30T02:16:23.062992+00:00",
+        "revision": "2630ee356d8f606e22a205527b4eea67cdab66d0",
+        "rustflags": "",
+        "tree": "f848bf714adc386ad185d18af8c8e1dd5abb9b28"
+      },
+      "compare": {
+        "binaries": {
+          "cargo-flowistry": "be7e85bcdced54e101efdffea75eb879f1e6702eca8ceac0d16745ac667a5648",
+          "flowistry-driver": "f3b26952781cbefa01e99b57e9c9b5605612ce527cc1b951cc0c407b40dbb1a2"
+        },
+        "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+        "cargo_encoded_rustflags": "",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "-p",
+          "flowistry_ide",
+          "-j",
+          "4"
+        ],
+        "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+        "features": "",
+        "profile": {},
+        "recorded_at": "2026-09-30T02:16:23.062992+00:00",
+        "revision": "2630ee356d8f606e22a205527b4eea67cdab66d0",
+        "rustflags": "",
+        "tree": "f848bf714adc386ad185d18af8c8e1dd5abb9b28"
+      }
+    },
+    "cache_dir": "/home/sheep/Projects/flowistry/target/continuation-validation/perf-replay-isolated",
+    "checkpoint_implementation": "5b0fbcdc51c14bb03aa7e51cdfbbad15b831804d842b81371e852aa9b02fadc8",
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "configuration_inputs": {
+      "/.cargo/config": null,
+      "/.cargo/config.toml": null,
+      "/home/sheep/.cargo/config": null,
+      "/home/sheep/.cargo/config.toml": null,
+      "/rust-toolchain": null,
+      "/rust-toolchain.toml": null,
+      "/tmp/.cargo/config": null,
+      "/tmp/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/rust-toolchain.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/rust-toolchain.toml": "704b46d5f5b659d1b649193366f9db98e2f1cd1570d6ce53526109131bcad831",
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/rust-toolchain.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/.cargo/config": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/.cargo/config.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/rust-toolchain.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/rust-toolchain.toml": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/rust-toolchain": null,
+      "/tmp/claude-1000/-home-sheep-Projects-flowistry/rust-toolchain.toml": null,
+      "/tmp/claude-1000/.cargo/config": null,
+      "/tmp/claude-1000/.cargo/config.toml": null,
+      "/tmp/claude-1000/rust-toolchain": null,
+      "/tmp/claude-1000/rust-toolchain.toml": null,
+      "/tmp/rust-toolchain": null,
+      "/tmp/rust-toolchain.toml": null
+    },
+    "corpus": "fef31dfe97db3c94748766e9c97edea7b39052d3436c69ab28a967c26f66fffd",
+    "environment_sha256": "34d3ef40d76cb0fa0cc7f5deb90b17f73d785bf19fa4cd836e8ff0c048c043c6",
+    "harness": "889af7a25db997d87ff86dc54542a2cb57a398373fb2285acaeeeaea2c400276",
+    "measurement_settings": {
+      "cargo_replay": "on",
+      "warmup": 1
+    },
+    "schema": 1,
+    "settings": {
+      "base_cache": "inherit",
+      "budgets": null,
+      "command": "focus",
+      "compare_cache": "inherit",
+      "memory_limit": "6G",
+      "modes": [
+        "SigOnly"
+      ],
+      "phases": true,
+      "repeat": 4,
+      "timeout": 600
+    },
+    "work_dir": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates"
+  }
+}

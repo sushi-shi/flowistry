@@ -119,6 +119,7 @@ def manifest(args, backends, corpus_dir, harness):
         'settings': {key: getattr(args, key) for key in
                      ('modes', 'timeout', 'memory_limit', 'phases', 'repeat', 'budgets',
                       'command', 'base_cache', 'compare_cache')},
+        'measurement_settings': {key: getattr(args, key, None) for key in ('cargo_replay', 'warmup')},
         'work_dir': str(args.work_dir),
         'cache_dir': str(args.cache_dir) if args.cache_dir else None,
     }

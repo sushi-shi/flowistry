@@ -267,3 +267,47 @@ reuse. Explicit reuse policies require `--cache-dir`, with separate directories
 per backend. Priming failures remain visible even if the subsequent request
 succeeds. The coverage audit totals hits, misses and snapshot responses separately:
 an equivalent response alone does not prove a cache hit.
+
+### Repeated performance measurements
+
+Use frozen binaries and an idle prepared corpus. For example:
+
+```sh
+FLOWISTRY_CACHE=off python3 scripts/smoke-real-crates.py /path/to/base \
+  --compare /path/to/candidate --crate either --position src/into_either.rs:58:8 \
+  --modes SigOnly --repeat 7 --warmup 1 --cargo-replay on \
+  --cache-dir /path/to/measurement-cache --phases --perf /path/to/perf \
+  --memory-limit 6G -j 1 --work-dir /path/to/corpus --json /path/to/samples.json
+python3 scripts/summarize-benchmarks.py /path/to/samples.json \
+  --output /path/to/measurement-summary.json
+```
+
+Paired repetitions alternate A/B then B/A. All samples retain wall time, process
+tree peak RSS, instructions/cycles, phase timings, analysis counters, cache
+telemetry and response wire size when available. The summary reports medians,
+nearest-rank p95, maxima and per-position ratios. Missing phase observations stay
+missing; they are not zero-cost samples. The legacy text table still selects the
+fastest repetition, so use the new JSON summary for performance claims.
+
+Unavailable perf counters, failed samples, changed output between repetitions,
+missing repetitions and failed warmups invalidate measurements. Reused correctness
+checkpoints are rejected as timing samples. The manifest fingerprints the actual
+binaries, compiler, source inputs, harness and environment; measurement metadata
+records host load and perf identity. `--position` selects an existing locked
+position and never rewrites the corpus. A selected subset does not pass the full
+coverage gate.
+
+`--repeat` does not imply compiler or Cargo warmup. `--warmup N` makes unmeasured
+requests before the samples; warmup failures invalidate the position. Cargo command replay and
+semantic/snapshot reuse are distinct paths; separate them explicitly when
+reporting baselines. `--base-cache off --compare-cache warm` can compare cold
+analysis with snapshot reuse, but cannot establish a solver optimization. Keep
+loaded-host probes separate from quiet latency measurements and retain all raw
+samples. Phase timers can overlap and must not be blindly summed into wall time.
+
+`--cargo-replay off` always takes the Cargo path; `on` enables replay and requires
+`--cache-dir`. Cache directories also isolate `XDG_CACHE_HOME` per backend, since
+the replay store is keyed by source directory and otherwise A/B runs overwrite
+each other's records. With `--perf`, each sample records whether the backend
+logged direct compiler replay. Inspect this alongside snapshot telemetry rather
+than inferring reuse from speed.

@@ -5,8 +5,8 @@ complete merely because tooling or a subset of its tests passes.
 
 | Step | State | Evidence / next gate |
 |---|---|---|
-| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Frozen #17 and integrated builds; 18 harness/audit regressions pass. Complete corpus comparison running; independent engine/eager corpus and cache-mode/file-focus gates still pending. |
-| 2. Performance baseline | Pending | Frozen release binaries available; need actual immediate-base, project and save measurements and budgets. |
+| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Frozen #17 and integrated builds; 26 validation regressions pass. Complete corpus comparison and independent engine/eager corpus running; full cache-mode/file-focus gates pending. Real cross-launch checkpoint reuse and equal file-focus snapshot replay proved on a small case. |
+| 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Pending | Port only the relevant experiment after the baseline gates. |
 | 4. Seed rows | Pending | Preserve context-sensitive traversal cutoff. |
 | 5. HIR hashing | Pending | Profile and retain only proven improvements. |
@@ -45,7 +45,15 @@ All new heavy artifacts use
   verified exact PID. The already-running timing helper (PID 133458, harness
   496111 at inspection) was allowed to finish; all inherited reports remain.
   Its load log marks overlap with the new builds, so it is not quiet timing
-  evidence. Recheck host process state before reusing its heavy-run slot.
+  evidence. The helper has now finished: 704 successful pairs, zero differences,
+  and 16 paired benign results. Its freed slot runs the independent reference gate.
+- `reference.log`, `reference.json`, `reference-checkpoints/`: independent engine
+  and eager-reference corpus run, using the existing engine corpus, two workers
+  and the 6 GiB cap. Its harness source is #41 commit `11d5f3763`.
+- The first combined run predates internal-directory-symlink support. Alacritty
+  and Bevy source aliases can fail preparation in that version. Keep completed
+  checkpoints with their original manifest; missing entries require a fixed-harness
+  rerun. No full coverage claim can be made from this partial evidence.
 
 The combined run uses the already-prepared corpus at
 `$S/h19/target/smoke-crates`; the inherited timing uses a separate engine corpus.
@@ -57,10 +65,11 @@ Do not delete active source/build inputs or preserved experiment work.
 1. Inspect checkpoint records for differences while the full comparison runs.
    Audit its completed report with `scripts/summarize-validation.py`; investigate
    every difference/status change and missing entry.
-2. Verify real cross-launch checkpoint reuse with the stable temporary-directory
-   implementation in #41, using a completed small entry in a separate checkpoint
-   directory after a heavy slot and its prepared source become available.
-3. Run the frozen reference-check executable across the full corpus, then the
+2. Cross-launch reuse is proven by `resume-proof-{first,second}.json`: identical
+   checkpoint identity, reused second record, preserved original timestamp.
+   `cache-proof-stable.json` proves equal file-focus output with one snapshot hit
+   versus a cache-off miss. These small probes do not establish full coverage.
+3. Complete the frozen reference-check executable's corpus run, then the
    cache-off/fresh/warm and file-focus equivalence gates. Reuse existing corpora
    serially, keeping at most two heavy harnesses active.
 4. Save compact final reports in this PR, update the status table, and proceed
