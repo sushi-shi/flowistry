@@ -1,0 +1,9 @@
+fn pair(a: i32, b: i32, c: i32) -> i32 { a + b + c }
+
+fn main() {
+  let pairs = [(1, 2)];
+  let point = (3, 4);
+  `[let x = 1;]`
+  `[let sum = pair(x, ]`pairs[0].0`[, ]`point.1`[);]`
+  `[sum;]`
+}

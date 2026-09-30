@@ -20,7 +20,6 @@ use rustc_utils::{
 use serde::Serialize;
 
 mod direct_influence;
-mod simple_args;
 #[cfg(test)]
 mod tests;
 
@@ -90,21 +89,15 @@ pub(crate) fn focus_with_session<'tcx>(
     .map(|(_, target)| target.clone())
     .collect::<Vec<_>>();
 
-  let simple_args = simple_args::collect(tcx, body_id);
   let maybe_relevant = {
     block_timer!("focus: maybe spans");
     shared_results.as_ref().map(|shared_results| {
-      infoflow::compute_focus_spans(
-        shared_results,
-        targets.clone(),
-        &spanner,
-        &simple_args,
-      )
+      infoflow::compute_focus_spans(shared_results, targets.clone(), &spanner)
     })
   };
   let relevant = {
     block_timer!("focus: dependency spans");
-    infoflow::compute_focus_spans(results, targets, &spanner, &simple_args)
+    infoflow::compute_focus_spans(results, targets, &spanner)
   };
 
   let direct = {

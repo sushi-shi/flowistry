@@ -34,6 +34,7 @@ pub mod mutation;
 mod recursive;
 mod session;
 mod shared_handles;
+mod simple_args;
 mod summary;
 
 /// The output of the information flow analysis.

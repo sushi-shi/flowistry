@@ -281,18 +281,25 @@ pub fn compute_dependency_spans<'tcx>(
     .collect::<Vec<_>>()
 }
 
-/// Human-facing focus ranges with independent, simple call inputs removed from
-/// forward-only uses. Backward dependencies retain the complete call: all its
-/// inputs may be needed to explain its result. The caller restricts candidates
-/// to side-effect-free reads with trustworthy source spans.
+/// Human-facing focus ranges: each target's forward and backward slice, with the
+/// independent inputs of forward-only calls removed.
+///
+/// In `f(target, other)`, when the call is only in the forward slice, `other` is not
+/// highlighted unless it depends on the target. Backward dependencies retain the
+/// complete call: all its inputs may be needed to explain its result. Only
+/// side-effect-free reads with trustworthy source spans are candidates for removal
+/// (see [`super::simple_args::collect`]).
 pub fn compute_focus_spans<'tcx>(
   results: &FlowResults<'_, 'tcx>,
   targets: Vec<Vec<(Place<'tcx>, LocationOrArg)>>,
   spanner: &Spanner,
-  simple_args: &[Span],
 ) -> Vec<Vec<Span>> {
   block_timer!("compute_focus_spans");
   let body = results.analysis.body;
+  let simple_args = super::simple_args::collect(
+    results.analysis.tcx,
+    results.analysis.def_id.expect_local(),
+  );
   let target_deps = targets
     .iter()
     .map(|target| TargetDeps::new(target, results))
