@@ -11,7 +11,9 @@ use rustc_utils::{
 };
 
 use super::{FlowDomain, FlowResults, mutation::ModularMutationVisitor};
-use crate::{infoflow::mutation::Mutation, mir::placeinfo::PlaceInfo};
+use crate::{
+  extensions::ContextMode, infoflow::mutation::Mutation, mir::placeinfo::PlaceInfo,
+};
 
 /// Which way to look for dependencies
 #[derive(Clone, Copy, Debug)]
@@ -183,6 +185,30 @@ fn compute_dependencies_inner<'tcx>(
         }) => {
           if let Some(place) = discr.as_place() {
             check(place);
+          }
+        }
+        // In Recurse mode, the mutations of a terminator are those of the analysis
+        // (e.g. from a callee summary), and it may read a target without writing
+        // anything that depends on it (e.g. a call returning `()`).
+        Either::Right(terminator)
+          if results.analysis.place_info.mode().context_mode == ContextMode::Recurse =>
+        {
+          let effects = results.analysis.effects_at(terminator, location);
+          for mutation in &effects.mutations {
+            check(mutation.mutated);
+          }
+          if let Some(reads) = results.analysis.call_reads.borrow().get(&location) {
+            for (target_deps, outputs) in
+              iter::zip(all_target_deps, &mut *outputs.borrow_mut())
+            {
+              if target_deps
+                .all_forward
+                .iter()
+                .any(|fwd| reads.is_superset(fwd))
+              {
+                outputs.insert(location);
+              }
+            }
           }
         }
         _ => ModularMutationVisitor::new(&results.analysis.place_info, |_, mutations| {

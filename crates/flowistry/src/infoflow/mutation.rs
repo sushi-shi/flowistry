@@ -58,6 +58,11 @@ pub enum MutationKind {
     operand: usize,
   },
 
+  /// A dropped value may be written by a destructor of the source code in its drop
+  /// glue, together with everything mutably reachable from it (in
+  /// [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse) only).
+  Destructor,
+
   /// An effect of a callee, translated from an analysis of the callee's body
   /// (see [`ContextMode::Recurse`](crate::extensions::ContextMode::Recurse)).
   CalleeEffect(CalleeEffect),
@@ -91,9 +96,9 @@ impl MutationKind {
       MutationKind::Assign | MutationKind::CallReturn | MutationKind::AsmOutput => {
         MutationStatus::Definitely
       }
-      MutationKind::CallArgument { .. } | MutationKind::AsmMemory { .. } => {
-        MutationStatus::Possibly
-      }
+      MutationKind::CallArgument { .. }
+      | MutationKind::AsmMemory { .. }
+      | MutationKind::Destructor => MutationStatus::Possibly,
       MutationKind::CalleeEffect(effect) => match effect {
         CalleeEffect::Return(Precision::Exact) => MutationStatus::Definitely,
         // Several coarsened return effects can land on the same caller place, each
