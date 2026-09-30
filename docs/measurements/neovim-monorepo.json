@@ -1,0 +1,39 @@
+{
+  "source_revision": "045ef2c74845a9c1881f505f3da3f50fefb66287",
+  "imported_editor_revision": "e2394b51a2d002805cefb76a550014352fcdc033",
+  "system": "x86_64-linux",
+  "max_jobs": 1,
+  "cores": 4,
+  "checks": {
+    "nvim-frontend": {
+      "status": "passed",
+      "assertions": 242
+    },
+    "nvim-source-selection": {
+      "status": "passed",
+      "selection_assertions": 756,
+      "precision_assertions": 50
+    },
+    "nvim-summaries": {
+      "status": "passed",
+      "assertions": 101
+    },
+    "nvim-cache": {
+      "status": "passed",
+      "editor_assertions": 45,
+      "focus_cache_cases": 51,
+      "fast_cache_cases": 32,
+      "zero_compiler_hits": 17
+    },
+    "nvim-package": {
+      "status": "passed",
+      "installed_plugin_paired_backend": true,
+      "launcher_paired_backend": true
+    }
+  },
+  "launcher": "/nix/store/8wlxjkmbfrfxwwdvizr1f1qyrdz58rjc-flowistry-nvim",
+  "plugin": "/nix/store/ksxix946mhmaqb5xrav1vgbm7gqm03kv-vimplugin-flowistry.nvim-045ef2c",
+  "backend": "/nix/store/4kca3m7sa3bkmnxpks60bfihdzfw2vhb-flowistry-backend-0.5.44-045ef2c",
+  "aarch64_built": false,
+  "full_corpus_gate": false
+}

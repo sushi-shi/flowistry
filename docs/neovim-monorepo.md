@@ -42,7 +42,25 @@ backend path from this build and renders compiler-derived highlights. Other
 checks cover frontend behavior, source selection, call precision, callee summaries
 and persistent caches.
 
-Full package validation results will be recorded after the clean candidate build.
+All five x86_64-linux checks and the actual launcher built successfully at clean
+commit `045ef2c74845a9c1881f505f3da3f50fefb66287`, with `--cores 4 --max-jobs 1`:
+
+| Check | Observed result |
+| --- | --- |
+| nvim-frontend | 242 assertions |
+| nvim-source-selection | 756 selection assertions and 50 call-precision assertions |
+| nvim-summaries | 101 compiler/editor assertions |
+| nvim-cache | 45 editor assertions, 51 body-cache cases, 32 fast-cache cases |
+| nvim-package | Installed plugin and actual launcher both invoked their paired backend |
+
+The cache check observed 17 fast hits with no compiler invocation. Both package
+checks produced compiler-derived focus/dim marks. No full-corpus or quiet
+performance claim follows from these packaging tests. aarch64 was not built.
+
+Outputs are rooted at `/tmp/flowistry-monorepo-validation{,-1,...,-5}`; the last
+is the launcher. The build log is `/tmp/flowistry-monorepo-build.log`. A standalone
+clone of the same commit at `/tmp/flowistry-monorepo-package` avoided a Nix local
+worktree object-cache failure without copying any target directories.
 The full optimization/background/incremental plan remains unfinished. Preserve
 the coordinator WIP in `/tmp/flowistry-project-coordinator` and continue it from
 the migration tip when resumed.
