@@ -6,6 +6,8 @@
 
 Flowistry is a tool that analyzes the [information flow](https://en.wikipedia.org/wiki/Information_flow_(information_theory)) of Rust programs. Flowistry understands whether it's possible for one piece of code to affect another. Flowistry integrates into the IDE to provide a "focus mode" which helps you focus on the code that's related to your current task.
 
+This fork adds editor-independent file analysis (`cargo flowistry file-focus`), [cached callee summaries](docs/callee-summaries.md) for the opt-in `Recurse` context mode, and [possible writes through shared handles](docs/shared-handles.md) (`maybe_slice`).
+
 For example, this GIF shows the focus mode when reading a function that unions two sets together:
 
 <kbd>
@@ -150,6 +152,8 @@ println!("{}", y.lock().unwrap());
 Flowistry *can* determine that `*x.lock().unwrap() = 1` is a mutation to `x`, but it *can not* determine that it is a mutation to `y`. So if you focus on `y`, the assignment to 1 would be faded out, even though it is relevant to the value of `y`.
 
 We are researching methods to overcome this limitation, but for now just be aware that this is the main case where Flowistry is known to provide an incorrect answer.
+
+This fork reports such code separately: focus responses include a `maybe_slice` of code that is relevant only if handles to the same interior-mutable type point to one object, so an editor can show it in a different color. See [docs/shared-handles.md](docs/shared-handles.md).
 
 ### A focus region may include more code than you expect
 
