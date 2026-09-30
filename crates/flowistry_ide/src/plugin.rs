@@ -247,7 +247,10 @@ fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
   let serialize_timer = Instant::now();
   // serde_json writes token by token. Without a buffer every tiny write goes through
   // the compressor, which dominated the run time for large focus outputs.
-  let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+  // Level 6 (zlib's default) compresses about twice as fast as level 9 (`best`); the
+  // output is larger (e.g. 2.6 instead of 1.5 MB for a 195 MB JSON), but it only goes
+  // through a local pipe.
+  let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(6));
   let mut writer = std::io::BufWriter::with_capacity(1 << 16, encoder);
   serde_json::to_writer(&mut writer, &result).unwrap();
   let buffer = writer
