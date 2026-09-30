@@ -1,0 +1,7 @@
+fn f(mut b: Box<(i32, i32)>, y: i32) {
+  b.0 = y;
+  let z = b.1;
+  `(z)`;
+}
+
+fn main() {}
