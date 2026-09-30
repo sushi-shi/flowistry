@@ -2,7 +2,7 @@
 fn main() {
   `[let mut x = 0;]`
   `[let y = 1;]`
-  `[let mut n = 0;]`
+  let mut n = 0;
   `[let mut f = |p: &mut i32| {
     *p = y;
     n += 1;

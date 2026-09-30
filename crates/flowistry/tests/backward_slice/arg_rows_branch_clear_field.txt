@@ -1,0 +1,11 @@
+fn f(mut a: (i32, (i32, i32)), c: bool, b: i32) {
+  if c {
+    a.1 = (b, 0);
+  } else {
+    a.0 = b;
+  }
+  let z = a.1.1 + a.0;
+  `(z)`;
+}
+
+fn main() {}
