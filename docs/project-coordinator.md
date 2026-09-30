@@ -91,3 +91,11 @@ These focused tests establish process/protocol behavior. Full project throughput
 time to first useful result and resource-growth measurements on large corpus
 projects remain acceptance gates. Neovim background scheduling, foreground
 preemption and dependency-aware saves are subsequent features in the same stack.
+
+The immutable `project-coordinator-v1/` build at `2fae9dd12` passes all 16 public
+coordinator scenarios and all 13 existing worker scenarios. The IDE all-targets
+suite passes 38 tests, and the Python harness suite passes 55 regressions.
+[The compact report](measurements/project-coordinator.json) records exact build
+and harness hashes, case outcomes and raw-report checksums. Two full corpus runs
+now compare cache-off analysis with refresh and warm reuse, using separate
+prepared corpus roots and two 6 GiB workers each. They remain in progress.

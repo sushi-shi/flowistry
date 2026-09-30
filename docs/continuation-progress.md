@@ -173,3 +173,18 @@ the earlier WIP commit and merging `refactor/neovim-monorepo` normally. #53's pa
 package CI passed. No PR was merged and no history was force-pushed. The earlier
 'active run' descriptions above are historical; these terminal reports supersede
 them. Step 9's large-project/performance gates and steps 10–13 remain unfinished.
+
+The next candidate is frozen as `project-coordinator-v1/` at `2fae9dd12`.
+All 16 public coordinator and 13 worker scenarios pass, including kernel-backed
+OOM handling, setsid descendant cancellation, superseded saves and blocked output.
+The IDE suite passes 38 tests and the Python suite 55. See
+[the exact candidate evidence](measurements/project-coordinator.json).
+Two new heavy runs use this immutable candidate and the metadata-aware comparator:
+`coordinator-cache-refresh.{log,json}` with the engine prepared corpus, and
+`coordinator-cache-warm.{log,json}` with h19. Each covers all locked selections in
+both modes with cache-off as its oracle and has its own `-stores/` and
+`-checkpoints/` namespace. They use two jobs and a 6 GiB per-request cap; do not
+start a third heavy harness or write to either prepared corpus while they run.
+Summary verification mode is disabled for these ordinary cache gates. Retained
+harness snapshots are `coordinator-cache-harness.py` and
+`coordinator-cache-checkpoint.py` under the validation root.

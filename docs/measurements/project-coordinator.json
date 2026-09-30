@@ -1,0 +1,195 @@
+{
+  "active_corpus_runs": [
+    "coordinator-cache-refresh",
+    "coordinator-cache-warm"
+  ],
+  "build": {
+    "binaries": {
+      "cargo-flowistry": "57567db6532ed9dea037fa037d2bfd07f35f3cdcf3f7eaf448b7b8d373824286",
+      "flowistry-driver": "6e588fa793e5e0a48910e25701bc34facd0c7035c7589769c00c53cf3beb4ebd"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T13:15:53.520008+00:00",
+    "revision": "2fae9dd12250d9ce24201d00290433993f31d990",
+    "rustflags": "",
+    "tree": "4e5462a61880f77e48422d7aea4261a61685a2c1"
+  },
+  "ide_all_targets": {
+    "command": "cargo test --locked -p flowistry_ide --all-targets",
+    "passed": true,
+    "tests": 38
+  },
+  "python_regressions": {
+    "command": "python3 -m unittest discover -s scripts -p 'test_*.py'",
+    "passed": true,
+    "tests": 55
+  },
+  "reports": [
+    {
+      "cases": 16,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "smoke-real-crates.py": "752e262e95ae78e69353ad5a2917a511b61d5d5f4701e2560c37fcc02b3e27b1",
+        "smoke_checkpoint.py": "5b0fbcdc51c14bb03aa7e51cdfbbad15b831804d842b81371e852aa9b02fadc8",
+        "test-project-coordinator.py": "9e14d4579f1db505dd3a2e5fbbe6e2068ca942177cdd76d7237715cc629cc730"
+      },
+      "log": {
+        "path": "/home/sheep/Projects/flowistry/target/continuation-validation/coordinator-final-v1.log",
+        "sha256": "2ad2644c32da72d4ffb0b61922a5fb7d4d7c00db3531f66a2c48eecc5fb71cc2"
+      },
+      "outcomes": [
+        {
+          "case": "SigOnly-lib",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-bin",
+          "passed": true
+        },
+        {
+          "case": "Recurse-lib",
+          "passed": true
+        },
+        {
+          "case": "Recurse-bin",
+          "passed": true
+        },
+        {
+          "case": "priorities",
+          "passed": true
+        },
+        {
+          "case": "type-error-isolation",
+          "passed": true
+        },
+        {
+          "case": "sigterm",
+          "passed": true
+        },
+        {
+          "case": "cancel-file",
+          "passed": true
+        },
+        {
+          "case": "timeout",
+          "passed": true
+        },
+        {
+          "case": "oom",
+          "passed": true
+        },
+        {
+          "case": "sigterm-tree",
+          "passed": true
+        },
+        {
+          "case": "sigkill-tree",
+          "passed": true
+        },
+        {
+          "case": "edit-during-run",
+          "passed": true
+        },
+        {
+          "case": "closed-output",
+          "passed": true
+        },
+        {
+          "case": "backpressure-cancel",
+          "passed": true
+        },
+        {
+          "case": "no-user-systemd",
+          "passed": true
+        }
+      ],
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/coordinator-final-v1.json",
+      "sha256": "783dff3db9be36edfad1644f87109f60997e1b7e547138a44f4dd6e9a3f652ae"
+    },
+    {
+      "cases": 13,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "smoke-real-crates.py": "752e262e95ae78e69353ad5a2917a511b61d5d5f4701e2560c37fcc02b3e27b1",
+        "smoke_checkpoint.py": "5b0fbcdc51c14bb03aa7e51cdfbbad15b831804d842b81371e852aa9b02fadc8",
+        "test-project-workers.py": "8e877c9a74678e665fa4d115fc3fd4109e1329c0e09c902c673c4d5d5e1af105"
+      },
+      "log": {
+        "path": "/home/sheep/Projects/flowistry/target/continuation-validation/coordinator-workers-v1.log",
+        "sha256": "391645fd8b90ace31b96cb5fb22dbc1c152d805c9d7d1936cedac7d9ef1edfe3"
+      },
+      "outcomes": [
+        {
+          "case": "SigOnly-lib-custom_library",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-bin-custom-binary",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-bin-file-focus",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-features",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-errors",
+          "passed": true
+        },
+        {
+          "case": "Recurse-lib-custom_library",
+          "passed": true
+        },
+        {
+          "case": "Recurse-bin-custom-binary",
+          "passed": true
+        },
+        {
+          "case": "Recurse-bin-file-focus",
+          "passed": true
+        },
+        {
+          "case": "Recurse-features",
+          "passed": true
+        },
+        {
+          "case": "Recurse-errors",
+          "passed": true
+        },
+        {
+          "case": "invalid-target",
+          "passed": true
+        },
+        {
+          "case": "missing-selection",
+          "passed": true
+        },
+        {
+          "case": "launcher-lock",
+          "passed": true
+        }
+      ],
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/coordinator-workers-v1.json",
+      "sha256": "5055a3c5104a1a01f9ff2eb344c6c0cc4cb0dcae12bb3abf2b0ad2ba272861d2"
+    }
+  ],
+  "schema": 1,
+  "scope": "Focused process/protocol acceptance at the frozen candidate. Full project performance/resource-growth, packaged integration and final corpus gates remain open."
+}
