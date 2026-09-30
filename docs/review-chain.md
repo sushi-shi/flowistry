@@ -128,4 +128,8 @@ termination through replay/snapshot wrappers and records the reference OOM triag
 and the edit/concurrency oracle: all 84 current cases pass in both modes, including
 isolated real-project edits. Versioned publication/background cases and full
 release gates remain pending.
+[#48](https://github.com/sushi-shi/flowistry/pull/48) extends the existing caches
+with a shared body index, revision/generation publication checks and a combined
+disk budget. Its 16 new publication cases and all 84 edit cases pass; project and
+editor integration remain later features.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

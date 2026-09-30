@@ -5,13 +5,13 @@ complete merely because tooling or a subset of its tests passes.
 
 | Step | State | Evidence / next gate |
 |---|---|---|
-| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Frozen #17 and integrated builds; 26 validation regressions pass. Reference sweep has full coverage with five resource-limited outcomes; missing comparison entries are rerunning after old-harness recovery. Full cache-mode/file-focus gates pending. |
+| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Full #17/integrated coverage: 2,827 equal successful pairs, 48 paired benign selections and five reference-OOM/integrated-success outcomes; see [combined-corpus-results.md](combined-corpus-results.md). Independent reference coverage is complete but five checks remain resource-limited. Full file-focus/cache comparison now running. |
 | 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Port prepared, [#43](https://github.com/sushi-shi/flowistry/pull/43); gates pending | Only experiment `ab7857370` ported; 107 core tests pass with engine-diff/shadow-eager. Bounded-scan integration, symmetric matrix equality and independent ungrouped checks added. See [recurse-row-groups.md](recurse-row-groups.md). Acceptance still depends on completed baseline gates and integrated corpus/performance evidence. |
 | 4. Seed rows | Candidate prepared, [#44](https://github.com/sushi-shi/flowistry/pull/44); gates pending | Fresh-root type templates preserve the traversal cutoff, with bounded temporary storage and shadow comparison to original seeds. 108 core tests pass; two-mode small-case comparison passes, full corpus and stress measurements pending. See [seed-row-experiment.md](seed-row-experiment.md). |
 | 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
 | 6. Edit/concurrency harness | Implemented in [#47](https://github.com/sushi-shi/flowistry/pull/47); release gates pending | 84 serial, concurrency, recovery and real-project cases pass; 47 harness regressions pass. See [edit-concurrency-validation.md](edit-concurrency-validation.md). Add versioned-publication/background cases as those features land; full corpus gates remain required. |
-| 7. Shared result index | Implemented candidate; final integration gates pending | Existing caches now share a publication lock and disk budget. Compiler-derived body index, revision/generation envelopes, cancellation, source-hash checks and interrupted-write recovery pass 16 new cases, plus all 84 edit cases. See [versioned-result-index.md](versioned-result-index.md). |
+| 7. Shared result index | Implemented in [#48](https://github.com/sushi-shi/flowistry/pull/48); final integration gates pending | Existing caches now share a publication lock and disk budget. Compiler-derived body index, revision/generation envelopes, cancellation, source-hash checks and interrupted-write recovery pass 16 new cases, plus all 84 edit cases. See [versioned-result-index.md](versioned-result-index.md). |
 | 8. Persisted summaries | Pending | Portable schema, dependency graph and invalidation. |
 | 9. Project command | Pending | Streaming, priorities and bounded workers. |
 | 10. Neovim background work | Pending | Continue after editor #4; foreground priority and compatible pin. |
@@ -75,10 +75,16 @@ Do not delete active source/build inputs or preserved experiment work.
    saved harness hashes and current source hashes; see `recover-equivalence.py`.
    The corrected Alacritty/Bevy run has completed: 238 equal successful pairs and
    two paired benign selections in `equivalence-symlinks.{log,json}`. The other
-   nine entries use `equivalence-remaining.{log,json}` in the engine corpus;
-   Helix is the last active entry. The freed h19 slot now runs the full Recurse
+   nine entries have also completed: 1,076 equal successful pairs and four paired
+   benign selections in `equivalence-remaining.{log,json}`. The assembled
+   `equivalence-complete{,-summary}.json` has exact full coverage; see
+   [combined-corpus-results.md](combined-corpus-results.md). The h19 slot now runs the full Recurse
    comparison of `baseline/` with `row-groups/`, in `row-groups-corpus.{log,json}`
    and `row-groups-checkpoints/`, under the same two-job/6 GiB caps.
+   The freed engine-corpus slot runs cache-off versus warm `file-focus` at
+   `result-index-v1/`, both modes, all locked positions, in
+   `file-cache-corpus.{log,json}` and `file-cache-checkpoints/`. Cache entries live
+   in `file-cache-stores/`; the new combined per-store disk bound applies.
    Preserve all three manifests when assembling coverage; do not present a new
    harness manifest as the origin of old records.
    The independent reference sweep has finished with complete coverage: 2,827
@@ -107,4 +113,4 @@ Do not delete active source/build inputs or preserved experiment work.
    Continue with persisted summaries, project command, Neovim background work,
    saves and safe relocation (steps 8–12). Those features remain unimplemented.
    Finish all final gates in step 13. Current continuation PR order is #41 → #42 →
-   #43 → #44 → #45 → #46 → #47; nothing has been merged.
+   #43 → #44 → #45 → #46 → #47 → #48; nothing has been merged.
