@@ -1,0 +1,8 @@
+fn log(prefix: &str, value: i32) {}
+
+fn main() {
+  let prefix = "value: ";
+  `[let input = 1;]`
+  `[let doubled = input * 2;]`
+  `[log(prefix, doubled);]`
+}

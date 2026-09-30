@@ -1,0 +1,7 @@
+# Stress positions of the corpus and their budgets, checked by smoke-real-crates.py --budgets.
+# crate	mode	file	line (0-based)	column	max peak RSS (MiB)	max seconds
+just	SigOnly	src/error.rs	926	10	6144	600
+just	SigOnly	src/analyzer.rs	177	4	6144	600
+just	SigOnly	src/token.rs	19	4	6144	600
+memchr	SigOnly	src/arch/generic/memchr.rs	283	16	6144	600
+memchr	Recurse	src/arch/generic/memchr.rs	283	16	6144	600

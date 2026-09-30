@@ -457,6 +457,66 @@ where
   }
 }
 
+/// The row operations of the transfer function (see `FlowAnalysis::transfer`), on the
+/// flow state ([`LazyMatrix`]) and on the eager matrices that callee summaries use.
+pub(crate) trait RowMatrix<R, C: IndexedValue + 'static> {
+  /// Returns the [`IndexedDomain`] for the column type.
+  fn col_domain(&self) -> &Rc<IndexedDomain<C>>;
+
+  /// The value of `row`.
+  fn row_set(&self, row: &R) -> &IndexSet<C>;
+
+  /// Adds all elements of `from` to the value of `row`, returning true if it changed.
+  fn union_into_row(&mut self, row: R, from: &IndexSet<C>) -> bool;
+
+  /// Empties the value of `row`.
+  fn clear_row(&mut self, row: &R);
+}
+
+impl<R, C> RowMatrix<R, C> for LazyMatrix<R, C>
+where
+  R: Clone + Eq + Hash,
+  C: IndexedValue + 'static,
+{
+  fn col_domain(&self) -> &Rc<IndexedDomain<C>> {
+    LazyMatrix::col_domain(self)
+  }
+
+  fn row_set(&self, row: &R) -> &IndexSet<C> {
+    LazyMatrix::row_set(self, row)
+  }
+
+  fn union_into_row(&mut self, row: R, from: &IndexSet<C>) -> bool {
+    LazyMatrix::union_into_row(self, row, from)
+  }
+
+  fn clear_row(&mut self, row: &R) {
+    LazyMatrix::clear_row(self, row)
+  }
+}
+
+impl<R, C> RowMatrix<R, C> for indexical::bitset::rustc::IndexMatrix<R, C>
+where
+  R: PartialEq + Eq + Hash + Clone,
+  C: IndexedValue + 'static,
+{
+  fn col_domain(&self) -> &Rc<IndexedDomain<C>> {
+    indexical::bitset::rustc::IndexMatrix::col_domain(self)
+  }
+
+  fn row_set(&self, row: &R) -> &IndexSet<C> {
+    indexical::bitset::rustc::IndexMatrix::row_set(self, row)
+  }
+
+  fn union_into_row(&mut self, row: R, from: &IndexSet<C>) -> bool {
+    indexical::bitset::rustc::IndexMatrix::union_into_row(self, row, from)
+  }
+
+  fn clear_row(&mut self, row: &R) {
+    indexical::bitset::rustc::IndexMatrix::clear_row(self, row)
+  }
+}
+
 #[cfg(test)]
 mod test {
   use indexical::bitset::rustc::IndexMatrix;
