@@ -10,7 +10,7 @@ complete merely because tooling or a subset of its tests passes.
 | 3. Recurse row groups | Port prepared, [#43](https://github.com/sushi-shi/flowistry/pull/43); gates pending | Only experiment `ab7857370` ported; 107 core tests pass with engine-diff/shadow-eager. Bounded-scan integration, symmetric matrix equality and independent ungrouped checks added. See [recurse-row-groups.md](recurse-row-groups.md). Acceptance still depends on completed baseline gates and integrated corpus/performance evidence. |
 | 4. Seed rows | Candidate prepared, [#44](https://github.com/sushi-shi/flowistry/pull/44); gates pending | Fresh-root type templates preserve the traversal cutoff, with bounded temporary storage and shadow comparison to original seeds. 108 core tests pass; two-mode small-case comparison passes, full corpus and stress measurements pending. See [seed-row-experiment.md](seed-row-experiment.md). |
 | 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
-| 6. Edit/concurrency harness | Current-backend matrix implemented; release gates pending | 84 serial, concurrency, recovery and real-project cases pass; 47 harness regressions pass. See [edit-concurrency-validation.md](edit-concurrency-validation.md). Add versioned-publication/background cases as those features land; full corpus gates remain required. |
+| 6. Edit/concurrency harness | Implemented in [#47](https://github.com/sushi-shi/flowistry/pull/47); release gates pending | 84 serial, concurrency, recovery and real-project cases pass; 47 harness regressions pass. See [edit-concurrency-validation.md](edit-concurrency-validation.md). Add versioned-publication/background cases as those features land; full corpus gates remain required. |
 | 7. Shared result index | Pending | Versioned publication and bounded persistent storage. |
 | 8. Persisted summaries | Pending | Portable schema, dependency graph and invalidation. |
 | 9. Project command | Pending | Streaming, priorities and bounded workers. |
@@ -102,4 +102,4 @@ Do not delete active source/build inputs or preserved experiment work.
    persisted summaries, project command, Neovim background work, saves and safe
    relocation (steps 7–12). None of those features has been declared implemented.
    Finish all final gates in step 13. Current continuation PR order is #41 → #42 →
-   #43 → #44 → #45 → #46; nothing has been merged.
+   #43 → #44 → #45 → #46 → #47; nothing has been merged.
