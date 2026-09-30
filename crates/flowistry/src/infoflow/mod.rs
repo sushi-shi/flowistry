@@ -32,6 +32,7 @@ mod interior;
 pub mod mutation;
 mod recursive;
 mod session;
+mod simple_args;
 mod summary;
 
 /// The output of the information flow analysis.

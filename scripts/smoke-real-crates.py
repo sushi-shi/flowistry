@@ -72,7 +72,9 @@ BENIGN_ERRORS = [
     "Could not find SourceFile for path",
 ]
 
-CRASH_MARKERS = ["panicked", "internal compiler error"]
+# A Rust panic ("thread 'rustc' (…) panicked at …") or an ICE. Bare words would match
+# identifiers in timer logs, e.g. sudo-rs's `has_panicked`.
+CRASH_MARKER = re.compile(r"^thread '[^']*'(?: \(\d+\))? panicked at |internal compiler error:", re.M)
 
 # Timer output of the backend: `[<time> INFO  rustc_utils::timer] <phase> took <n>s`.
 PHASE_LOG = "rustc_utils::timer=info,flowistry_ide=info"
@@ -421,7 +423,7 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
         except Exception:
             response = None
     stderr = res.stderr
-    if any(m in stderr for m in CRASH_MARKERS) or response is None:
+    if CRASH_MARKER.search(stderr) or response is None:
         return {"status": "crash", "message": crash_signature(stderr), "seconds": seconds,
                 "returncode": res.returncode, "stderr_tail": stderr[-4000:]}
     timings = parse_phases(stderr) if phases else None
@@ -765,6 +767,7 @@ def git_checkout(entry, args, env):
 
     Cloning and downloading dependencies need the network, so they only happen with
     --fetch or --update-corpus; the repository's own Cargo.lock pins dependencies.
+    Returns the cargo workspace root: the checkout, or its `root` subdirectory.
     """
     dest = args.work_dir / "_git" / entry["name"]
     head = git(["rev-parse", "HEAD"], dest).stdout.strip() if (dest / ".git").is_dir() else None
@@ -781,6 +784,12 @@ def git_checkout(entry, args, env):
             res = git(argv, dest)
             if res.returncode != 0:
                 raise RuntimeError(f"git {argv[0]} failed: {res.stderr.strip()}")
+    if online and entry.get("submodules"):
+        res = git(["submodule", "update", "-q", "--init", "--recursive", "--depth", "1"], dest)
+        if res.returncode != 0:
+            raise RuntimeError(f"git submodule update failed: {res.stderr.strip()}")
+    # The cargo workspace may live in a subdirectory of the repository (`root`).
+    dest = dest / entry.get("root", ".")
     # The checkout lies inside this repository, whose workspace cargo would otherwise use.
     manifest = dest / "Cargo.toml"
     text = manifest.read_text()
@@ -821,19 +830,23 @@ def smoke_git_entry(entry, args, backends):
         entry_dir = CORPUS_DIR / entry["name"]
         checkout = git_checkout(entry, args, backend_env(backends[0][1], args.work_dir / "_fetch" / "target"))
         dest = checkout / entry.get("package", ".")
-        base_env = backend_env(backends[0][1], checkout / "target" / "smoke-base")
+        # Per-entry build environment, e.g. CFLAGS for old C code or --cap-lints for old crates.
+        extra_env = entry.get("env", {})
+        base_env = dict(backend_env(backends[0][1], checkout / "target" / "smoke-base"), **extra_env)
         root_src, is_bin = lib_target(dest, base_env)
         touch = root_src if is_bin else None
         files = compiled_files(dest, root_src.parent, base_env, args.timeout, touch, checkout)
         if args.compare:
             compiled_files(dest, root_src.parent,
-                           backend_env(backends[1][1], checkout / "target" / "smoke-cmp"), args.timeout,
+                           dict(backend_env(backends[1][1], checkout / "target" / "smoke-cmp"), **extra_env),
+                           args.timeout,
                            touch, checkout)
     except Exception as e:  # noqa: BLE001 - reported as a skipped crate
         report["skipped"].append((entry["name"], str(e)))
         log(f"[{entry['name']}] skipped: {e}")
         return report
     report.update(crate=label, dir=str(dest), target_root=str(checkout), files=files, pruned=[],
+                  env=entry.get("env", {}),
                   touch=str(touch) if touch else None)
     return run_positions(report, entry_dir, dest, args, backends)
 
@@ -859,14 +872,18 @@ def run_positions(report, entry_dir, dest, args, backends):
         report["seconds"] = 0.0
         return report
     target_root = Path(report.get("target_root", dest))
-    envs = [(name, backend_env(bin_dir, target_root / "target" / ("smoke-base" if i == 0 else "smoke-cmp")))
+    envs = [(name, dict(backend_env(bin_dir, target_root / "target" / ("smoke-base" if i == 0 else "smoke-cmp")),
+                        **report.get("env", {})))
             for i, (name, bin_dir) in enumerate(backends)]
     started = time.monotonic()
     for idx, (rel, line, col) in enumerate(positions):
         for mode in args.modes:
             rec = {"crate": label, "file": rel, "line": line, "column": col, "mode": mode}
             for name, env in envs:
-                result = focus_repeated(dest, env, rel, line, col, mode, args, report.get("touch"))
+                # Inside a workspace member, cargo-flowistry resolves relative paths from the
+                # package but the driver from the workspace root; an absolute path works for both.
+                file_arg = str(dest / rel) if report.get("target_root") not in (None, str(dest)) else rel
+                result = focus_repeated(dest, env, file_arg, line, col, mode, args, report.get("touch"))
                 rec[name] = result
                 if result["status"] in ("crash", "timeout"):
                     log(f"[{label}] {result['status'].upper()} ({name}) {mode} {rel}:{line}:{col}: "
@@ -1059,7 +1076,11 @@ def main():
     registries = registry_dirs(args)
     corpus = json.loads(CORPUS_FILE.read_text()) if CORPUS_FILE.is_file() else None
     if args.crates and not args.update_corpus:
-        specs = args.crates
+        # Corpus entries by name (locked); anything else is an ad-hoc NAME[@VERSION] or path.
+        by_name = {e["name"]: e for e in (corpus or {}).get("crates", [])}
+        specs = [dict(by_name[c]) if c in by_name else c for c in args.crates]
+        if corpus is not None:
+            args.seed, args.positions = corpus["seed"], corpus["positions"]
     elif corpus is not None:
         if args.update_corpus:
             # Entries are updated in place; with --crate, only the named ones.
