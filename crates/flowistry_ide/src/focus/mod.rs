@@ -1,7 +1,10 @@
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, rc::Rc, time::Instant};
 
 use anyhow::Result;
-use flowistry::infoflow::{self, Direction};
+use flowistry::{
+  extensions::EvalMode,
+  infoflow::{self, AnalysisSession},
+};
 use itertools::Itertools;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
@@ -17,6 +20,8 @@ use rustc_utils::{
 use serde::Serialize;
 
 mod direct_influence;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Serialize)]
 pub struct PlaceInfo {
@@ -24,6 +29,11 @@ pub struct PlaceInfo {
   pub ranges: Vec<CharRange>,
   pub slice: Vec<CharRange>,
   pub direct_influence: Vec<CharRange>,
+  /// Code that may be relevant only if separately held shared handles to state of
+  /// the same interior-mutable type (e.g. two `Rc<RefCell<T>>`) are one object.
+  /// Disjoint from `slice`, and omitted when empty.
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub maybe_slice: Vec<CharRange>,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,10 +43,22 @@ pub struct FocusOutput {
 }
 
 pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
+  let session = AnalysisSession::new(tcx, EvalMode::from_ambient());
+  focus_with_session(&session, body_id)
+}
+
+/// Like [`focus`], sharing the callee summaries of `session` (and in its mode).
+pub(crate) fn focus_with_session<'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_id: BodyId,
+) -> Result<FocusOutput> {
+  let tcx = session.tcx();
   let def_id = tcx.hir_body_owner_def_id(body_id);
   let body_with_facts = get_body_with_borrowck_facts(tcx, def_id);
   let body = &body_with_facts.body;
-  let results = &infoflow::compute_flow(tcx, body_id, body_with_facts);
+  let results = &infoflow::compute_flow_with_session(session, body_id, body_with_facts);
+  let shared_results =
+    infoflow::compute_flow_with_shared_handles(session, body_id, body_with_facts);
 
   let source_map = tcx.sess.source_map();
   let spanner = {
@@ -59,22 +81,28 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     })
     .into_group_map()
     .into_iter()
-    .map(|(k, vs)| (k, vs.concat()))
+    .map(|(k, vs)| (k, vs.into_iter().flatten().unique().collect::<Vec<_>>()))
     .collect::<Vec<_>>();
 
   let targets = grouped_spans
     .iter()
     .map(|(_, target)| target.clone())
-    .collect();
+    .collect::<Vec<_>>();
 
+  let maybe_relevant = {
+    block_timer!("focus: maybe spans");
+    shared_results.as_ref().map(|shared_results| {
+      infoflow::compute_focus_spans(shared_results, targets.clone(), &spanner)
+    })
+  };
   let relevant = {
     block_timer!("focus: dependency spans");
-    infoflow::compute_dependency_spans(results, targets, Direction::Both, &spanner)
+    infoflow::compute_focus_spans(results, targets, &spanner)
   };
 
   let direct = {
     block_timer!("focus: direct influence");
-    direct_influence::DirectInfluence::build(body, &results.analysis.place_info)
+    direct_influence::DirectInfluence::build(&results.analysis)
   };
 
   // The place queries of the whole request on this body, including the dependency
@@ -105,7 +133,8 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     ranges
   };
   let mut slices = Vec::with_capacity(grouped_spans.len());
-  for ((mir_span, targets), slice) in grouped_spans.iter().zip(relevant) {
+  for (i, ((mir_span, targets), slice)) in grouped_spans.iter().zip(relevant).enumerate()
+  {
     log::debug!("Slice for {mir_span:?} is {slice:#?}");
 
     let mut direct_influence = Vec::new();
@@ -123,6 +152,11 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
       );
     }
 
+    let maybe_slice = maybe_relevant
+      .as_ref()
+      .map(|maybe| subtract_spans(&maybe[i], &slice))
+      .unwrap_or_default();
+
     let Ok(range) = CharRange::from_span(mir_span.span(), source_map) else {
       continue;
     };
@@ -131,6 +165,7 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
       ranges: to_ranges(&[mir_span.span()]),
       slice: to_ranges(&slice),
       direct_influence: to_ranges(&direct_influence),
+      maybe_slice: to_ranges(&maybe_slice),
     });
   }
   log::info!(
@@ -156,4 +191,14 @@ pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
     place_info: slices,
     containers,
   })
+}
+
+/// The parts of the `maybe` spans that no `exact` span covers. A maybe span that
+/// contains or overlaps an exact span keeps only its uncovered parts.
+fn subtract_spans(maybe: &[Span], exact: &[Span]) -> Vec<Span> {
+  Span::merge_overlaps(maybe.to_vec())
+    .into_iter()
+    .flat_map(|span| span.subtract(exact.to_vec()))
+    .filter(|span| !span.is_empty())
+    .collect()
 }
