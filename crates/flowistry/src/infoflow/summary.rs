@@ -200,7 +200,8 @@ pub(crate) fn compute<'tcx>(
     reads: RefCell::new(IndexSet::new(&domain)),
     domain,
   };
-  let results = engine::iterate_to_fixpoint(tcx, body, location_domain, analysis);
+  let results =
+    engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis);
   let analysis = &results.analysis;
   let place_info = &analysis.flow.place_info;
 
@@ -218,7 +219,7 @@ pub(crate) fn compute<'tcx>(
     }
     let state = results.state_at(body.terminator_loc(block));
     for leaf in &return_leaves {
-      let deps = analysis.flow.deps_of_inputs(state, &[*leaf]);
+      let deps = analysis.flow.deps_of_inputs(&*state, &[*leaf]);
       if leaf.ty(body.local_decls(), tcx).ty.is_unit() {
         whole_return.union(&deps);
       } else {

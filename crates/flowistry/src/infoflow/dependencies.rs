@@ -36,48 +36,62 @@ struct TargetDeps {
 }
 
 impl TargetDeps {
-  pub fn new<'tcx>(
-    targets: &[(Place<'tcx>, LocationOrArg)],
+  /// The target dependencies of each list of targets in `all_targets`.
+  fn all<'tcx>(
+    all_targets: &[Vec<(Place<'tcx>, LocationOrArg)>],
     results: &FlowResults<'_, 'tcx>,
-  ) -> Self {
+  ) -> Vec<Self> {
     let place_info = &results.analysis.place_info;
     let location_domain = results.analysis.location_domain();
-    // let mut backward = LocationSet::new(location_domain);
 
-    let expanded_targets = targets.iter().flat_map(|(place, location)| {
-      place_info
-        .reachable_values(*place, Mutability::Not)
-        .iter()
-        .map(move |reachable| (*reachable, *location))
-    });
-
-    let all_forward = expanded_targets
-      .map(|(place, location)| {
-        let state_location = match location {
-          LocationOrArg::Arg(..) => Location::START,
-          LocationOrArg::Location(location) => location,
-        };
-        let state = results.state_at(state_location);
-        // backward.union(&aliases.deps(state, place));
-
-        let mut forward = LocationOrArgSet::new(location_domain);
-        forward.insert_all();
-        for conflict in place_info.norm_children(place_info.normalize(place)) {
-          let deps = state.row_set(&conflict);
-          trace!("place={place:?}, conflict={conflict:?}, deps={deps:?}");
-          forward.intersect(deps);
-        }
-
-        forward.insert(location);
-
-        forward
+    // Every value reachable from a target is a sub-target at the target's location.
+    let sub_targets = all_targets
+      .iter()
+      .enumerate()
+      .flat_map(|(i, targets)| {
+        targets.iter().flat_map(move |(place, location)| {
+          place_info
+            .reachable_values(*place, Mutability::Not)
+            .iter()
+            .map(move |reachable| (i, *reachable, *location))
+        })
       })
       .collect::<Vec<_>>();
 
-    TargetDeps {
-      // backward,
-      all_forward,
+    // Visit the sub-targets location by location, so that each block's states are
+    // computed once (see `FlowResults::state_at`).
+    let state_location = |location: LocationOrArg| match location {
+      LocationOrArg::Arg(..) => Location::START,
+      LocationOrArg::Location(location) => location,
+    };
+    let mut order = (0 .. sub_targets.len()).collect::<Vec<_>>();
+    order.sort_by_key(|i| state_location(sub_targets[*i].2));
+    let mut forward = vec![None; sub_targets.len()];
+    for i in order {
+      let (_, place, location) = sub_targets[i];
+      let state = results.state_at(state_location(location));
+
+      let mut deps = LocationOrArgSet::new(location_domain);
+      deps.insert_all();
+      for conflict in place_info.norm_children(place_info.normalize(place)) {
+        let conflict_deps = state.row_set(&conflict);
+        trace!("place={place:?}, conflict={conflict:?}, deps={conflict_deps:?}");
+        deps.intersect(conflict_deps);
+      }
+      deps.insert(location);
+      forward[i] = Some(deps);
     }
+
+    let mut all_target_deps = all_targets
+      .iter()
+      .map(|_| TargetDeps {
+        all_forward: Vec::new(),
+      })
+      .collect::<Vec<_>>();
+    for ((i, ..), deps) in iter::zip(sub_targets, forward) {
+      all_target_deps[i].all_forward.push(deps.unwrap());
+    }
+    all_target_deps
   }
 }
 
@@ -132,10 +146,7 @@ fn compute_dependencies_inner<'tcx>(
     let all_target_deps = match precomputed {
       Some(targets) => targets,
       None => {
-        owned = all_targets
-          .iter()
-          .map(|targets| TargetDeps::new(targets, results))
-          .collect::<Vec<_>>();
+        owned = TargetDeps::all(&all_targets, results);
         &owned
       }
     };
@@ -162,8 +173,7 @@ fn compute_dependencies_inner<'tcx>(
       }
     }
 
-    for location in body.all_locations() {
-      let state = results.state_at(location);
+    results.for_each_state(|location, state| {
       let check = |place| {
         let deps = deps(state, aliases, place);
 
@@ -221,24 +231,33 @@ fn compute_dependencies_inner<'tcx>(
           }
         }
       }
-    }
+    });
   };
 
   let backward = || {
-    for (targets, outputs) in iter::zip(&all_targets, &mut *outputs.borrow_mut()) {
+    let mut outputs = outputs.borrow_mut();
+    let mut located = Vec::new();
+    for (i, targets) in all_targets.iter().enumerate() {
       for (place, location) in targets {
         match location {
           LocationOrArg::Arg(..) => {
-            outputs.insert(*location);
+            outputs[i].insert(*location);
           }
           LocationOrArg::Location(location) => {
-            let deps = results
-              .analysis
-              .deps_for(results.state_at(*location), *place);
-            outputs.union(&deps);
+            // The place queries of `deps_for` happen in the order of the targets.
+            results.analysis.prepare_deps_for(*place);
+            located.push((*location, i, *place));
           }
         }
       }
+    }
+    // Then the states, block by block (see `FlowResults::state_at`).
+    located.sort_by_key(|(location, ..)| *location);
+    for (location, i, place) in located {
+      let deps = results
+        .analysis
+        .deps_for(&results.state_at(location), place);
+      outputs[i].union(&deps);
     }
   };
 
@@ -303,10 +322,7 @@ pub fn compute_focus_spans<'tcx>(
     results.analysis.tcx,
     results.analysis.def_id.expect_local(),
   );
-  let target_deps = targets
-    .iter()
-    .map(|target| TargetDeps::new(target, results))
-    .collect::<Vec<_>>();
+  let target_deps = TargetDeps::all(&targets, results);
   let forward = compute_dependencies_inner(
     results,
     targets.clone(),
@@ -355,7 +371,7 @@ pub fn compute_focus_spans<'tcx>(
             deps.union(
               &results
                 .analysis
-                .deps_for(results.state_at(*previous), place),
+                .deps_for(&results.state_at(*previous), place),
             );
           }
           Some((arg.span, deps))

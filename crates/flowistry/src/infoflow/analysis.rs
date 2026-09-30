@@ -1,8 +1,10 @@
 use std::{
   cell::{Cell, RefCell},
+  iter,
   rc::Rc,
 };
 
+use either::Either;
 use indexical::{IndexedValue, bitset::rustc::IndexSet};
 use log::debug;
 use rustc_data_structures::fx::{FxHashMap as HashMap, FxHashSet as HashSet};
@@ -115,6 +117,7 @@ pub struct FlowAnalysis<'a, 'tcx> {
 pub(crate) struct TransferCounters {
   pub(crate) transfers: Cell<usize>,
   pub(crate) mutations: Cell<usize>,
+  pub(crate) unstable_locations: Cell<usize>,
 }
 
 /// Memoized computations of the transfer function. Each depends only on its key (a
@@ -268,6 +271,201 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       .borrow_mut()
       .insert(location, Rc::clone(&batches));
     batches
+  }
+
+  /// The number of reachable locations whose effect is not idempotent on its own
+  /// output (see [`batch_is_idempotent`](Self::batch_is_idempotent)). The block engine
+  /// computes the same states as the location engine if there are none.
+  pub(crate) fn unstable_locations(&self) -> usize {
+    let body = self.body;
+    traversal::reverse_postorder(body)
+      .flat_map(|(block, data)| {
+        (0 ..= data.statements.len()).map(move |statement_index| Location {
+          block,
+          statement_index,
+        })
+      })
+      .filter(|location| !self.effect_is_idempotent(*location))
+      .count()
+  }
+
+  /// Whether the effect `f` of `location` satisfies `f(x ∨ f(x)) = f(x)` for every
+  /// state `x`, i.e. whether applying it again to its own output adds nothing. See
+  /// [`batch_is_idempotent`](Self::batch_is_idempotent).
+  fn effect_is_idempotent(&self, location: Location) -> bool {
+    match self.body.stmt_at(location) {
+      Either::Left(statement) => {
+        let mutations = self.statement_mutations(statement, location);
+        self.batch_is_idempotent(&mutations, location)
+      }
+      Either::Right(terminator) if self.recurse() => {
+        let effects = self.effects_at(terminator, location);
+        self.batch_is_idempotent(&effects.mutations, location)
+          && self.reads_are_stable(&effects)
+      }
+      Either::Right(_) => match &*self.modular_mutations(location) {
+        [] => true,
+        [mutations] => self.batch_is_idempotent(mutations, location),
+        // Batches are applied one after the other.
+        _ => false,
+      },
+    }
+  }
+
+  /// Whether the dependencies of what a terminator reads (recorded in
+  /// [`call_reads`](Self::call_reads) from its pre-state) are the same in `x` and in
+  /// `x ∨ f(x)` for every state `x`, where `f` is the effect of the terminator.
+  ///
+  /// The location engine applies the effect of a revisited location to its own
+  /// previous output joined with its predecessors' states, so it records the reads of
+  /// `x ∨ f(x)`; the block engine records those of `x`. They are the same if the
+  /// terminator writes none of the rows it reads: a written row gains the location of
+  /// the terminator itself, which need not be among the dependencies of the reads.
+  fn reads_are_stable(&self, effects: &CallEffects<'tcx>) -> bool {
+    if effects.reads.is_empty() || effects.mutations.is_empty() {
+      return true;
+    }
+    let read = effects
+      .reads
+      .iter()
+      .flat_map(|place| self.influence_keys(*place))
+      .copied()
+      .collect::<HashSet<_>>();
+    effects.mutations.iter().all(|mt| {
+      self
+        .written_alias_keys(mt.mutated)
+        .iter()
+        .copied()
+        .chain(self.possibly_shared_rows(mt))
+        .all(|key| !read.contains(&key))
+    })
+  }
+
+  /// Whether the transfer function `f` of a batch of mutations satisfies
+  /// `f(x ∨ f(x)) = f(x)` for every state `x`.
+  ///
+  /// `f` computes the dependencies `D_i` of each mutation `i` from the rows of its
+  /// inputs and of the control dependencies in `x` (the *pre-state*), then applies the
+  /// mutations in order: each clears the children of its place if it is a strong
+  /// update, adds the rows of the provenance of its place in the current state to
+  /// `D_i`, and adds `D_i` to the rows of the aliases of its place. So `D_i` is the
+  /// union of the values in `x` of a set of *source* rows `S_i` (plus locations that
+  /// do not depend on `x`): the rows it reads from `x` (its *base* reads) and the
+  /// sources of the writers of the provenance rows it reads.
+  ///
+  /// `x ∨ f(x)` differs from `x` only in rows `w` that `f` writes, whose value becomes
+  /// that of the sources `T_w` of `f(x)(w)` (`w` itself unless a mutation clears it, and
+  /// the sources of its writers after the last clear). A base read of such a row by
+  /// mutation `i` then reads `T_w` instead of `w`. If `T_w ⊆ S_i` for every such read,
+  /// every `D_i` stays the same (by induction on `i`), and so does `f`. This is checked
+  /// here symbolically.
+  fn batch_is_idempotent(
+    &self,
+    mutations: &[Mutation<'tcx>],
+    location: Location,
+  ) -> bool {
+    if mutations.len() <= 1 {
+      return true;
+    }
+    let controlled_by = self.control_dependencies.dependent_on(location.block);
+    let control_keys = controlled_by
+      .into_iter()
+      .flat_map(|set| set.iter())
+      .filter_map(
+        |block| match &self.body.basic_blocks[block].terminator().kind {
+          TerminatorKind::SwitchInt { discr, .. } => discr.as_place(),
+          _ => None,
+        },
+      )
+      .flat_map(|discr| self.influence_keys(discr))
+      .copied()
+      .collect::<Vec<_>>();
+
+    /// The sources of the value of a row within the batch.
+    struct RowSources<'tcx> {
+      /// Whether the row still has its value from the pre-state (it is not cleared).
+      initial: bool,
+      /// The sources of the dependencies written to the row since it was cleared.
+      written: HashSet<NormPlace<'tcx>>,
+    }
+    let mut rows = HashMap::<NormPlace<'tcx>, RowSources<'tcx>>::default();
+    let mut base_reads = Vec::with_capacity(mutations.len());
+    let mut sources = Vec::with_capacity(mutations.len());
+    for mt in mutations {
+      let mut base = mt
+        .inputs
+        .iter()
+        .flat_map(|input| self.influence_keys(*input))
+        .copied()
+        .chain(control_keys.iter().copied())
+        .collect::<HashSet<_>>();
+      let mut source = base.clone();
+
+      if mt.status() == MutationStatus::Definitely
+        && self.place_info.aliases(mt.mutated).len() == 1
+      {
+        for key in self.children_keys(mt.mutated) {
+          rows.insert(*key, RowSources {
+            initial: false,
+            written: HashSet::default(),
+          });
+        }
+      }
+
+      for key in self.influence_keys(mt.mutated) {
+        match rows.get(key) {
+          Some(row) => {
+            if row.initial {
+              base.insert(*key);
+              source.insert(*key);
+            }
+            source.extend(row.written.iter().copied());
+          }
+          None => {
+            base.insert(*key);
+            source.insert(*key);
+          }
+        }
+      }
+
+      let written = self
+        .written_alias_keys(mt.mutated)
+        .iter()
+        .copied()
+        .chain(self.possibly_shared_rows(mt));
+      for key in written {
+        rows
+          .entry(key)
+          .or_insert_with(|| RowSources {
+            initial: true,
+            written: HashSet::default(),
+          })
+          .written
+          .extend(source.iter().copied());
+      }
+
+      base_reads.push(base);
+      sources.push(source);
+    }
+
+    // `rows` now holds the sources of the value in `f(x)` of every row that `f` clears
+    // or writes. A row that is only cleared keeps its value in `x ∨ f(x)`.
+    iter::zip(&base_reads, &sources).all(|(base, source)| {
+      base.iter().all(|key| match rows.get(key) {
+        Some(row) if !row.written.is_empty() => {
+          row.written.iter().all(|written| source.contains(written))
+        }
+        _ => true,
+      })
+    })
+  }
+
+  /// Makes the place queries of [`deps_for`](Self::deps_for) for `place`, which then
+  /// only reads the state.
+  pub(crate) fn prepare_deps_for(&self, place: Place<'tcx>) {
+    for reachable in self.place_info.reachable_values(place, Mutability::Not) {
+      self.influence_keys(*reachable);
+    }
   }
 
   /// Returns all the dependencies of `place` within `state`.
