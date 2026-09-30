@@ -1,6 +1,7 @@
 # Editor invalidation for compiler inputs
 
-This feature-11 increment follows #56 in the unified backend/editor stack.
+Draft [#57](https://github.com/sushi-shi/flowistry/pull/57) follows #56 in the
+unified backend/editor stack as the next feature-11 increment.
 It connects the editor's save handling to the input paths already collected by
 the shared response cache. It does not introduce another validity cache.
 
@@ -44,6 +45,20 @@ actual compiler/backend/editor saves of an external include, path dependency,
 external build input and ancestor Cargo config in both modes, with background
 workers enabled for Recurse. Its recorded timings are loaded-machine functional
 observations, not the repeated quiet save distributions required by the plan.
+
+Frozen candidate `fda9c7e8efca3e338334b5e7ff243205c990f7c9` passes 366 frontend
+assertions, 31 real-editor assertions covering eight saves in both modes, 20 IDE
+unit tests and 16 publication cases. Its backend executables are byte-identical
+to the earlier `689c60f09` archive used by the publication and Rust tests; later
+changes refined editor workspace identity and test fixtures. The
+[durable evidence](measurements/editor-input-invalidation.json) records both
+builds, exact report/harness hashes, passing case coverage and the unsuccessful
+fixture attempt retained separately. A parent-workspace regression verifies that
+configuration rediscovery cannot resume compilation while that input is dirty.
+The [paired-package gate](https://github.com/sushi-shi/flowistry/actions/runs/36731870757/job/109943332290)
+passes at this runtime revision. Five supplemental scheduler assertions verify
+that background input discovery rejects intervening edits before decoding and
+resumes only for the new generation; runtime files are unchanged.
 
 The broader [continuation plan](continuation-plan.md) remains active: final edit
 and corpus gates, the rustc-incremental experiment, safe layout reuse and measured

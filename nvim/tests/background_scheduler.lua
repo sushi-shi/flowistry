@@ -171,6 +171,29 @@ local ok, err = xpcall(function()
   check(streams[10].context.root == path_b, "waiting workspace makes progress")
   bounded:close()
   streams[10].done(nil, { code = 130, cancelled = true })
+
+  local input_revision, accepted = 0, 0
+  local discovery = manager_module.new(config, {
+    valid = function(state) return valid[state.buf] == state end,
+    dirty = function() return false end,
+    revision = function() return input_revision end,
+    result = function() accepted = accepted + 1 end,
+  })
+  local before_decode = #decoded
+  discovery:attach(a)
+  await(function() return #streams == 11 end, "input discovery starts")
+  input_revision = input_revision + 1
+  streams[11].event(body(a, "old-inputs"))
+  check(streams[11].cancelled and #decoded == before_decode, "edit before watch discovery rejects background output before decoding")
+  streams[11].done(nil, { code = 130, cancelled = true })
+  await(function() return #streams == 12 end, "input discovery resumes for the new revision")
+  streams[11].event(body(a, "late-old-inputs"))
+  check(#decoded == before_decode, "old discovery completion cannot cross generations")
+  streams[12].event(body(a, "current-inputs"))
+  decoded[#decoded].callback(nil, {}, 10)
+  check(accepted == 1, "only the current discovered revision is delivered")
+  discovery:close()
+  streams[12].done(nil, { code = 130, cancelled = true })
 end, debug.traceback)
 m:close()
 if not ok then io.stderr:write(err .. "\n"); vim.cmd("cquit 1") end
