@@ -101,6 +101,13 @@ impl rustc_driver::Callbacks for Callbacks {
       }
       Ok(FileOutput { bodies })
     })());
+    if tcx.dcx().has_errors().is_none() {
+      if crate::plugin::postprocess(self.output.take().unwrap()).is_ok() {
+        use std::io::Write;
+        std::io::stdout().flush().unwrap();
+        std::process::exit(0);
+      }
+    }
     rustc_driver::Compilation::Stop
   }
 }

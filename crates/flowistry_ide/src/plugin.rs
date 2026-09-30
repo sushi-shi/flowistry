@@ -234,7 +234,7 @@ impl RustcPlugin for FlowistryPlugin {
   }
 }
 
-fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
+pub(crate) fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
   let result = match result {
     Ok(output) => Ok(output),
     Err(e) => match e {
@@ -276,7 +276,24 @@ pub fn run_with_callbacks(
   args: &[String],
   callbacks: &mut (dyn rustc_driver::Callbacks + Send),
 ) -> FlowistryResult<()> {
-  let mut args = args.to_vec();
+  // The analyses ask rustc for the few bodies they need (see `after_expansion`), so
+  // loading and saving the incremental state cost more than it saves: ~10% of the
+  // instructions of a typical focus.
+  let mut kept = Vec::with_capacity(args.len());
+  let mut rest = args.iter();
+  while let Some(arg) = rest.next() {
+    if arg == "-C"
+      && rest
+        .clone()
+        .next()
+        .is_some_and(|next| next.starts_with("incremental="))
+    {
+      rest.next();
+    } else if !arg.starts_with("-Cincremental=") {
+      kept.push(arg.clone());
+    }
+  }
+  let mut args = kept;
   args.extend(
     "-Z identify-regions -Z mir-opt-level=0 -A warnings -Z maximal-hir-to-mir-coverage"
       .split(' ')
@@ -389,6 +406,25 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
       }
       analysis.analyze(tcx, body)
     })());
+
+    // Without errors, write the output and exit: tearing down the compiler (freeing
+    // its arenas and source files) takes longer than analyzing most bodies. With
+    // errors, the driver reports them and fails the request as before.
+    if tcx.dcx().has_errors().is_none() {
+      let output =
+        self
+          .output
+          .take()
+          .unwrap()
+          .map_err(|e| FlowistryError::AnalysisError {
+            error: e.to_string(),
+          });
+      if postprocess(output).is_ok() {
+        use std::io::Write;
+        std::io::stdout().flush().unwrap();
+        std::process::exit(0);
+      }
+    }
 
     rustc_driver::Compilation::Stop
   }
