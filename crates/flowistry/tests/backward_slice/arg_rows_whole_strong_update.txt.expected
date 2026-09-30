@@ -1,0 +1,10 @@
+struct S { a: i32, b: (i32, i32) }
+
+fn f(`[mut s: S]`, `[t: S]`) {
+  `[let before = s.b.1;]`
+  `[s = t;]`
+  `[let x = s.a + s.b.0 + before;]`
+  `[x;]`
+}
+
+fn main() {}

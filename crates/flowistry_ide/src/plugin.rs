@@ -24,7 +24,7 @@ use rustc_utils::{
   source_map::{
     filename::Filename,
     find_bodies::find_enclosing_bodies,
-    range::{CharPos, CharRange, FunctionIdentifier, ToSpan},
+    range::{CharPos, CharRange, ToSpan},
   },
   timer::elapsed,
 };
@@ -48,6 +48,11 @@ pub struct FlowistryPluginArgs {
 
 #[derive(Subcommand, Serialize, Deserialize)]
 enum FlowistryCommand {
+  FileFocus {
+    file: String,
+    pos_line: Option<usize>,
+    pos_column: Option<usize>,
+  },
   Spans {
     file: String,
   },
@@ -74,6 +79,23 @@ enum FlowistryCommand {
   Preload,
 
   RustcVersion,
+}
+
+/// The plugin arguments of this `cargo flowistry` invocation, serialized as
+/// `rustc_plugin` passes them to the driver, and the file they are about. `None` for
+/// commands that do not run the driver on a crate.
+pub fn replay_request() -> Option<(String, PathBuf)> {
+  let args = FlowistryPluginArgs::try_parse_from(env::args().skip(1)).ok()?;
+  use FlowistryCommand::*;
+  let file = match &args.command {
+    Spans { file }
+    | FileFocus { file, .. }
+    | Focus { file, .. }
+    | Decompose { file, .. }
+    | Playground { file, .. } => PathBuf::from(file),
+    Preload | RustcVersion => return None,
+  };
+  Some((serde_json::to_string(&args).ok()?, file))
 }
 
 pub struct FlowistryPlugin;
@@ -114,6 +136,7 @@ impl RustcPlugin for FlowistryPlugin {
     };
 
     let file = match &args.command {
+      FileFocus { file, .. } => file,
       Spans { file, .. } => file,
       Focus { file, .. } => file,
       Decompose { file, .. } => file,
@@ -132,6 +155,7 @@ impl RustcPlugin for FlowistryPlugin {
     compiler_args: Vec<String>,
     plugin_args: FlowistryPluginArgs,
   ) -> RustcResult<()> {
+    crate::replay::record(&compiler_args);
     let eval_mode = EvalMode {
       context_mode: plugin_args.context_mode.unwrap_or(ContextMode::SigOnly),
       mutability_mode: plugin_args
@@ -143,6 +167,17 @@ impl RustcPlugin for FlowistryPlugin {
 
     use FlowistryCommand::*;
     match plugin_args.command {
+      FileFocus {
+        file,
+        pos_line,
+        pos_column,
+      } => postprocess(crate::file_focus::analyze(
+        &compiler_args,
+        file,
+        pos_line
+          .zip(pos_column)
+          .map(|(line, column)| CharPos { line, column }),
+      )),
       Spans { file, .. } => postprocess(crate::spans::spans(&compiler_args, file)),
       Playground {
         file,
@@ -152,16 +187,18 @@ impl RustcPlugin for FlowistryPlugin {
         end_column,
         ..
       } => {
-        let compute_target = || CharRange {
-          start: CharPos {
-            line: start_line,
-            column: start_column,
-          },
-          end: CharPos {
-            line: end_line,
-            column: end_column,
-          },
-          filename: Filename::intern(&file),
+        let compute_target = || {
+          crate::positions::Chars(CharRange {
+            start: CharPos {
+              line: start_line,
+              column: start_column,
+            },
+            end: CharPos {
+              line: end_line,
+              column: end_column,
+            },
+            filename: Filename::intern(&file),
+          })
         };
         postprocess(run(
           crate::playground::playground,
@@ -186,7 +223,7 @@ impl RustcPlugin for FlowistryPlugin {
             filename: Filename::intern(&file),
           };
           debug!("eyo WTF {range:?} {file}");
-          FunctionIdentifier::Range(range)
+          crate::positions::Chars(range)
         };
         postprocess(run(crate::focus::focus, compute_target, &compiler_args))
       }
@@ -215,7 +252,7 @@ impl RustcPlugin for FlowistryPlugin {
   }
 }
 
-fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
+pub(crate) fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
   let result = match result {
     Ok(output) => Ok(output),
     Err(e) => match e {
@@ -230,7 +267,10 @@ fn postprocess<T: Serialize>(result: FlowistryResult<T>) -> RustcResult<()> {
   let serialize_timer = Instant::now();
   // serde_json writes token by token. Without a buffer every tiny write goes through
   // the compressor, which dominated the run time for large focus outputs.
-  let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+  // Level 6 (zlib's default) compresses about twice as fast as level 9 (`best`); the
+  // output is larger (e.g. 2.6 instead of 1.5 MB for a 195 MB JSON), but it only goes
+  // through a local pipe.
+  let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::new(6));
   let mut writer = std::io::BufWriter::with_capacity(1 << 16, encoder);
   serde_json::to_writer(&mut writer, &result).unwrap();
   let buffer = writer
@@ -254,7 +294,24 @@ pub fn run_with_callbacks(
   args: &[String],
   callbacks: &mut (dyn rustc_driver::Callbacks + Send),
 ) -> FlowistryResult<()> {
-  let mut args = args.to_vec();
+  // The analyses ask rustc for the few bodies they need (see `after_expansion`), so
+  // loading and saving the incremental state cost more than it saves: ~10% of the
+  // instructions of a typical focus.
+  let mut kept = Vec::with_capacity(args.len());
+  let mut rest = args.iter();
+  while let Some(arg) = rest.next() {
+    if arg == "-C"
+      && rest
+        .clone()
+        .next()
+        .is_some_and(|next| next.starts_with("incremental="))
+    {
+      rest.next();
+    } else if !arg.starts_with("-Cincremental=") {
+      kept.push(arg.clone());
+    }
+  }
+  let mut args = kept;
   args.extend(
     "-Z identify-regions -Z mir-opt-level=0 -A warnings -Z maximal-hir-to-mir-coverage"
       .split(' ')
@@ -335,7 +392,12 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
     config.override_queries = Some(borrowck_facts::override_queries);
   }
 
-  fn after_analysis<'tcx>(
+  /// Runs the analysis as soon as the crate is expanded and resolved, instead of after
+  /// rustc's whole-crate `analysis` pass. rustc's queries are demand-driven, so only
+  /// the target body and what the analysis needs (in `Recurse` mode, its callees) are
+  /// type-checked and borrow-checked, with borrowck facts collected for those only.
+  /// Errors elsewhere in the crate therefore do not stop the analysis.
+  fn after_expansion<'tcx>(
     &mut self,
     _compiler: &rustc_interface::interface::Compiler,
     tcx: TyCtxt<'tcx>,
@@ -349,8 +411,38 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
       debug!("target span: {target:?}");
       let mut bodies = find_enclosing_bodies(tcx, target);
       let body = bodies.next().context("Selection did not map to a body")?;
+      // The whole-crate pass used to stop on errors before the analysis ran. Keep
+      // the analysis away from bodies that do not type-check; the errors are
+      // reported and fail the request as before.
+      if let Some(guar) = tcx
+        .typeck(tcx.hir_body_owner_def_id(body))
+        .tainted_by_errors
+      {
+        return Err(anyhow::Error::msg(format!(
+          "the selected function does not type-check: {guar:?}"
+        )));
+      }
       analysis.analyze(tcx, body)
     })());
+
+    // Without errors, write the output and exit: tearing down the compiler (freeing
+    // its arenas and source files) takes longer than analyzing most bodies. With
+    // errors, the driver reports them and fails the request as before.
+    if tcx.dcx().has_errors().is_none() {
+      let output =
+        self
+          .output
+          .take()
+          .unwrap()
+          .map_err(|e| FlowistryError::AnalysisError {
+            error: e.to_string(),
+          });
+      if postprocess(output).is_ok() {
+        use std::io::Write;
+        std::io::stdout().flush().unwrap();
+        std::process::exit(0);
+      }
+    }
 
     rustc_driver::Compilation::Stop
   }
