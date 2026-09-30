@@ -1,0 +1,391 @@
+{
+  "cache_modes": {
+    "base": "off",
+    "compare": "warm"
+  },
+  "checkpoint_id": "7cfeb7961cc291751952b4a23ef0ab7f11d9a9f1c5a68cb55c9487a0f7d94dcb",
+  "command": "file-focus",
+  "coverage_complete": true,
+  "crates": [
+    {
+      "expected": 120,
+      "name": "itertools",
+      "recorded": 120,
+      "source_sha256": "9d3a06ec81173d059728e0991a6b2c0e03ef65a8040875ce0f7a715b4774d42c"
+    },
+    {
+      "expected": 120,
+      "name": "either",
+      "recorded": 120,
+      "source_sha256": "93c1007a1e058a567ca97ddb7e861b899c4bd3667083f27f2f8e053e5e4199f1"
+    },
+    {
+      "expected": 120,
+      "name": "smallvec",
+      "recorded": 120,
+      "source_sha256": "c0c7b4441c767a06d912f595304ad09444627008262410a36183f116575e9626"
+    },
+    {
+      "expected": 120,
+      "name": "indexmap",
+      "recorded": 120,
+      "source_sha256": "889016eda5ef5e370d88072aa0ce7cbc3f01dad5adc9b19c8d20aa0d12b4ed6a"
+    },
+    {
+      "expected": 120,
+      "name": "hashbrown",
+      "recorded": 120,
+      "source_sha256": "3dbd523bb86e4c7bc4fb154725a689647fe4912320f0dac19f03f96b5c3de42f"
+    },
+    {
+      "expected": 120,
+      "name": "serde_json",
+      "recorded": 120,
+      "source_sha256": "77089cbcc3d2892f20662e955aeedf4ace81a4bffebf0b399c899ff407c57b64"
+    },
+    {
+      "expected": 120,
+      "name": "regex-syntax",
+      "recorded": 120,
+      "source_sha256": "d04402fafc2b4785f0a15640e7d2e9934d41e99b097e2c5bcdd06562772e122a"
+    },
+    {
+      "expected": 120,
+      "name": "anyhow",
+      "recorded": 120,
+      "source_sha256": "7386094031646caa5dc181f2a0539e8e0b1a26173c33c3fe6accfc0de0abf74a"
+    },
+    {
+      "expected": 120,
+      "name": "bitflags",
+      "recorded": 120,
+      "source_sha256": "a9b59fb30f4762895b79370d7fc991eb579db76c8a281a2ad2a4ab89ea7e7b76"
+    },
+    {
+      "expected": 120,
+      "name": "memchr",
+      "recorded": 120,
+      "source_sha256": "9ab8664f80a61f435bdb0e0273208c4e0e6525e8442d4447d7771c19d19d30bb"
+    },
+    {
+      "expected": 120,
+      "name": "just",
+      "recorded": 120,
+      "source_sha256": "bd40083bf9b68abc7306a4ac547fe17d2b9ada7fc2eadaaa1327e580f4d46d08"
+    },
+    {
+      "expected": 120,
+      "name": "tokei",
+      "recorded": 120,
+      "source_sha256": "30cdab0cccbf2a9cd0dcad6a6627337697783446ebb1573e7efdf768d11a5f49"
+    },
+    {
+      "expected": 120,
+      "name": "alacritty",
+      "recorded": 120,
+      "source_sha256": "e10d463cc0b5fa6dd3863e058d37b8d6d0ce89a1cb41e95d1399209bff421af9"
+    },
+    {
+      "expected": 120,
+      "name": "niri",
+      "recorded": 120,
+      "source_sha256": "41fee20907068b0302ca4a1889ec606a6ce7b3f0bb920a9fd5cad2e1fd20e8b2"
+    },
+    {
+      "expected": 120,
+      "name": "helix",
+      "recorded": 120,
+      "source_sha256": "839383127eda97224c9a4137ea5d8dce7437b7242e506d30f6319c7eef38f9c6"
+    },
+    {
+      "expected": 120,
+      "name": "bevy",
+      "recorded": 120,
+      "source_sha256": "b1fb2c4e8cc7a4e822f1e6f8dc872c6cfd3e7629f6df74203bc1093442db56ee"
+    },
+    {
+      "expected": 120,
+      "name": "brains",
+      "recorded": 120,
+      "source_sha256": "f1462540e5e76be078bb1074e5a70dea2939e966955e82a5cc5df8a8975a4db0"
+    },
+    {
+      "expected": 120,
+      "name": "local_lru",
+      "recorded": 120,
+      "source_sha256": "8e8f4007821ac3d49df511937f0e15013c902d6d82a42a5e962bc4840d61640d"
+    },
+    {
+      "expected": 120,
+      "name": "cargo-inspect",
+      "recorded": 120,
+      "source_sha256": "e6cb01a86d6c3090a9623e4bd1154e2ea6bda0ca121f8e32ba61539e5bb31a74"
+    },
+    {
+      "expected": 120,
+      "name": "biodiff",
+      "recorded": 120,
+      "source_sha256": "d6b9c7fe416d06abefcd200fadee6d866d97cff0df2ac799a48b7d1879b70fe1"
+    },
+    {
+      "expected": 120,
+      "name": "objdiff",
+      "recorded": 120,
+      "source_sha256": "ab3e39a72c0e0748432114db5e36fec522921aec7c7791f3aee48ebf498d6fd4"
+    },
+    {
+      "expected": 120,
+      "name": "boxxy",
+      "recorded": 120,
+      "source_sha256": "d9d18e1ee34fe566093ecbc7866a5d8fd65aabc36250e6ef835272b7b98e9973"
+    },
+    {
+      "expected": 120,
+      "name": "sudo-rs",
+      "recorded": 120,
+      "source_sha256": "999c989c435b9c699361fe7de178410c33c8ca9d102c943d9a9302162bfe840b"
+    },
+    {
+      "expected": 120,
+      "name": "bosminer",
+      "recorded": 120,
+      "source_sha256": "499b91234f4766bd54026e5249f78cb974daad39559bca3111ed6ea697190167"
+    }
+  ],
+  "exception_classification": "Legacy harness labels remain crash, but both compiler exit codes are zero. These are unresolved foreign FilenameIndex decoder failures at just src/unindent.rs:49:23 in both modes, fixed by PR #50.",
+  "exceptions": [
+    {
+      "base": {
+        "max_rss_mb": 181,
+        "message": "no decodable response: ",
+        "returncode": 0,
+        "seconds": 0.39,
+        "status": "crash",
+        "stderr_tail": ""
+      },
+      "column": 23,
+      "compare": {
+        "max_rss_mb": 186,
+        "message": "no decodable response: ",
+        "returncode": 0,
+        "seconds": 0.63,
+        "status": "crash",
+        "stderr_tail": "",
+        "warmup_message": "no decodable response: ",
+        "warmup_status": "crash"
+      },
+      "crate": "just-4cca0e099b7b",
+      "file": "src/unindent.rs",
+      "line": 49,
+      "mode": "SigOnly",
+      "recorded_at": "2026-09-30T08:32:52Z",
+      "same": true
+    },
+    {
+      "base": {
+        "max_rss_mb": 180,
+        "message": "no decodable response: ",
+        "returncode": 0,
+        "seconds": 0.4,
+        "status": "crash",
+        "stderr_tail": ""
+      },
+      "column": 23,
+      "compare": {
+        "max_rss_mb": 186,
+        "message": "no decodable response: ",
+        "returncode": 0,
+        "seconds": 0.62,
+        "status": "crash",
+        "stderr_tail": "",
+        "warmup_message": "no decodable response: ",
+        "warmup_status": "crash"
+      },
+      "crate": "just-4cca0e099b7b",
+      "file": "src/unindent.rs",
+      "line": 49,
+      "mode": "Recurse",
+      "recorded_at": "2026-09-30T08:32:54Z",
+      "same": true
+    }
+  ],
+  "gate": "incomplete: two legacy decoder failures; rerun at filename-fixed final tip required",
+  "measurement": {
+    "ambient_cache": "off",
+    "cargo_replay": "inherit",
+    "cpu_count": 24,
+    "kernel": "6.18.52",
+    "load_end": [
+      13.740234375,
+      16.23779296875,
+      15.2919921875
+    ],
+    "load_start": [
+      7.14013671875,
+      5.197265625,
+      3.0751953125
+    ],
+    "machine": "x86_64",
+    "perf": null,
+    "perf_sha256": null,
+    "phases": false,
+    "repeat": 1,
+    "sample_order": "alternating A/B, B/A",
+    "warmup": 0
+  },
+  "modes": [
+    "SigOnly",
+    "Recurse"
+  ],
+  "records": 2880,
+  "report": "/home/sheep/Projects/flowistry/target/continuation-validation/file-cache-resolved.json",
+  "schema": 1,
+  "sha256": "4a7ba975cb55daeab0c92bee797e78a888a8b83113a7035d019dada5d8683bcf",
+  "status_counts": [
+    {
+      "base": "ok",
+      "compare": "ok",
+      "count": 2878,
+      "same": true
+    },
+    {
+      "base": "crash",
+      "compare": "crash",
+      "count": 2,
+      "same": true
+    }
+  ],
+  "timing_claim": "Loaded-machine correctness run; no latency or speedup claim.",
+  "validation_manifest": {
+    "backends": {
+      "base": {
+        "cargo-flowistry": "9999414b717ce332609f6e75e2623789f1ffc75b5ba8badc4aad590f4d1096d2",
+        "flowistry-driver": "543d3f79399d01cdcda63fc937320436375a8f15fec1d7a8da0cb784d73559bc"
+      },
+      "compare": {
+        "cargo-flowistry": "9999414b717ce332609f6e75e2623789f1ffc75b5ba8badc4aad590f4d1096d2",
+        "flowistry-driver": "543d3f79399d01cdcda63fc937320436375a8f15fec1d7a8da0cb784d73559bc"
+      }
+    },
+    "builds": {
+      "base": {
+        "binaries": {
+          "cargo-flowistry": "9999414b717ce332609f6e75e2623789f1ffc75b5ba8badc4aad590f4d1096d2",
+          "flowistry-driver": "543d3f79399d01cdcda63fc937320436375a8f15fec1d7a8da0cb784d73559bc"
+        },
+        "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+        "cargo_encoded_rustflags": "",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "-p",
+          "flowistry_ide",
+          "-j",
+          "4"
+        ],
+        "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+        "features": "",
+        "profile": {},
+        "recorded_at": "2026-09-30T04:35:10.696665+00:00",
+        "revision": "235760027b3945bb54005e39182bdc2eaa0d69ef",
+        "rustflags": "",
+        "tree": "434d2d5ff583b7714a3b456c0fcd3a6b36ba8c58"
+      },
+      "compare": {
+        "binaries": {
+          "cargo-flowistry": "9999414b717ce332609f6e75e2623789f1ffc75b5ba8badc4aad590f4d1096d2",
+          "flowistry-driver": "543d3f79399d01cdcda63fc937320436375a8f15fec1d7a8da0cb784d73559bc"
+        },
+        "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+        "cargo_encoded_rustflags": "",
+        "command": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "-p",
+          "flowistry_ide",
+          "-j",
+          "4"
+        ],
+        "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+        "features": "",
+        "profile": {},
+        "recorded_at": "2026-09-30T04:35:10.696665+00:00",
+        "revision": "235760027b3945bb54005e39182bdc2eaa0d69ef",
+        "rustflags": "",
+        "tree": "434d2d5ff583b7714a3b456c0fcd3a6b36ba8c58"
+      }
+    },
+    "cache_dir": "/home/sheep/Projects/flowistry/target/continuation-validation/file-cache-stores",
+    "checkpoint_implementation": "5b0fbcdc51c14bb03aa7e51cdfbbad15b831804d842b81371e852aa9b02fadc8",
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "configuration_inputs": {
+      "/.cargo/config": null,
+      "/.cargo/config.toml": null,
+      "/home/.cargo/config": null,
+      "/home/.cargo/config.toml": null,
+      "/home/rust-toolchain": null,
+      "/home/rust-toolchain.toml": null,
+      "/home/sheep/.cargo/config": null,
+      "/home/sheep/.cargo/config.toml": null,
+      "/home/sheep/Projects/.cargo/config": null,
+      "/home/sheep/Projects/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/rust-toolchain.toml": "704b46d5f5b659d1b649193366f9db98e2f1cd1570d6ce53526109131bcad831",
+      "/home/sheep/Projects/flowistry/target/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/engine/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/rust-toolchain.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/rust-toolchain.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/.cargo/config": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/.cargo/config.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates/rust-toolchain.toml": null,
+      "/home/sheep/Projects/flowistry/target/engine/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/engine/rust-toolchain.toml": null,
+      "/home/sheep/Projects/flowistry/target/rust-toolchain": null,
+      "/home/sheep/Projects/flowistry/target/rust-toolchain.toml": null,
+      "/home/sheep/Projects/rust-toolchain": null,
+      "/home/sheep/Projects/rust-toolchain.toml": null,
+      "/home/sheep/rust-toolchain": null,
+      "/home/sheep/rust-toolchain.toml": null,
+      "/rust-toolchain": null,
+      "/rust-toolchain.toml": null
+    },
+    "corpus": "fef31dfe97db3c94748766e9c97edea7b39052d3436c69ab28a967c26f66fffd",
+    "environment_sha256": "4b5e17733f7c806fed095bdb9d1f4a097c8893c985b815ab58cb74e83dabfa1b",
+    "harness": "cdf528fcea13318705f40a610113a8fab4f85995d0bd24d38501ee1cf8ebed61",
+    "measurement_settings": {
+      "cargo_replay": "inherit",
+      "warmup": 0
+    },
+    "schema": 1,
+    "settings": {
+      "base_cache": "off",
+      "budgets": null,
+      "command": "file-focus",
+      "compare_cache": "warm",
+      "memory_limit": "6G",
+      "modes": [
+        "SigOnly",
+        "Recurse"
+      ],
+      "phases": false,
+      "repeat": 1,
+      "timeout": 600
+    },
+    "work_dir": "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates"
+  }
+}

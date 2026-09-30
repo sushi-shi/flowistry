@@ -37,5 +37,10 @@ The corrected legacy run subsequently encountered a foreign macro-source index a
 but the filename identity is absent from the legacy protocol. An isolated source
 copy reproduces this failure. The [filename-table fix](file-focus-identities.md)
 adds explicit identities and resolves the case while preserving every preexisting
-output field. The legacy run remains useful coverage evidence and is left running;
-its two raw `crash` classifications are retained with this protocol-error triage.
+output field. The legacy run has finished with exact coverage of all 2,880 locked
+selections: 2,878 equal successful pairs and those two decoder failures. Its two
+raw `crash` classifications remain unchanged with this protocol-error triage;
+both compiler exit codes were zero. The
+[completed report](measurements/file-cache-resolved-complete.json) records exact
+coverage, provenance and the raw exceptions. The filename-fixed final-tip cache
+gate remains required; this older run is not relabeled as a full pass.

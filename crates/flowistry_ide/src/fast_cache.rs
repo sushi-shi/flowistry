@@ -1078,6 +1078,7 @@ fn cached_run() -> Option<ExitCode> {
 }
 
 pub fn run() -> ExitCode {
+  #[cfg(target_os = "linux")]
   if let Some(code) = crate::project_process::internal() {
     return code;
   }

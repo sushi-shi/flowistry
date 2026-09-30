@@ -292,6 +292,13 @@ fn supervise(request: Request) -> anyhow::Result<Outcome> {
       next_discovery = Instant::now() + Duration::from_millis(100);
     }
     worker.sample();
+    // A killed compiler can leave Cargo or a build-script descendant waiting on
+    // inherited pipes. Treat the kernel's OOM event as terminal for this body,
+    // stop the entire scope, and move on without waiting for the timeout.
+    if worker.oom > 0 {
+      reason = "oom";
+      break None;
+    }
     if let Some(status) = worker.child.try_wait()? {
       break Some(status);
     }
@@ -311,6 +318,13 @@ fn supervise(request: Request) -> anyhow::Result<Outcome> {
   }
   if reason == "exited" && stdout_overflow.load(Ordering::Relaxed) {
     reason = "output_limit";
+  }
+  if reason == "exited" && status.is_some_and(|status| !status.success()) {
+    reason = if status.is_some_and(|status| status.code().is_none()) {
+      "signal"
+    } else {
+      "worker_error"
+    };
   }
   Ok(Outcome {
     status: reason.into(),

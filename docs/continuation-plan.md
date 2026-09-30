@@ -9,8 +9,9 @@ save handling. It supersedes the phase ordering in the earlier
 The persistent semantic cache and snapshot replay are already implemented in
 backend #2. The starting backend is `2630ee356`; the matching Neovim tip is
 `34c447e`. Documentation continues in #40. Existing PRs remain unmerged until
-review. New backend PRs form a single continuation after #40; editor PRs continue
-after nvim#4, with their backend dependencies and compatible pins recorded.
+review. New work forms a single continuation after #40. Since #53, the editor is in
+`nvim/` and all backend/editor PRs extend the same chain and root Nix package;
+the historical separate editor stack is superseded.
 
 Each numbered item is a reviewable feature or evidence milestone. Split a feature
 into consecutive PRs if necessary; preserve the sequence and its acceptance gate.
@@ -214,7 +215,7 @@ outcomes. Compare total project time and time to first useful result with featur
 
 ## 10. Background analysis in Neovim
 
-**Depends on:** 9; editor PR after nvim#4, pinned to its tested backend.
+**Depends on:** 9; continue after the coordinator in the monorepo PR chain.
 
 **Deliverable:** one coordinated background job per enabled workspace, progress,
 foreground priority, and analysis available across functions without repeated
@@ -229,8 +230,8 @@ control and distinguish saved analysis from current-buffer state.
 
 **Done when:** navigation, multiple buffers/workspaces, workspace changes, restart,
 cancellation and compiler failures behave correctly in headless editor tests;
-foreground latency and total background resource use are measured. Update the Nix
-pin and test the packaged integration before enabling this behavior by default.
+foreground latency and total background resource use are measured. Test the shared root Nix
+package before enabling this behavior by default.
 
 ## 11. Dependency-aware incremental save handling
 

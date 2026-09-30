@@ -33,6 +33,7 @@ mod plugin;
 mod positions;
 mod project;
 mod project_coordinator;
+#[cfg(target_os = "linux")]
 mod project_process;
 mod replay;
 mod result_store;
