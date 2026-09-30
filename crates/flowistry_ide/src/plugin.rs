@@ -497,6 +497,16 @@ pub fn run_with_callbacks(
     }
   }
   let mut args = kept;
+  let experiment = std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL").unwrap_or_default();
+  if matches!(experiment.as_str(), "retain" | "stop" | "finish") {
+    let directory = std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL_DIR")
+      .expect("isolated incremental directory");
+    args.extend([
+      "-C".into(),
+      format!("incremental={directory}"),
+      "-Zincremental-info".into(),
+    ]);
+  }
   args.extend(
     "-Z identify-regions -Z mir-opt-level=0 -A warnings -Z maximal-hir-to-mir-coverage"
       .split(' ')
@@ -504,8 +514,21 @@ pub fn run_with_callbacks(
   );
 
   log::info!(target: "flowistry::audit", "audit compiler");
+  log::info!(target: "flowistry::audit", "audit incremental experiment={experiment}");
   rustc_driver::catch_fatal_errors(move || rustc_driver::run_compiler(&args, callbacks))
     .map_err(|_| FlowistryError::BuildError)
+}
+
+pub(crate) fn experiment_finalize(tcx: TyCtxt<'_>) {
+  if std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL").as_deref() == Ok("finish") {
+    let hash = tcx.crate_hash(rustc_hir::def_id::LOCAL_CRATE);
+    tcx.finish();
+    rustc_incremental::finalize_session_directory(tcx.sess, Some(hash));
+  }
+}
+
+pub(crate) fn experiment_stop() -> bool {
+  std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL").as_deref() == Ok("stop")
 }
 
 fn run<A: FlowistryAnalysis, T: ToSpan>(
@@ -614,7 +637,8 @@ impl<A: FlowistryAnalysis, T: ToSpan, F: FnOnce() -> T> rustc_driver::Callbacks
     // Without errors, write the output and exit: tearing down the compiler (freeing
     // its arenas and source files) takes longer than analyzing most bodies. With
     // errors, the driver reports them and fails the request as before.
-    if tcx.dcx().has_errors().is_none() {
+    if tcx.dcx().has_errors().is_none() && !experiment_stop() {
+      experiment_finalize(tcx);
       let output =
         self
           .output
