@@ -36,6 +36,7 @@ exceeded), else 0.
 
 import argparse
 import base64
+import codecs
 import concurrent.futures
 import glob
 import gzip
@@ -492,8 +493,140 @@ def crash_signature(stderr):
     return "no decodable response: " + last_lines(stderr, 2)
 
 
+OK_PREFIX = '{"Ok":{"place_info":['
+RANGE_LIST_FIELDS = ("ranges", "slice", "direct_influence", "maybe_slice")
+
+
+def canonical_entry(entry, table=None):
+    """The canonical JSON of one `place_info` entry (see `canonical`)."""
+    def key(x):
+        return json.dumps(x, sort_keys=True)
+
+    entry = dict(entry)
+    def resolve(index):
+        # Reject malformed references rather than accepting Python's negative indices.
+        if type(index) is not int or not 0 <= index < len(table):
+            raise ValueError(f"invalid range-table index: {index!r}")
+        return table[index]
+
+    if table is not None and "range" in entry:
+        entry["range"] = resolve(entry["range"])
+    for field in RANGE_LIST_FIELDS:
+        if field in entry:
+            ranges = entry[field]
+            if table is not None:
+                ranges = [resolve(index) for index in ranges]
+            # The editor treats highlight ranges as sets. Duplicate spans and
+            # their iteration order do not change the displayed analysis.
+            unique = {key(r): r for r in ranges}
+            entry[field] = [unique[value] for value in sorted(unique)]
+    return key(entry)
+
+
+def decode_response(encoded, keep_output):
+    """Decode a focus response (base64 of gzipped JSON).
+
+    With `keep_output`, returns the parsed response. Otherwise an `Ok` response is not
+    kept: it becomes {"Ok": {"digest": ..., "places": n}}, where the digest identifies the
+    canonical form of the output (`canonical`), so two outputs have the same digest if and
+    only if their canonical forms are equal (barring SHA-256 collisions). The output is
+    decompressed and parsed entry by entry, so the harness never holds a whole output: large
+    outputs (hundreds of MB of JSON) would otherwise take many GB of Python objects.
+    """
+    data = base64.b64decode(encoded, validate=True)
+    if keep_output:
+        return json.loads(gzip.decompress(data))
+    decompressor = zlib.decompressobj(wbits=31)
+    text_decoder = codecs.getincrementaldecoder("utf-8")()
+    chunks = (data[i:i + (1 << 20)] for i in range(0, len(data), 1 << 20))
+    finished = False
+
+    def more():
+        nonlocal finished
+        for chunk in chunks:
+            text = text_decoder.decode(decompressor.decompress(chunk))
+            if text:
+                return text
+        finished = True
+        return text_decoder.decode(decompressor.flush(), final=True)
+
+    buffer = ""
+    while len(buffer) < len(OK_PREFIX) and not finished:
+        buffer += more()
+    if not buffer.startswith(OK_PREFIX):
+        # Not the compact form the backend writes: parse it whole.
+        while not finished:
+            buffer += more()
+        response = json.loads(buffer)
+        if "Ok" not in response:
+            return response
+        tail = dict(response["Ok"])
+        entries = tail.pop("place_info", [])
+        table = tail.pop("ranges", None)
+        return output_digest([entry_digest(entry, table) for entry in entries], tail)
+
+    decoder = json.JSONDecoder()
+    digests = []
+    indexed_entries = []
+    pos = len(OK_PREFIX)
+    while True:
+        while pos < len(buffer) and buffer[pos] in " \t\r\n,":
+            pos += 1
+        if pos == len(buffer):
+            if finished:
+                raise ValueError("truncated focus output")
+            buffer = buffer[pos:] + more()
+            pos = 0
+            continue
+        if buffer[pos] == "]":
+            break
+        try:
+            entry, end = decoder.raw_decode(buffer, pos)
+        except json.JSONDecodeError:
+            if finished:
+                raise
+            # The entry is incomplete: drop what was parsed and read more.
+            buffer = buffer[pos:] + more()
+            pos = 0
+            continue
+        if type(entry.get("range")) is int:
+            # A reordered object can put its table after place_info. Retain only
+            # these compact index lists until the table is available.
+            indexed_entries.append(entry)
+        else:
+            digests.append(entry_digest(entry))
+        pos = end
+    rest = buffer[pos + 1:]
+    while not finished:
+        rest += more()
+    # `rest` is the end of the output object, e.g. `,"containers":[...]}}`.
+    tail = json.loads("{" + rest.lstrip().lstrip(",").rstrip()[:-1])
+    table = tail.pop("ranges", None)
+    if indexed_entries and table is None:
+        raise ValueError("indexed focus output has no range table")
+    digests.extend(entry_digest(entry, table) for entry in indexed_entries)
+    return output_digest(digests, tail)
+
+
+def entry_digest(entry, table=None):
+    return hashlib.sha256(canonical_entry(entry, table).encode()).hexdigest()
+
+
+def output_digest(entry_digests, tail):
+    """The digest of an output from the digests of its `place_info` entries and its other
+    fields (`tail`)."""
+    tail = dict(tail)
+    if "containers" in tail:
+        tail["containers"] = sorted(tail["containers"], key=lambda x: json.dumps(x, sort_keys=True))
+    digest = hashlib.sha256()
+    for entry in sorted(entry_digests):
+        digest.update(entry.encode())
+    digest.update(json.dumps(tail, sort_keys=True).encode())
+    return {"Ok": {"digest": digest.hexdigest(), "places": len(entry_digests)}}
+
+
 def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=None, phases=False,
-                    memory_limit=None):
+                    memory_limit=None, keep_output=True):
     if phases:
         env = dict(env, RUST_LOG=PHASE_LOG)
     # rustc_plugin clears cargo's cached metadata for library targets only; for a binary,
@@ -514,7 +647,7 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
     tail = res.stdout.strip().splitlines()
     if tail:
         try:
-            response = json.loads(gzip.decompress(base64.b64decode(tail[-1].strip(), validate=True)))
+            response = decode_response(tail[-1].strip(), keep_output)
         except Exception:
             response = None
     stderr = res.stderr
@@ -528,8 +661,10 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
     timings = parse_phases(stderr) if phases else None
     stats = parse_stats(stderr) if phases else None
     if "Ok" in response:
-        return {"status": "ok", "seconds": seconds, "max_rss_mb": max_rss_mb, "output": response["Ok"],
-                "phases": timings, "stats": stats, "places": len(response["Ok"].get("place_info", []))}
+        output = response["Ok"]
+        places = output["places"] if "digest" in output else len(output.get("place_info", []))
+        return {"status": "ok", "seconds": seconds, "max_rss_mb": max_rss_mb, "output": output,
+                "phases": timings, "stats": stats, "places": places}
     err = response.get("Err", response)
     message = err.get("error") or err.get("type") or json.dumps(err)
     status = "benign" if any(b in message for b in BENIGN_ERRORS) else "error"
@@ -562,7 +697,7 @@ def focus_repeated(crate_dir, env, rel_file, line, col, mode, args, touch=None):
     """Run a position `--repeat` times; keep the fastest run (the least disturbed by noise),
     unless some run failed, in which case that failure is the result."""
     runs = [flowistry_focus(crate_dir, env, rel_file, line, col, mode, args.timeout, touch, args.phases,
-                            args.memory_limit)
+                            args.memory_limit, args.keep_outputs)
             for _ in range(max(1, args.repeat))]
     worst = {"crash": 0, "oom": 1, "timeout": 2, "error": 3}
     failed = sorted((r for r in runs if r["status"] in worst), key=lambda r: worst[r["status"]])
@@ -579,16 +714,11 @@ def canonical(output):
     def key(x):
         return json.dumps(x, sort_keys=True)
 
-    if not isinstance(output, dict):
+    if not isinstance(output, dict) or "digest" in output:
         return output
-    places = []
-    for p in output.get("place_info", []):
-        p = dict(p)
-        for field in ["ranges", "slice", "direct_influence"]:
-            if field in p:
-                p[field] = sorted(p[field], key=key)
-        places.append(p)
     out = dict(output)
+    table = out.pop("ranges", None)
+    places = [json.loads(canonical_entry(p, table)) for p in output.get("place_info", [])]
     out["place_info"] = sorted(places, key=key)
     if "containers" in out:
         out["containers"] = sorted(out["containers"], key=key)
