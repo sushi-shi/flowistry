@@ -12,7 +12,7 @@ complete merely because tooling or a subset of its tests passes.
 | 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
 | 6. Edit/concurrency harness | Implemented in [#47](https://github.com/sushi-shi/flowistry/pull/47); release gates pending | 84 serial, concurrency, recovery and real-project cases pass; 47 harness regressions pass. See [edit-concurrency-validation.md](edit-concurrency-validation.md). Add versioned-publication/background cases as those features land; full corpus gates remain required. |
 | 7. Shared result index | Implemented in [#48](https://github.com/sushi-shi/flowistry/pull/48); final integration gates pending | Existing caches now share a publication lock and disk budget. Compiler-derived body index, revision/generation envelopes, cancellation, source-hash checks and interrupted-write recovery pass 16 new cases, plus all 84 edit cases. See [versioned-result-index.md](versioned-result-index.md). |
-| 8. Persisted summaries | Implemented; full corpus gates pending | Portable schema, shared disk adapter/fingerprints and dependency/reverse snapshots pass 18 summary cases, all 84 edit cases, all 16 publication cases, workspace tests and 52 harness regressions at `9da7aba9f`. Full Recurse logical-summary/output comparison and quiet measurements remain. See [persisted-summary-progress.md](persisted-summary-progress.md). |
+| 8. Persisted summaries | Implemented in [#49](https://github.com/sushi-shi/flowistry/pull/49); full corpus gates pending | Portable schema, shared disk adapter/fingerprints and dependency/reverse snapshots pass 18 summary cases, all 84 edit cases, all 16 publication cases, workspace tests and 52 harness regressions at `9da7aba9f`. Full Recurse logical-summary/output comparison and quiet measurements remain. See [persisted-summary-progress.md](persisted-summary-progress.md). |
 | 9. Project command | Pending | Streaming, priorities and bounded workers. |
 | 10. Neovim background work | Pending | Continue after editor #4; foreground priority and compatible pin. |
 | 11. Incremental saves | Pending | Dependency-aware recomputation and rapid-save handling. |
@@ -128,4 +128,4 @@ Do not delete active source/build inputs or preserved experiment work.
    corpus runs and their separate prepared roots; do not start a third heavy run.
    Steps 9–12 remain unimplemented.
    Finish all final gates in step 13. Current continuation PR order is #41 → #42 →
-   #43 → #44 → #45 → #46 → #47 → #48; nothing has been merged.
+   #43 → #44 → #45 → #46 → #47 → #48 → #49; nothing has been merged.

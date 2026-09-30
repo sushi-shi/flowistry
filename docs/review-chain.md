@@ -132,4 +132,8 @@ release gates remain pending.
 with a shared body index, revision/generation publication checks and a combined
 disk budget. Its 16 new publication cases and all 84 edit cases pass; project and
 editor integration remain later features.
+[#49](https://github.com/sushi-shi/flowistry/pull/49) persists portable callee
+summaries using shared semantic fingerprints and dependency snapshots with reverse
+edges. Its 18 summary, 84 edit and 16 publication cases pass; the full Recurse
+summary/output comparison and final performance gates remain pending.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
