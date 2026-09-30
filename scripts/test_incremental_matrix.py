@@ -9,6 +9,18 @@ from incremental_matrix import assert_equivalent, observation
 
 
 class OracleTests(unittest.TestCase):
+    def test_superseded_envelope_cannot_deliver_a_current_result(self):
+        encoded = base64.b64encode(gzip.compress(json.dumps({'Ok': {'bodies': []}}).encode())).decode()
+        envelope = {'schema': 1, 'status': 'current', 'generation': 'new', 'output': encoded}
+        fresh = observation(subprocess.CompletedProcess([], 0, json.dumps(envelope).encode(), b''), .1)
+        self.assertIsNotNone(fresh['semantic_digest'])
+        envelope.update(status='superseded', generation='old', output=None)
+        stale = observation(subprocess.CompletedProcess([], 75, json.dumps(envelope).encode(), b''), .1)
+        self.assertIsNone(stale['response'])
+        self.assertEqual(stale['publication']['generation'], 'old')
+        with self.assertRaises(AssertionError):
+            assert_equivalent(stale, fresh)
+
     def test_indexed_maybe_slice_changes_are_semantic(self):
         first = {'Ok': {'bodies': [{'range': {'filename': 'lib.rs'}, 'focus': {'Ok': {
             'ranges': [{'filename': 'lib.rs', 'start': [1, 0], 'end': [1, 8]},

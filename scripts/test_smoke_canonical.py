@@ -117,5 +117,37 @@ class FileFocusCanonicalTests(unittest.TestCase):
         changed['bodies'][0]['range']['filename'] = 'other.rs'
         self.assertNotEqual(digest(self.output)['Ok'], digest(changed)['Ok'])
 
+    def numeric_files(self, source_id):
+        value = json.dumps(self.output).replace('"test.rs"', str(source_id))
+        return json.loads(value)
+
+    def test_requested_file_interner_slot_is_response_local(self):
+        first = self.numeric_files(0)
+        second = self.numeric_files(7)
+        second['bodies'].reverse()
+        self.assertEqual(smoke.canonical(first), smoke.canonical(second))
+        self.assertEqual(digest(first)['Ok'], digest(second, pretty=True)['Ok'])
+        # Normalization must not mutate retained raw evidence.
+        self.assertEqual(first['bodies'][0]['range']['filename'], 0)
+
+    def test_foreign_numeric_filename_is_not_guessed(self):
+        for field in ('range', 'maybe_slice'):
+            output = self.numeric_files(0)
+            entry = output['bodies'][0]['focus']['Ok']['place_info'][0]
+            span = entry[field] if field == 'range' else entry[field][0]
+            span['filename'] = 1
+            with self.assertRaisesRegex(ValueError, 'foreign'):
+                digest(output)
+        output = self.numeric_files(0)
+        output['bodies'][1]['range']['filename'] = 1
+        with self.assertRaisesRegex(ValueError, 'foreign'):
+            digest(output)
+
+    def test_normalizing_ids_preserves_range_changes(self):
+        first = self.numeric_files(0)
+        second = self.numeric_files(7)
+        second['bodies'][0]['focus']['Ok']['place_info'][0]['maybe_slice'][0]['end'] = [2, 0]
+        self.assertNotEqual(digest(first)['Ok'], digest(second)['Ok'])
+
 if __name__ == "__main__":
     unittest.main()

@@ -93,6 +93,17 @@ def decode(stdout):
 
 def observation(completed, seconds):
     value = decode(completed.stdout)
+    publication = None
+    if value is None:
+        try:
+            publication = json.loads(completed.stdout)
+            if publication.get('schema') == 1 and 'status' in publication:
+                value = decode((publication.get('output') or '').encode())
+                publication = {k: v for k, v in publication.items() if k != 'output'}
+            else:
+                publication = None
+        except (ValueError, AttributeError):
+            publication = None
     stderr = completed.stderr.decode(errors='replace')
     result = {'exit_code': completed.returncode, 'seconds': seconds,
               'compiler_invocations': len(re.findall(r'audit compiler\b', stderr)),
@@ -100,6 +111,8 @@ def observation(completed, seconds):
               'cache_hits': re.findall(r'Focus cache hit: (.+)', stderr),
               'cache_misses': re.findall(r'Focus cache miss: (.+)', stderr),
               'response': value, 'stderr': stderr}
+    if publication is not None:
+        result['publication'] = publication
     if value and isinstance(value.get('Ok'), dict):
         result['semantic_digest'] = digest(smoke.canonical(value['Ok']))
         result['cache'] = value['Ok'].get('cache', {})
@@ -220,13 +233,15 @@ class Matrix:
     def run(self, case, mode, cache_mode='on', source=None, extra=None):
         return self.finish(self.begin(case, mode, cache_mode, source, extra))
 
-    def compiler_gate(self):
+    def compiler_gate(self, phase='before'):
         """Pause our fixture before rustc reads it, without modifying backend code."""
+        if phase not in ('before', 'after'):
+            raise ValueError('invalid compiler gate phase')
         gate = self.root / 'gate'
         gate.mkdir(exist_ok=True)
         wrapper = self.root / 'compiler-gate.py'
         wrapper.write_text(f'''#!{sys.executable}
-import json, os, pathlib, sys, time
+import json, os, pathlib, subprocess, sys, time
 gate = pathlib.Path({str(gate)!r})
 args = sys.argv[1:]
 fixture = any(args[i:i+2] == ['--crate-name', 'matrix_fixture'] for i in range(len(args)))
@@ -237,6 +252,7 @@ if fixture and (gate / 'armed').exists():
         pass
     else:
         os.close(fd)
+        completed = subprocess.run(args, stdout=subprocess.PIPE) if {phase!r} == 'after' else None
         ready = gate / 'ready.tmp'
         ready.write_text(json.dumps({{'pid': os.getpid()}}))
         ready.rename(gate / 'ready')
@@ -245,6 +261,9 @@ if fixture and (gate / 'armed').exists():
             if time.monotonic() > deadline:
                 sys.exit('compiler gate timed out')
             time.sleep(.01)
+        if completed is not None:
+            sys.stdout.buffer.write(completed.stdout)
+            sys.exit(completed.returncode if completed.returncode >= 0 else 128 - completed.returncode)
 os.execvp(args[0], args)
 ''')
         wrapper.chmod(0o700)

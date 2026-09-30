@@ -18,6 +18,8 @@ use rustc_middle::ty::TyCtxt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::result_store::{Namespace, Store, Ticket};
+
 const CHILD: &str = "FLOWISTRY_CACHE_CHILD_INPUTS";
 const LIMIT: u64 = 32 * 1024 * 1024;
 
@@ -35,6 +37,7 @@ fn transient_env(name: &str) -> bool {
       | "SHLVL"
       | "_"
       | "FLOWISTRY_CACHE"
+      | "FLOWISTRY_RESULT_PROTOCOL"
       | CHILD
   )
 }
@@ -70,7 +73,7 @@ struct Stamp {
   inode: u64,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct Input {
   stamp: Stamp,
   digest: String,
@@ -111,27 +114,60 @@ fn stamp(path: &Path) -> Option<Stamp> {
 #[serde(deny_unknown_fields)]
 struct Entry {
   key: String,
+  package: String,
   workspace: PathBuf,
   roots: Vec<PathBuf>,
   excluded: Vec<PathBuf>,
   files: Vec<PathBuf>,
   snapshot: Snapshot,
   responses: Vec<Response>,
+  provenance: Option<Provenance>,
+  published: Option<Ticket>,
   checksum: String,
 }
 impl Entry {
+  fn unchanged_inputs(&self, current: &Snapshot) -> bool {
+    let input = |path: &Path| {
+      !self
+        .excluded
+        .first()
+        .is_some_and(|target| path.starts_with(target))
+    };
+    self
+      .snapshot
+      .iter()
+      .filter(|(path, _)| input(path))
+      .all(|(path, value)| current.get(path) == Some(value))
+      && current
+        .keys()
+        .filter(|path| input(path))
+        .all(|path| self.snapshot.contains_key(path))
+  }
   fn checksum(&self) -> Option<String> {
     Some(digest(
       &serde_json::to_vec(&(
         &self.key,
+        &self.package,
         &self.workspace,
         &self.roots,
         &self.excluded,
         &self.files,
         &self.snapshot,
         &self.responses,
+        &self.provenance,
+        &self.published,
       ))
       .ok()?,
+    ))
+  }
+  fn revision(&self) -> String {
+    digest(&(
+      &self.key,
+      self
+        .snapshot
+        .iter()
+        .map(|(path, input)| (path, input.as_ref().map(|input| &input.digest)))
+        .collect::<Vec<_>>(),
     ))
   }
   fn snapshot(&self) -> Option<Snapshot> {
@@ -371,19 +407,22 @@ fn discover(key: String, directory: &Path, selected_file: &Path) -> Option<Entry
     .collect();
   Some(Entry {
     key,
+    package: selected.to_owned(),
     workspace,
     roots,
     excluded: vec![target, directory.to_owned()],
     files: files.into_iter().collect(),
     snapshot: BTreeMap::new(),
     responses: vec![],
+    provenance: None,
+    published: None,
     checksum: String::new(),
   })
 }
 
 /// Capture include files and proc-macro declared inputs outside package trees.
 /// Build-script rerun inputs are collected separately from Cargo's output files.
-pub(crate) fn record_inputs(tcx: TyCtxt<'_>) {
+pub(crate) fn record_inputs(tcx: TyCtxt<'_>, bodies: Vec<BodyIdentity>) {
   let Some(path) = env::var_os(CHILD) else {
     return;
   };
@@ -397,11 +436,32 @@ pub(crate) fn record_inputs(tcx: TyCtxt<'_>) {
     return;
   }
   let mut files = BTreeSet::new();
+  let mut verified_sources = BTreeMap::new();
   for file in tcx.sess.source_map().files().iter() {
     if let rustc_span::FileName::Real(name) = &file.name {
       if let Some(path) = name.local_path() {
         if path.is_file() {
           if let Ok(path) = path.canonicalize() {
+            let verified = (|| {
+              let before = stamp(&path)?;
+              let source = fs::File::open(&path).ok()?;
+              if rustc_span::SourceFileHash::new(file.src_hash.kind, source).ok()?
+                != file.src_hash
+              {
+                return None;
+              }
+              let digest = file_digest(&path)?;
+              (stamp(&path)? == before).then_some(Input {
+                stamp: before,
+                digest,
+              })
+            })();
+            if let Some(input) = verified {
+              verified_sources.insert(path.clone(), Some(input));
+            } else {
+              // The source on disk no longer matches the bytes rustc parsed.
+              return;
+            }
             files.insert(path);
           }
         }
@@ -423,8 +483,70 @@ pub(crate) fn record_inputs(tcx: TyCtxt<'_>) {
         }
       }),
   );
-  if let Ok(data) = serde_json::to_vec(&files) {
-    let _ = fs::write(path, data);
+  let provenance = Provenance {
+    compiler: rustc_interface::util::rustc_version_str()
+      .unwrap_or("unknown")
+      .into(),
+    crate_name: tcx.crate_name(rustc_hir::def_id::LOCAL_CRATE).to_string(),
+    crate_types: tcx
+      .sess
+      .opts
+      .crate_types
+      .iter()
+      .map(|kind| format!("{kind:?}"))
+      .collect(),
+    target: format!("{:?}", tcx.sess.target),
+    configuration: digest(&tcx.sess.opts.dep_tracking_hash(true)),
+    mode: format!("{:?}", flowistry::extensions::EvalMode::from_ambient()),
+    bodies,
+  };
+  if let Ok(data) = serde_json::to_vec(&CompilerInputs {
+    files: files.into_iter().collect(),
+    verified_sources,
+    provenance,
+  }) {
+    if data.len() as u64 <= LIMIT {
+      let _ = fs::write(path, data);
+    }
+  }
+}
+
+#[derive(Serialize, Deserialize)]
+struct CompilerInputs {
+  files: Vec<PathBuf>,
+  verified_sources: Snapshot,
+  provenance: Provenance,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Provenance {
+  compiler: String,
+  crate_name: String,
+  crate_types: Vec<String>,
+  target: String,
+  configuration: String,
+  mode: String,
+  bodies: Vec<BodyIdentity>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub(crate) struct BodyIdentity {
+  identity: String,
+  name: String,
+  range: Value,
+}
+impl BodyIdentity {
+  pub fn new(
+    tcx: TyCtxt<'_>,
+    id: rustc_hir::BodyId,
+    range: &rustc_utils::source_map::range::CharRange,
+  ) -> Self {
+    let def = tcx.hir_body_owner_def_id(id);
+    Self {
+      identity: format!("{:?}", tcx.def_path_hash(def.to_def_id())),
+      name: tcx.def_path_str(def),
+      range: serde_json::to_value(range).unwrap(),
+    }
   }
 }
 
@@ -636,55 +758,90 @@ fn prepare(mut value: Value) -> Option<Response> {
     output: encode(&value)?,
   })
 }
-fn load(path: &Path, key: &str) -> Option<Entry> {
-  if fs::metadata(path).ok()?.len() > LIMIT {
-    return None;
-  }
-  let entry: Entry = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
-  (entry.key == key && entry.checksum == entry.checksum()?).then_some(entry)
+fn load(store: &Store, key: &str) -> Option<Entry> {
+  let entry: Entry =
+    serde_json::from_slice(&store.get(Namespace::Responses, key).ok()?).ok()?;
+  (entry.key == key
+    && entry.checksum == entry.checksum()?
+    && entry
+      .published
+      .as_ref()
+      .is_none_or(|ticket| ticket.scope == key && ticket.revision == entry.revision()))
+  .then_some(entry)
 }
-fn save(path: &Path, entry: &mut Entry) -> Option<()> {
+fn save(store: &Store, entry: &mut Entry, ticket: &Ticket) -> Option<()> {
+  entry.published = entry.provenance.as_ref().map(|_| ticket.clone());
   entry.checksum = entry.checksum()?;
   let bytes = serde_json::to_vec(entry).ok()?;
-  if bytes.len() as u64 > LIMIT {
-    return None;
-  }
-  fs::create_dir_all(path.parent()?).ok()?;
-  let temp = path.with_extension(format!("{}.tmp", std::process::id()));
-  let result = fs::write(&temp, bytes).and_then(|_| fs::rename(&temp, path));
-  let _ = fs::remove_file(temp);
-  result.ok()?;
-  let mut entries = fs::read_dir(path.parent()?)
+  store
+    .put(Namespace::Responses, &entry.key, &bytes, Some(ticket))
     .ok()?
-    .filter_map(Result::ok)
-    .filter_map(|e| {
-      let m = e.metadata().ok()?;
-      Some((m.modified().ok()?, m.len(), e.path()))
-    })
-    .collect::<Vec<_>>();
-  entries.sort();
-  let mut total: u64 = entries.iter().map(|e| e.1).sum();
-  let mut count = entries.len();
-  for (_, len, old) in entries {
-    if total <= 256 * 1024 * 1024 && count <= 256 {
-      break;
-    }
-    if old != path && fs::remove_file(old).is_ok() {
-      total -= len;
-      count -= 1;
-    }
+    .then_some(())
+}
+
+fn protocol() -> bool {
+  env::var("FLOWISTRY_RESULT_PROTOCOL").is_ok_and(|value| value == "1")
+}
+
+fn emit(data: &[u8], status: &str, ticket: Option<&Ticket>) {
+  if protocol() {
+    let output =
+      matches!(status, "current" | "uncached").then(|| String::from_utf8_lossy(data));
+    println!(
+      "{}",
+      serde_json::json!({"schema": 1, "status": status,
+      "revision": ticket.map(|t| &t.revision), "generation": ticket.map(|t| &t.generation),
+      "output": output})
+    );
+  } else {
+    let _ = std::io::stdout().write_all(data);
   }
-  Some(())
+}
+
+fn index(entry: &Entry, ticket: &Ticket) -> Value {
+  let point = |value: &Value| Some((value["line"].as_u64()?, value["column"].as_u64()?));
+  let bodies = entry.provenance.as_ref().map(|provenance| provenance.bodies.iter().map(|body| {
+    let available = (|| {
+      // Coincident spans cannot safely identify which compiler body was selected.
+      if provenance.bodies.iter().filter(|other| other.range == body.range).count() != 1 { return None; }
+      let a = point(&body.range["start"])?;
+      let z = point(&body.range["end"])?;
+      Some(entry.responses.iter().any(|response| response.bodies.iter()
+        .any(|&(start, end, analyzed)| start == a && end == z && analyzed)))
+    })().unwrap_or(false);
+    serde_json::json!({"identity": body.identity, "name": body.name, "range": body.range, "available": available})
+  }).collect::<Vec<_>>()).unwrap_or_default();
+  serde_json::json!({"schema": 1, "status": "current", "revision": ticket.revision,
+    "generation": ticket.generation, "package": entry.package,
+    "produced_by": entry.published,
+    "validation": {"kind": "snapshot", "compiler": entry.provenance.as_ref().map(|p| &p.compiler),
+      "crate": entry.provenance.as_ref().map(|p| &p.crate_name),
+      "crate_types": entry.provenance.as_ref().map(|p| &p.crate_types),
+      "target": entry.provenance.as_ref().map(|p| &p.target),
+      "configuration": entry.provenance.as_ref().map(|p| &p.configuration),
+      "mode": entry.provenance.as_ref().map(|p| &p.mode)}, "bodies": bodies})
 }
 
 fn cached_run() -> Option<ExitCode> {
-  let args = env::args().skip(1).collect::<Vec<_>>();
-  let index = args.iter().position(|a| a == "file-focus")?;
-  let position = match args.len() - index {
+  let mut args = env::args().skip(1).collect::<Vec<_>>();
+  let command_index = args.iter().position(|a| {
+    matches!(a.as_str(), "file-focus" | "result-index" | "cancel-results")
+  })?;
+  let operation = args[command_index].clone();
+  let position = match args.len() - command_index {
     2 => None,
-    4 => Some((args[index + 2].parse().ok()?, args[index + 3].parse().ok()?)),
+    4 if operation == "file-focus" => Some((
+      args[command_index + 2].parse().ok()?,
+      args[command_index + 3].parse().ok()?,
+    )),
     _ => return None,
   };
+  args[command_index] = "file-focus".into();
+  args[command_index + 1] = Path::new(&args[command_index + 1])
+    .canonicalize()
+    .ok()?
+    .to_str()?
+    .into();
   let directory = directory()?;
   let directory = if directory.is_absolute() {
     directory
@@ -693,79 +850,199 @@ fn cached_run() -> Option<ExitCode> {
   };
   let mode = env::var("FLOWISTRY_CACHE").unwrap_or_default();
   if mode == "off" {
-    return None;
+    if operation == "result-index" {
+      println!(
+        "{}",
+        serde_json::json!({"schema": 1, "status": "miss", "bodies": []})
+      );
+      return Some(ExitCode::SUCCESS);
+    }
+    if operation != "cancel-results" {
+      return None;
+    }
   }
   let environment: BTreeMap<_, _> = env::vars_os()
     .filter(|(k, _)| !k.to_str().is_some_and(transient_env))
     .collect();
   let key = digest(&(
-    6u32,
+    7u32,
     env::current_dir().ok()?,
     env::current_exe().ok()?,
-    &args[.. index + 2],
+    &args[.. command_index + 2],
     environment,
   ));
-  let path = directory.join("responses-v1").join(format!("{key}.json"));
-  let mut previous = load(&path, &key).filter(|e| {
+  let store = Store::open(&directory).ok()?;
+  if operation == "cancel-results" {
+    store.cancel(&key).ok()?;
+    println!("{}", serde_json::json!({"schema": 1, "status": "canceled"}));
+    return Some(ExitCode::SUCCESS);
+  }
+  let mut previous = load(&store, &key).filter(|e| {
     e.snapshot()
       .is_some_and(|current| same_contents(&current, &e.snapshot))
   });
+  if operation == "result-index" {
+    let value =
+      if let Some(entry) = previous.as_ref().filter(|entry| entry.provenance.is_some()) {
+        let ticket = store.begin(&key, &entry.revision()).ok()?;
+        index(entry, &ticket)
+      } else {
+        serde_json::json!({"schema": 1, "status": "miss", "bodies": []})
+      };
+    println!("{value}");
+    return Some(ExitCode::SUCCESS);
+  }
   if mode != "refresh" {
     if let Some(entry) = &previous {
       for response in &entry.responses {
         if response.supports(position) {
-          print!("{}", response.output);
+          let ticket = store.begin(&key, &entry.revision()).ok()?;
+          emit(response.output.as_bytes(), "current", Some(&ticket));
           return Some(ExitCode::SUCCESS);
         }
       }
     }
   }
+  drop(store);
   let mut entry = previous
     .take()
-    .or_else(|| discover(key, &directory, Path::new(&args[index + 1])))?;
+    .or_else(|| discover(key.clone(), &directory, Path::new(&args[command_index + 1])))?;
   log::debug!("fast cache: snapshot {} package roots", entry.roots.len());
   fs::create_dir_all(&directory).ok()?;
   fs::create_dir_all(entry.excluded.first()?).ok()?;
+  build_inputs(&mut entry)?;
   entry.snapshot = entry.snapshot()?;
+  let ticket = Store::open(&directory)
+    .ok()?
+    .begin(&key, &entry.revision())
+    .ok()?;
   let nonce = SystemTime::now()
     .duration_since(UNIX_EPOCH)
     .ok()?
     .as_nanos();
   let inputs = directory.join(format!("inputs-{}-{nonce}.tmp", std::process::id()));
+  // The compiler can open the parent's anonymous file through procfs. Removing
+  // its name before launch means SIGKILL/cancellation cannot leak input sidecars.
+  use std::os::{fd::AsRawFd, unix::fs::OpenOptionsExt};
+  let input_file = fs::OpenOptions::new()
+    .read(true)
+    .write(true)
+    .create_new(true)
+    .mode(0o600)
+    .open(&inputs)
+    .ok()?;
+  fs::remove_file(&inputs).ok()?;
+  let inputs = PathBuf::from(format!(
+    "/proc/{}/fd/{}",
+    std::process::id(),
+    input_file.as_raw_fd()
+  ));
   let output = Command::new(env::current_exe().ok()?)
     .args(&args)
     .env(CHILD, &inputs)
     .stderr(Stdio::inherit())
     .output()
     .ok()?;
-  // Preserve the protocol and error status even when optional caching fails.
-  let _ = std::io::stdout().write_all(&output.stdout);
+  let mut publication = None;
+  let mut rejection = "uncached";
   let store_result = || -> Option<()> {
-    if !output.status.success() || !same_contents(&entry.snapshot()?, &entry.snapshot) {
+    // During an in-flight analysis, even a same-content rewrite can be an ABA
+    // edit. Warm reads can accept equal contents; writers require unchanged stamps.
+    if !output.status.success() || !entry.unchanged_inputs(&entry.snapshot()?) {
+      rejection = "superseded";
       log::debug!("fast cache: inputs changed during analysis");
       return None;
     }
     let response = prepare(decode(&output.stdout)?)?;
     log::debug!("fast cache: decoded response");
-    let extra: Vec<PathBuf> = serde_json::from_slice(&fs::read(&inputs).ok()?).ok()?;
-    log::debug!("fast cache: compiler recorded {} inputs", extra.len());
-    entry.files.extend(extra);
+    let preflight = entry.snapshot.clone();
+    let extra: CompilerInputs = serde_json::from_slice(&fs::read(&inputs).ok()?).ok()?;
+    log::debug!("fast cache: compiler recorded {} inputs", extra.files.len());
+    entry.files.extend(extra.files);
+    entry.provenance = Some(extra.provenance);
     build_inputs(&mut entry)?;
     log::debug!("fast cache: collected build inputs");
     entry.snapshot = entry.snapshot()?;
-    if mode == "refresh" {
-      entry.responses.clear();
+    if preflight.iter().any(|(path, input)| {
+      !entry
+        .excluded
+        .first()
+        .is_some_and(|target| path.starts_with(target))
+        && entry.snapshot.get(path) != Some(input)
+    }) || extra
+      .verified_sources
+      .iter()
+      .any(|(path, input)| entry.snapshot.get(path) != Some(input))
+    {
+      rejection = "superseded";
+      return None;
     }
+    let store = Store::open(&directory).ok()?;
+    if !store.current(&ticket) {
+      rejection = "superseded";
+      return None;
+    }
+    // Recheck after waiting for the publication lock, then refine the revision
+    // with compiler/Cargo-discovered inputs using the existing validation rules.
+    if entry.snapshot()? != entry.snapshot {
+      rejection = "superseded";
+      return None;
+    }
+    let final_ticket = store.begin(&key, &entry.revision()).ok()?;
+    // Newly discovered external inputs were not watched before Cargo/rustc.
+    // Accept them only when rustc's original source hash proves what was read.
+    // Otherwise retain the watch list, but no result, for a second validated run.
+    // Files Cargo generated inside its target directory are outputs of the
+    // already-watched build; external build/dependency inputs are not exempt.
+    let new_unknown = entry.snapshot.iter().any(|(path, input)| {
+      input.is_some()
+        && !preflight.contains_key(path)
+        && !entry
+          .excluded
+          .first()
+          .is_some_and(|target| path.starts_with(target))
+        && extra.verified_sources.get(path) != Some(input)
+    });
+    if new_unknown {
+      log::debug!("fast cache: external input requires a validated second run");
+      entry.responses.clear();
+      entry.provenance = None;
+      save(&store, &mut entry, &final_ticket)?;
+      return None;
+    }
+    if let Some(latest) =
+      load(&store, &key).filter(|old| same_contents(&old.snapshot, &entry.snapshot))
+    {
+      entry.responses = latest.responses;
+    }
+    entry.responses.retain(|old| old.bodies != response.bodies);
     entry.responses.push(response);
     if entry.responses.len() > 128 {
       entry.responses.remove(0);
     }
-    save(&path, &mut entry)
+    let result = save(&store, &mut entry, &final_ticket);
+    publication = Some(final_ticket);
+    result
   };
   let mut store_result = store_result;
   let saved = store_result().is_some();
   log::debug!("fast cache: saved response: {saved}");
-  let _ = fs::remove_file(inputs);
+  drop(input_file);
+  let state = if !output.status.success() {
+    "error"
+  } else if publication.is_some() {
+    "current"
+  } else {
+    rejection
+  };
+  emit(
+    &output.stdout,
+    state,
+    publication.as_ref().or(Some(&ticket)),
+  );
+  if protocol() && state == "superseded" {
+    return Some(ExitCode::from(75));
+  }
   Some(crate::replay::child_exit_code(output.status))
 }
 
@@ -773,6 +1050,41 @@ pub fn run() -> ExitCode {
   if env::var_os(CHILD).is_none() {
     if let Some(code) = cached_run() {
       return code;
+    }
+    if crate::plugin::result_control_request() {
+      println!(
+        "{}",
+        serde_json::json!({"schema": 1, "status": "unavailable",
+        "error": "result store unavailable, invalid arguments, or file not found"})
+      );
+      return ExitCode::FAILURE;
+    }
+    if protocol() {
+      // Unsupported snapshots still run normally, but cannot claim a validated
+      // input revision. The negotiated protocol makes that distinction explicit.
+      match Command::new(env::current_exe().unwrap())
+        .args(env::args().skip(1))
+        .env_remove("FLOWISTRY_RESULT_PROTOCOL")
+        .stderr(Stdio::inherit())
+        .output()
+      {
+        Ok(output) => {
+          emit(
+            &output.stdout,
+            if output.status.success() {
+              "uncached"
+            } else {
+              "error"
+            },
+            None,
+          );
+          return crate::replay::child_exit_code(output.status);
+        }
+        Err(error) => {
+          eprintln!("flowistry: {error}");
+          return ExitCode::FAILURE;
+        }
+      }
     }
   }
   // A snapshot miss must run Cargo so its new dep-info and build-script inputs
@@ -792,4 +1104,63 @@ pub fn run() -> ExitCode {
     let _ = fs::remove_file(pending);
   }
   result
+}
+
+#[cfg(test)]
+mod publication_tests {
+  use super::*;
+
+  #[test]
+  fn source_aba_is_rejected_while_cargo_can_replace_its_outputs() {
+    let input = Input {
+      stamp: Stamp {
+        len: 1,
+        modified: 1,
+        changed: (1, 0),
+        inode: 1,
+      },
+      digest: "same bytes".into(),
+    };
+    let source = PathBuf::from("/project/src/lib.rs");
+    let generated = PathBuf::from("/project/target/build/output");
+    let entry = Entry {
+      key: "key".into(),
+      package: "package".into(),
+      workspace: "/project".into(),
+      roots: vec![],
+      excluded: vec!["/project/target".into()],
+      files: vec![],
+      snapshot: [
+        (source.clone(), Some(input.clone())),
+        (generated.clone(), Some(input.clone())),
+      ]
+      .into(),
+      responses: vec![],
+      provenance: None,
+      published: None,
+      checksum: String::new(),
+    };
+    let mut now = entry.snapshot.clone();
+    now
+      .get_mut(&generated)
+      .unwrap()
+      .as_mut()
+      .unwrap()
+      .stamp
+      .changed
+      .0 += 1;
+    assert!(entry.unchanged_inputs(&now));
+    now
+      .get_mut(&source)
+      .unwrap()
+      .as_mut()
+      .unwrap()
+      .stamp
+      .changed
+      .0 += 1;
+    assert!(!entry.unchanged_inputs(&now));
+    // Content equality remains appropriate for an already-published warm read,
+    // but cannot prove which contents an in-flight compiler saw during an ABA edit.
+    assert!(same_contents(&now, &entry.snapshot));
+  }
 }

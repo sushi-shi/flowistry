@@ -1,0 +1,630 @@
+{
+  "builds": {
+    "base": {
+      "binaries": {
+        "cargo-flowistry": "8d7ae7642d6faf808f7f4daf9d70ced07af86da547abe53abc1107b565a1b79c",
+        "flowistry-driver": "63ef8839c49fc2c75c2e4fb850728c2dda61d5b6972b8925ead81c8123643404"
+      },
+      "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+      "cargo_encoded_rustflags": "",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "-p",
+        "flowistry_ide",
+        "-j",
+        "4"
+      ],
+      "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+      "features": "",
+      "profile": {},
+      "recorded_at": "2026-09-30T02:17:37.790070+00:00",
+      "revision": "82d430807a315e1bff8c0b3e2155295ad2265371",
+      "rustflags": "",
+      "tree": "be1b4478f8e8925fe63729ca4c4527ad10ff4f16"
+    },
+    "compare": {
+      "binaries": {
+        "cargo-flowistry": "be7e85bcdced54e101efdffea75eb879f1e6702eca8ceac0d16745ac667a5648",
+        "flowistry-driver": "f3b26952781cbefa01e99b57e9c9b5605612ce527cc1b951cc0c407b40dbb1a2"
+      },
+      "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+      "cargo_encoded_rustflags": "",
+      "command": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "-p",
+        "flowistry_ide",
+        "-j",
+        "4"
+      ],
+      "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+      "features": "",
+      "profile": {},
+      "recorded_at": "2026-09-30T02:16:23.062992+00:00",
+      "revision": "2630ee356d8f606e22a205527b4eea67cdab66d0",
+      "rustflags": "",
+      "tree": "f848bf714adc386ad185d18af8c8e1dd5abb9b28"
+    }
+  },
+  "classification": "All five status changes are #17 reference memory-limit failures versus integrated success. No successful-output difference. These positions are not successful reference comparisons.",
+  "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+  "corpus": "fef31dfe97db3c94748766e9c97edea7b39052d3436c69ab28a967c26f66fffd",
+  "coverage_complete": true,
+  "crates": [
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "itertools",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "either",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "smallvec",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "indexmap",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "hashbrown",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "serde_json",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "regex-syntax",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "anyhow",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "bitflags",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "memchr",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "just",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "tokei",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "alacritty",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "niri",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "helix",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "bevy",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "brains",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "local_lru",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "cargo-inspect",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "biodiff",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "objdiff",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "boxxy",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "sudo-rs",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    },
+    {
+      "duplicates": 0,
+      "expected": 120,
+      "extra": [],
+      "missing": [],
+      "name": "bosminer",
+      "recorded": 120,
+      "reused": 0,
+      "skipped": []
+    }
+  ],
+  "failures": [
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/error.rs",
+        926,
+        10,
+        "Recurse"
+      ],
+      "result": {
+        "max_rss_mb": 6248,
+        "message": "killed at the memory limit of 6G",
+        "returncode": 0,
+        "seconds": 12.41,
+        "status": "oom",
+        "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+      }
+    },
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/error.rs",
+        926,
+        10,
+        "SigOnly"
+      ],
+      "result": {
+        "max_rss_mb": 6248,
+        "message": "killed at the memory limit of 6G",
+        "returncode": 0,
+        "seconds": 12.28,
+        "status": "oom",
+        "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+      }
+    },
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/analyzer.rs",
+        177,
+        4,
+        "Recurse"
+      ],
+      "result": {
+        "max_rss_mb": 6249,
+        "message": "killed at the memory limit of 6G",
+        "returncode": 0,
+        "seconds": 66.24,
+        "status": "oom",
+        "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+      }
+    },
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/compiler.rs",
+        13,
+        4,
+        "Recurse"
+      ],
+      "result": {
+        "max_rss_mb": 6211,
+        "message": "killed at the memory limit of 6G",
+        "returncode": 0,
+        "seconds": 71.6,
+        "status": "oom",
+        "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+      }
+    },
+    {
+      "backend": "base",
+      "crate": "just",
+      "position": [
+        "src/analyzer.rs",
+        324,
+        10,
+        "Recurse"
+      ],
+      "result": {
+        "max_rss_mb": 6249,
+        "message": "killed at the memory limit of 6G",
+        "returncode": 0,
+        "seconds": 63.8,
+        "status": "oom",
+        "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+      }
+    }
+  ],
+  "missing_entries": [],
+  "needs_triage": true,
+  "output_differences": [],
+  "schema": 1,
+  "segments": [
+    {
+      "checkpoint_id": "e3e873b49dbb27e4786330ed916c4f6d99ab28dd27eb85eb8f792855de345619",
+      "configuration_inputs_sha256": "e36e3759c90e51a46a015af060d97796b2a31ad70282f9bb47e3c548a51ee84d",
+      "manifest": {
+        "checkpoint_implementation": "45bb39f10b0f1ad48f8cef76030a36a245ed05fa94919276abf11ad8fc674546",
+        "environment_sha256": "474da9b44e6efbff3b43b871d6fd9f1fced24605f0b60416ae579380b4333de7",
+        "harness": "5a94b27fd42f69b076f1c2cbf7ad969dfb7a84225e6a4f2af240259fcfc8eab7",
+        "settings": {
+          "budgets": null,
+          "memory_limit": "6G",
+          "modes": [
+            "SigOnly",
+            "Recurse"
+          ],
+          "phases": false,
+          "repeat": 1,
+          "timeout": 600
+        },
+        "work_dir": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates"
+      },
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/equivalence-recovered.json",
+      "sha256": "5c3fc5ad39b626998f90d96a99f0e828f9637af9de810960f8a9fb978a1e65fa"
+    },
+    {
+      "checkpoint_id": "64233cf13d4d6390b9c54278abd3bd826e386f1df537897b02ed7ec9279303b8",
+      "configuration_inputs_sha256": "e36e3759c90e51a46a015af060d97796b2a31ad70282f9bb47e3c548a51ee84d",
+      "manifest": {
+        "checkpoint_implementation": "39a2a1cfafcf814052f37043e7ed73c9db86efe26b11d4e3b044669735d0263b",
+        "environment_sha256": "ca4f23a373dd5e42ac9280fefc5c3b10de3f94230412c59dec1d9415eaaa22ea",
+        "harness": "73806aa5f77f8e6b71e1fd32950ccf247b3a904f1c61451ae8295952aba92367",
+        "settings": {
+          "base_cache": "inherit",
+          "budgets": null,
+          "command": "focus",
+          "compare_cache": "inherit",
+          "memory_limit": "6G",
+          "modes": [
+            "SigOnly",
+            "Recurse"
+          ],
+          "phases": false,
+          "repeat": 1,
+          "timeout": 600
+        },
+        "work_dir": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates"
+      },
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/equivalence-symlinks.json",
+      "sha256": "6442ecb726cbcdcef297c0776d8c3097e24c04169d194b92bde94eae9c98050a"
+    },
+    {
+      "checkpoint_id": "4d148ad38dbf9e3a16317b30ea2e0c49e9e71fce1dcca63fc802511d5b46e507",
+      "configuration_inputs_sha256": "0c51c632a13472cea497c878c85e8f0fd2a57031066230d5e6679540d5849d38",
+      "manifest": {
+        "checkpoint_implementation": "39a2a1cfafcf814052f37043e7ed73c9db86efe26b11d4e3b044669735d0263b",
+        "environment_sha256": "a45416f8454946809327b2d16d6d6122536bb14b651847be0534c799d6665b62",
+        "harness": "73806aa5f77f8e6b71e1fd32950ccf247b3a904f1c61451ae8295952aba92367",
+        "settings": {
+          "base_cache": "inherit",
+          "budgets": null,
+          "command": "focus",
+          "compare_cache": "inherit",
+          "memory_limit": "6G",
+          "modes": [
+            "SigOnly",
+            "Recurse"
+          ],
+          "phases": false,
+          "repeat": 1,
+          "timeout": 600
+        },
+        "work_dir": "/home/sheep/Projects/flowistry/target/engine/harness/target/smoke-crates"
+      },
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/equivalence-remaining.json",
+      "sha256": "8faefa75ed2ec1d219a54a8b654f0d71ad786af20888c9f68bc94210bbeaec0c"
+    }
+  ],
+  "source_report": {
+    "path": "/home/sheep/Projects/flowistry/target/continuation-validation/equivalence-complete-summary.json",
+    "sha256": "da9a5d62f5c4a6582ef090d6edb5703d734c4e29b50a6648925b240630983eb7"
+  },
+  "status_changes": [
+    {
+      "crate": "just",
+      "position": [
+        "src/error.rs",
+        926,
+        10,
+        "Recurse"
+      ],
+      "results": {
+        "base": {
+          "max_rss_mb": 6248,
+          "message": "killed at the memory limit of 6G",
+          "returncode": 0,
+          "seconds": 12.41,
+          "status": "oom",
+          "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+        },
+        "compare": {
+          "max_rss_mb": 838,
+          "output_digest": "96c7d1c6ec69144b4d6668e3539ae8d1076930f666d2b3118a70881ec41ad58c",
+          "phases": null,
+          "places": 1186,
+          "seconds": 3.66,
+          "stats": null,
+          "status": "ok"
+        }
+      }
+    },
+    {
+      "crate": "just",
+      "position": [
+        "src/error.rs",
+        926,
+        10,
+        "SigOnly"
+      ],
+      "results": {
+        "base": {
+          "max_rss_mb": 6248,
+          "message": "killed at the memory limit of 6G",
+          "returncode": 0,
+          "seconds": 12.28,
+          "status": "oom",
+          "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+        },
+        "compare": {
+          "max_rss_mb": 651,
+          "output_digest": "6dfd965cf3e50a6c632f697a3ec8f98910ca8e83931b7e97d5666907620a6529",
+          "phases": null,
+          "places": 1186,
+          "seconds": 3.05,
+          "stats": null,
+          "status": "ok"
+        }
+      }
+    },
+    {
+      "crate": "just",
+      "position": [
+        "src/analyzer.rs",
+        177,
+        4,
+        "Recurse"
+      ],
+      "results": {
+        "base": {
+          "max_rss_mb": 6249,
+          "message": "killed at the memory limit of 6G",
+          "returncode": 0,
+          "seconds": 66.24,
+          "status": "oom",
+          "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+        },
+        "compare": {
+          "max_rss_mb": 1698,
+          "output_digest": "071a61742bf68ef43651279e0d4d9bf255ba260955088bb8c5b24a395aa00f80",
+          "phases": null,
+          "places": 699,
+          "seconds": 109.92,
+          "stats": null,
+          "status": "ok"
+        }
+      }
+    },
+    {
+      "crate": "just",
+      "position": [
+        "src/compiler.rs",
+        13,
+        4,
+        "Recurse"
+      ],
+      "results": {
+        "base": {
+          "max_rss_mb": 6211,
+          "message": "killed at the memory limit of 6G",
+          "returncode": 0,
+          "seconds": 71.6,
+          "status": "oom",
+          "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+        },
+        "compare": {
+          "max_rss_mb": 2827,
+          "output_digest": "80cc2ef03a1ab3100fbfb50069f4b98cac63f638a761d982a69756c71fe1bf1f",
+          "phases": null,
+          "places": 219,
+          "seconds": 25.12,
+          "stats": null,
+          "status": "ok"
+        }
+      }
+    },
+    {
+      "crate": "just",
+      "position": [
+        "src/analyzer.rs",
+        324,
+        10,
+        "Recurse"
+      ],
+      "results": {
+        "base": {
+          "max_rss_mb": 6249,
+          "message": "killed at the memory limit of 6G",
+          "returncode": 0,
+          "seconds": 63.8,
+          "status": "oom",
+          "stderr_tail": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/librand-b333a805526aed1b.rmeta --extern regex=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libregex-f5a95bd50c52bdf0.rmeta --extern semver=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsemver-942c7e6c6ff56b79.rmeta --extern serde=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde-71dc7ebf40dcd847.rmeta --extern serde_json=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libserde_json-03e7693410943828.rmeta --extern sha2=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsha2-457bf1528e8cff26.rmeta --extern shellexpand=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libshellexpand-1db54b474720afc6.rmeta --extern similar=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsimilar-fbba9aeacb2b57c0.rmeta --extern snafu=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libsnafu-1f9259ed2da71878.rmeta --extern strsim=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrsim-ca1109c003f143ea.rmeta --extern strum=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libstrum-dfb57f5fe389863d.rmeta --extern tempfile=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtempfile-fb4dd8dab1756380.rmeta --extern typed_arena=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libtyped_arena-33ccf3bdf2f2825e.rmeta --extern unicode_width=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libunicode_width-5ffbd281ec52823f.rmeta --extern uuid=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/deps/libuuid-43d59a62b77e71ac.rmeta -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out -L native=/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/_git/just/target/smoke-base/plugin-nightly-2026-05-01/debug/build/blake3-8455fde581b5c54d/out` (signal: 9, SIGKILL: kill)\n"
+        },
+        "compare": {
+          "max_rss_mb": 1699,
+          "output_digest": "071a61742bf68ef43651279e0d4d9bf255ba260955088bb8c5b24a395aa00f80",
+          "phases": null,
+          "places": 699,
+          "seconds": 123.75,
+          "stats": null,
+          "status": "ok"
+        }
+      }
+    }
+  ],
+  "status_counts": {
+    "base": {
+      "benign": 48,
+      "ok": 2827,
+      "oom": 5
+    },
+    "compare": {
+      "benign": 48,
+      "ok": 2832
+    }
+  }
+}

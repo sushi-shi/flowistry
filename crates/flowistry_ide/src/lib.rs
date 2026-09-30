@@ -30,8 +30,9 @@ mod file_focus;
 mod focus;
 mod playground;
 mod plugin;
-mod replay;
 mod positions;
+mod replay;
+mod result_store;
 mod spans;
 
 pub use plugin::{FlowistryPlugin, replay_request};

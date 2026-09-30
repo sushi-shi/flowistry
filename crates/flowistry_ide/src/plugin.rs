@@ -48,6 +48,14 @@ pub struct FlowistryPluginArgs {
 
 #[derive(Subcommand, Serialize, Deserialize)]
 enum FlowistryCommand {
+  /// List currently validated body results without invoking the compiler.
+  ResultIndex {
+    file: String,
+  },
+  /// Invalidate active publication tickets for this file and configuration.
+  CancelResults {
+    file: String,
+  },
   FileFocus {
     file: String,
     pos_line: Option<usize>,
@@ -93,9 +101,18 @@ pub fn replay_request() -> Option<(String, PathBuf)> {
     | Focus { file, .. }
     | Decompose { file, .. }
     | Playground { file, .. } => PathBuf::from(file),
-    Preload | RustcVersion => return None,
+    Preload | RustcVersion | ResultIndex { .. } | CancelResults { .. } => return None,
   };
   Some((serde_json::to_string(&args).ok()?, file))
+}
+
+pub(crate) fn result_control_request() -> bool {
+  FlowistryPluginArgs::try_parse_from(env::args().skip(1)).is_ok_and(|args| {
+    matches!(
+      args.command,
+      FlowistryCommand::ResultIndex { .. } | FlowistryCommand::CancelResults { .. }
+    )
+  })
 }
 
 pub struct FlowistryPlugin;
