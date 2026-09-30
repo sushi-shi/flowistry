@@ -1,0 +1,283 @@
+{
+  "schema": 1,
+  "conclusion": "No compiler change retained; profiles locate work, not speedups.",
+  "artifact_root": "/home/sheep/Projects/flowistry/target/continuation-validation",
+  "cases": [
+    {
+      "name": "serde",
+      "position": [
+        "src/de.rs",
+        329,
+        8,
+        "SigOnly"
+      ],
+      "successful_samples": 12,
+      "source_sha256": "55124439dc6bb615662a8fef45851b7a7d9c3625bbeb25866c737babf3725c10",
+      "report_sha256": "88d56983f1150a0a5ccf64eaf2bc77d94036d8f5a5ab064b13dc21355659f74c",
+      "perf_data_sha256": "7547b105a2d340d1046979455621f139f6bca876b98da138f89f0095fada8646",
+      "profile_file": "hir-serde-profile.data",
+      "measurement": {
+        "repeat": 12,
+        "phases": true,
+        "load_start": [
+          16.2744140625,
+          26.16748046875,
+          27.1552734375
+        ],
+        "load_end": [
+          16.49267578125,
+          26.04833984375,
+          27.111328125
+        ],
+        "cpu_count": 24,
+        "kernel": "6.18.52",
+        "machine": "x86_64",
+        "ambient_cache": null,
+        "sample_order": "single backend",
+        "cargo_replay": "on",
+        "warmup": 1,
+        "perf": null,
+        "perf_sha256": null
+      },
+      "settings": {
+        "modes": [
+          "SigOnly"
+        ],
+        "timeout": 600,
+        "memory_limit": "6G",
+        "phases": true,
+        "repeat": 12,
+        "budgets": null,
+        "command": "focus",
+        "base_cache": "off",
+        "compare_cache": "inherit"
+      },
+      "backends": {
+        "base": {
+          "cargo-flowistry": "f756955a734bcb8ce6983d28faaccf2c1aa00189c379b93a125e157d5f4ea201",
+          "flowistry-driver": "f11d3e7ee35c7a056bef7688a45d8ec10065072db24aa0ff9936fe4b02079d6d"
+        }
+      },
+      "builds": {
+        "base": {
+          "binaries": {
+            "cargo-flowistry": "f756955a734bcb8ce6983d28faaccf2c1aa00189c379b93a125e157d5f4ea201",
+            "flowistry-driver": "f11d3e7ee35c7a056bef7688a45d8ec10065072db24aa0ff9936fe4b02079d6d"
+          },
+          "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+          "cargo_encoded_rustflags": "",
+          "command": [
+            "cargo",
+            "build",
+            "--locked",
+            "--release",
+            "-p",
+            "flowistry_ide",
+            "-j",
+            "4"
+          ],
+          "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+          "features": "",
+          "profile": {},
+          "recorded_at": "2026-09-30T03:10:22.112084+00:00",
+          "revision": "f1163469c9f0e3d6f79cc71d59bb70dca573b936",
+          "rustflags": "",
+          "tree": "9cbb4e67704224cf97bd51b94c2f794f2ff131be"
+        }
+      },
+      "harness": "889af7a25db997d87ff86dc54542a2cb57a398373fb2285acaeeeaea2c400276",
+      "environment_sha256": "59ed855ddf8518779fc6d7fd46c98ea5ad542c87a61c56b84f1f8d643e6051bf",
+      "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+      "sampled_hir_symbols": [
+        "0.85%;[.] <rustc_hir::hir::Ty as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.53%;[.] <rustc_hir::hir::QPath as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.35%;[.] <rustc_hir::hir::Expr as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.17%;[.] <rustc_middle::ty::context::TyCtxt>::hash_owner_nodes::{closure#0};-      -",
+        "0.17%;[.] <rustc_hir::def::Res as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -"
+      ]
+    },
+    {
+      "name": "just",
+      "position": [
+        "src/indentation.rs",
+        45,
+        4,
+        "SigOnly"
+      ],
+      "successful_samples": 12,
+      "source_sha256": "bd40083bf9b68abc7306a4ac547fe17d2b9ada7fc2eadaaa1327e580f4d46d08",
+      "report_sha256": "a1ea699afab4d5dd43da2cbcfcd47c7401f9ad00f5cb357a71a92b4462e086fd",
+      "perf_data_sha256": "289f914c096177e965a5983077ebeaf095dae255c862c8426b654a93c9d872e7",
+      "profile_file": "hir-just-profile.data",
+      "measurement": {
+        "repeat": 12,
+        "phases": true,
+        "load_start": [
+          18.34814453125,
+          23.83203125,
+          25.9033203125
+        ],
+        "load_end": [
+          23.28662109375,
+          24.6572265625,
+          26.14111328125
+        ],
+        "cpu_count": 24,
+        "kernel": "6.18.52",
+        "machine": "x86_64",
+        "ambient_cache": null,
+        "sample_order": "single backend",
+        "cargo_replay": "on",
+        "warmup": 1,
+        "perf": null,
+        "perf_sha256": null
+      },
+      "settings": {
+        "modes": [
+          "SigOnly"
+        ],
+        "timeout": 600,
+        "memory_limit": "6G",
+        "phases": true,
+        "repeat": 12,
+        "budgets": null,
+        "command": "focus",
+        "base_cache": "off",
+        "compare_cache": "inherit"
+      },
+      "backends": {
+        "base": {
+          "cargo-flowistry": "f756955a734bcb8ce6983d28faaccf2c1aa00189c379b93a125e157d5f4ea201",
+          "flowistry-driver": "f11d3e7ee35c7a056bef7688a45d8ec10065072db24aa0ff9936fe4b02079d6d"
+        }
+      },
+      "builds": {
+        "base": {
+          "binaries": {
+            "cargo-flowistry": "f756955a734bcb8ce6983d28faaccf2c1aa00189c379b93a125e157d5f4ea201",
+            "flowistry-driver": "f11d3e7ee35c7a056bef7688a45d8ec10065072db24aa0ff9936fe4b02079d6d"
+          },
+          "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+          "cargo_encoded_rustflags": "",
+          "command": [
+            "cargo",
+            "build",
+            "--locked",
+            "--release",
+            "-p",
+            "flowistry_ide",
+            "-j",
+            "4"
+          ],
+          "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+          "features": "",
+          "profile": {},
+          "recorded_at": "2026-09-30T03:10:22.112084+00:00",
+          "revision": "f1163469c9f0e3d6f79cc71d59bb70dca573b936",
+          "rustflags": "",
+          "tree": "9cbb4e67704224cf97bd51b94c2f794f2ff131be"
+        }
+      },
+      "harness": "889af7a25db997d87ff86dc54542a2cb57a398373fb2285acaeeeaea2c400276",
+      "environment_sha256": "16a56095a79d7a985dbe63f0ce8a338e5df459901202d99b3ea8b256c8de7cf8",
+      "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+      "sampled_hir_symbols": [
+        "0.65%;[.] <rustc_hir::hir::QPath as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.50%;[.] <[rustc_hir::hir::AssocItemConstraint] as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.40%;[.] <rustc_hir::hir::Expr as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.27%;[.] <rustc_hir::hir::PatKind as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.20%;[.] <rustc_middle::ty::context::TyCtxt>::hash_owner_nodes::{closure#0};-      -",
+        "0.20%;[.] <rustc_hir::hir::Ty as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.13%;[.] <rustc_hir::hir::Generics as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -",
+        "0.13%;[.] <rustc_hir::hir::Block as rustc_data_structures::stable_hasher::HashStable>::hash_stable::<rustc_middle::ich::StableHashingContext>;-      -"
+      ]
+    },
+    {
+      "name": "binary",
+      "position": [
+        "src/main.rs",
+        8,
+        2,
+        "SigOnly"
+      ],
+      "successful_samples": 12,
+      "source_sha256": "ef79fa29652c3da6b3b2ddc975a26a1053e74bdcc4bfbd968c0f1a43f5a795b7",
+      "report_sha256": "453d4a1d51d24895847dfdeecf1cfae45f722e56ef96a6a4f455941da935fb0f",
+      "perf_data_sha256": "b996075d28c1e81bbe1dd0d487f9b764cd019c683bc7252dcd53175efd63871c",
+      "profile_file": "hir-binary-profile.data",
+      "measurement": {
+        "repeat": 12,
+        "phases": true,
+        "load_start": [
+          13.97119140625,
+          17.0283203125,
+          22.1005859375
+        ],
+        "load_end": [
+          14.2138671875,
+          17.02783203125,
+          22.07275390625
+        ],
+        "cpu_count": 24,
+        "kernel": "6.18.52",
+        "machine": "x86_64",
+        "ambient_cache": null,
+        "sample_order": "single backend",
+        "cargo_replay": "on",
+        "warmup": 1,
+        "perf": null,
+        "perf_sha256": null
+      },
+      "settings": {
+        "modes": [
+          "SigOnly"
+        ],
+        "timeout": 600,
+        "memory_limit": "6G",
+        "phases": true,
+        "repeat": 12,
+        "budgets": null,
+        "command": "focus",
+        "base_cache": "off",
+        "compare_cache": "inherit"
+      },
+      "backends": {
+        "base": {
+          "cargo-flowistry": "f756955a734bcb8ce6983d28faaccf2c1aa00189c379b93a125e157d5f4ea201",
+          "flowistry-driver": "f11d3e7ee35c7a056bef7688a45d8ec10065072db24aa0ff9936fe4b02079d6d"
+        }
+      },
+      "builds": {
+        "base": {
+          "binaries": {
+            "cargo-flowistry": "f756955a734bcb8ce6983d28faaccf2c1aa00189c379b93a125e157d5f4ea201",
+            "flowistry-driver": "f11d3e7ee35c7a056bef7688a45d8ec10065072db24aa0ff9936fe4b02079d6d"
+          },
+          "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+          "cargo_encoded_rustflags": "",
+          "command": [
+            "cargo",
+            "build",
+            "--locked",
+            "--release",
+            "-p",
+            "flowistry_ide",
+            "-j",
+            "4"
+          ],
+          "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+          "features": "",
+          "profile": {},
+          "recorded_at": "2026-09-30T03:10:22.112084+00:00",
+          "revision": "f1163469c9f0e3d6f79cc71d59bb70dca573b936",
+          "rustflags": "",
+          "tree": "9cbb4e67704224cf97bd51b94c2f794f2ff131be"
+        }
+      },
+      "harness": "889af7a25db997d87ff86dc54542a2cb57a398373fb2285acaeeeaea2c400276",
+      "environment_sha256": "d55c0da4d82ba3f533ef818a63f3cbfa92df5027270d41cf9053c014f01241e6",
+      "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+      "sampled_hir_symbols": []
+    }
+  ]
+}
