@@ -89,6 +89,15 @@ local function run()
       await(function() return flow.status() == "active" end, "closing progress does not break analysis")
     else
       await(function() return flow.status() == "error" end, "backend failure is reported")
+      local error_popup
+      await(function()
+        for _, win in ipairs(popups()) do
+          local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false))
+          if text:find("fixture compiler failure", 1, true) then error_popup = win; return true end
+        end
+      end, "CoC error popup shows the actual backend error")
+      check(vim.api.nvim_win_get_height(error_popup) <= 2, "CoC error popup stays small")
+      check(vim.api.nvim_get_current_win() == edit_win, "CoC error popup preserves editing focus")
     end
     await(function() return #popups() == 0 end, finish .. ": no orphan progress windows")
   end

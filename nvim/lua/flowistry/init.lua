@@ -148,7 +148,7 @@ local function fail(state, err)
   state.busy, state.operation, state.slice = false, nil, nil
   state.status, state.error = "error", tostring(err)
   if not state.stale then render.clear(state.buf) end
-  notify("Analysis failed; use :Flowistry log for details.\n" .. state.error:match("[^\n]+"), vim.log.levels.ERROR)
+  progress.error(state, state.error)
 end
 
 -- A generation guards every subprocess callback, including decode and startup.

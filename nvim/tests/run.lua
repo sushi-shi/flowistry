@@ -119,7 +119,18 @@ local function run()
     local pin = pins.set(anchor_buf, { 2, 9 }) -- Second byte of dy.
     vim.api.nvim_buf_set_lines(anchor_buf, 0, -1, false, lines)
     equal(pins.position(anchor_buf, pin), expected, message)
+    local signs = vim.api.nvim_buf_get_extmarks(anchor_buf, pins.namespace, 0, -1, { details = true })
+    if expected then
+      equal(#signs, 1, "one gutter pin survives relocation")
+      equal(signs[1][2], expected[1], "gutter pin follows the anchored line")
+      equal(signs[1][4].sign_text, "📌", "pin has a visible gutter marker")
+      equal(signs[1][4].sign_hl_group, "FlowistryPin", "gutter pin uses its red highlight")
+    else
+      equal(#signs, 0, "missing target hides the gutter pin")
+    end
     pins.clear(anchor_buf)
+    equal(#vim.api.nvim_buf_get_extmarks(anchor_buf, pins.namespace, 0, -1, {}), 0,
+      "unpin clears the gutter marker")
   end
   anchor_case(original_lines, { 2, 9 }, "identical whole-buffer replacement preserves pinned column")
   anchor_case({ "fn main() {", "    let dx = end[0] - start[0];", "",
@@ -159,7 +170,37 @@ local function run()
   equal(pins.position(anchor_buf, lost_pin), nil, "missing pin stays unavailable without repeated mapping")
   vim.api.nvim_buf_set_lines(anchor_buf, 0, -1, false, original_lines)
   equal(pins.position(anchor_buf, lost_pin), { 2, 8 }, "restoring source recovers the original pin")
+  equal(#vim.api.nvim_buf_get_extmarks(anchor_buf, pins.namespace, 0, -1, {}), 1,
+    "restoring a missing target restores its gutter pin")
   vim.api.nvim_buf_delete(anchor_buf, { force = true })
+
+  -- A one-column gutter must show the pin above a letter mark, then reveal the
+  -- untouched letter again on unpin. Exercise the actual screen, not just IDs.
+  local previous_buf, previous_signcolumn = vim.api.nvim_get_current_buf(), vim.wo.signcolumn
+  local gutter_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(gutter_buf)
+  vim.wo.signcolumn = "yes"
+  vim.api.nvim_buf_set_lines(gutter_buf, 0, -1, false, { "let selected = 1;" })
+  render.highlights()
+  vim.fn.sign_define("FlowistryTestTag", { text = "p", texthl = "Identifier" })
+  vim.fn.sign_place(1, "FlowistryTestTag", "FlowistryTestTag", gutter_buf, { lnum = 1, priority = 10 })
+  vim.cmd("redraw!")
+  equal(vim.fn.screenstring(1, 1), "p", "letter tag initially appears in gutter")
+  pins.set(gutter_buf, { 0, 4 })
+  vim.cmd("redraw!")
+  equal(vim.fn.screenstring(1, 1), "📌", "pin displays above the existing letter tag")
+  equal(vim.api.nvim_get_hl(0, { name = "FlowistryPin", link = false }).fg, 0xff5555,
+    "pin has a red foreground")
+  equal(#vim.fn.sign_getplaced(gutter_buf, { group = "FlowistryTestTag" })[1].signs, 1,
+    "pin leaves the underlying tag intact")
+  pins.clear(gutter_buf)
+  vim.cmd("redraw!")
+  equal(vim.fn.screenstring(1, 1), "p", "unpin reveals the original letter tag")
+  vim.fn.sign_unplace("FlowistryTestTag", { buffer = gutter_buf })
+  vim.fn.sign_undefine("FlowistryTestTag")
+  vim.api.nvim_set_current_buf(previous_buf)
+  vim.wo.signcolumn = previous_signcolumn
+  vim.api.nvim_buf_delete(gutter_buf, { force = true })
 
   local call_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(call_buf, 0, -1, false, {
@@ -434,11 +475,25 @@ local function run()
 
   for _, mode in ipairs({ "exit", "diagnostics", "base64", "gzip", "error", "schema", "json" }) do
     setup({ FLOWISTRY_TEST_MODE = mode })
+    local before_notes, before_win = #notes, vim.api.nvim_get_current_win()
     flow.enable()
     await(function() return flow.status() == "error" end, "failure surfaced: " .. mode)
+    equal(#notes, before_notes, "analysis failure does not emit a generic notification")
+    equal(vim.api.nvim_get_current_win(), before_win, "error popup does not take editing focus")
     equal(#marks(), 0, "failure clears highlights: " .. mode)
+    local error_popup
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(win).relative == "editor" then error_popup = win end
+    end
+    check(error_popup ~= nil, "analysis error has a small popup")
+    check(vim.api.nvim_win_get_height(error_popup) <= 2, "error popup is at most two rows")
     if mode == "diagnostics" then
-      check(notes[#notes]:find("Flowistry produced no analysis", 1, true), "empty compiler output reports diagnostics instead of a base64 error")
+      local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(error_popup), 0, -1, false))
+      equal(text, "error: expected Rust expression", "popup shows the actual compiler diagnostic")
+      flow.log()
+      check(table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false)):find("Flowistry produced no analysis", 1, true),
+        "full transport details remain available in the log")
+      vim.cmd.close()
     end
   end
   flow.log()

@@ -67,7 +67,9 @@ local function remember(buf, pin, lines, pos)
   pin.lines, pin.pos = lines, pos
   pin.tick = vim.api.nvim_buf_get_changedtick(buf)
   pin.first, pin.last = token_range(lines[pos[1] + 1] or "", pos[2])
-  pin.id = vim.api.nvim_buf_set_extmark(buf, M.namespace, pos[1], pos[2], { id = pin.id })
+  pin.id = vim.api.nvim_buf_set_extmark(buf, M.namespace, pos[1], pos[2], {
+    id = pin.id, sign_text = "📌", sign_hl_group = "FlowistryPin", priority = 1000,
+  })
 end
 
 function M.set(buf, pos, previous)
@@ -87,7 +89,12 @@ function M.position(buf, pin)
     local first, last = token_range(line, pos[2])
     if line:sub(first + 1, last) ~= pin.lines[pin.pos[1] + 1]:sub(pin.first + 1, pin.last) then pos = nil end
   end
-  if not pos then pin.missing_tick = tick; return nil end
+  if not pos then
+    -- Keep the source anchor for undo, but never point at a different line.
+    if pin.id then vim.api.nvim_buf_del_extmark(buf, M.namespace, pin.id); pin.id = nil end
+    pin.missing_tick = tick
+    return nil
+  end
   remember(buf, pin, lines, pos)
   pin.missing_tick = nil
   return pos

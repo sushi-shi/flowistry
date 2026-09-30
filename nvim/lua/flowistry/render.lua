@@ -10,6 +10,7 @@ function M.highlights()
     italic = false, bold = false,
   })
   vim.api.nvim_set_hl(0, "FlowistryFocus", { default = true, link = "Visual" })
+  vim.api.nvim_set_hl(0, "FlowistryPin", { default = true, fg = "#ff5555", ctermfg = 196 })
   vim.api.nvim_set_hl(0, "FlowistryInfluence", { default = true, link = "CursorLine" })
   -- Code that matters only if two shared handles (e.g. Rc<RefCell<T>> clones)
   -- point to the same object: kept readable, but tinted apart from the slice.
