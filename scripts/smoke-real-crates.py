@@ -292,15 +292,21 @@ def strip_dev_only(sections):
         sections.append(["[workspace]", []])
 
 
-def memory_scope(memory_limit):
+def memory_scope(memory_limit, environment=None):
     """The command prefix that runs a command in a transient systemd scope whose memory
     (without swap) is capped at `memory_limit` (e.g. "6G"). When the cap is hit, the kernel
     kills the largest process in the scope (the compiler) and the rest keep running
     (OOMPolicy=continue), so cargo reports the compiler's SIGKILL."""
     if not memory_limit:
         return []
-    return ["systemd-run", "--user", "--scope", "--quiet", "--collect",
-            "-p", f"MemoryMax={memory_limit}", "-p", "MemorySwapMax=0", "-p", "OOMPolicy=continue"]
+    scope = ["systemd-run", "--user", "--scope", "--quiet", "--collect",
+             "-p", f"MemoryMax={memory_limit}", "-p", "MemorySwapMax=0", "-p", "OOMPolicy=continue"]
+    # The memory cap must not invent a new semantic environment for every run.
+    # Restore the caller's invocation ID (or absence) after entering the scope.
+    environment = os.environ if environment is None else environment
+    if "INVOCATION_ID" in environment:
+        return scope + ["env", "INVOCATION_ID=" + environment["INVOCATION_ID"]]
+    return scope + ["env", "-u", "INVOCATION_ID"]
 
 
 # Runs argv[2:] and writes the peak RSS (KiB) of its process tree to the file descriptor
@@ -332,7 +338,7 @@ def run(cmd, cwd, env, timeout=None, memory_limit=None):
     With `memory_limit`, the command runs in a systemd scope capped at that much memory.
     """
     rss_read, rss_write = os.pipe()
-    cmd = [sys.executable, "-S", "-c", RSS_WRAPPER, str(rss_write)] + memory_scope(memory_limit) + list(cmd)
+    cmd = [sys.executable, "-S", "-c", RSS_WRAPPER, str(rss_write)] + memory_scope(memory_limit, env) + list(cmd)
     try:
         proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, errors="replace", start_new_session=True, pass_fds=(rss_write,))
@@ -1367,6 +1373,18 @@ def budget_summary(reports, names, budgets):
     return out, exceeded
 
 
+def checked_smoke_crate(spec, args, registries, backends):
+    """Retain an explicit failed entry if harness preparation/checkpointing fails."""
+    try:
+        return smoke_crate(spec, args, registries, backends)
+    except Exception as error:
+        name = spec.get('name') if isinstance(spec, dict) else str(spec)
+        message = f'harness failure ({type(error).__name__}): {error}'
+        log(f'[{name}] {message}')
+        return {'name': name, 'spec': spec, 'crate': None, 'files': [], 'records': [],
+                'skipped': [(name, message)]}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__.split("\n\n")[0],
@@ -1511,7 +1529,7 @@ def main():
         args.checkpoints = Checkpoints(args.checkpoint_dir, manifest(args, backends, CORPUS_DIR, __file__))
     started = time.monotonic()
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-        reports = list(pool.map(lambda s: smoke_crate(s, args, registries, backends), specs))
+        reports = list(pool.map(lambda s: checked_smoke_crate(s, args, registries, backends), specs))
     total = time.monotonic() - started
     if args.update_corpus:
         if not args.crates:
