@@ -694,12 +694,24 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
                 "phases": timings, "stats": stats, "places": places,
                 "cache": response.get("cache", output.get("cache")), "counters": counters,
                 "wire_bytes": len(tail[-1].strip().encode()),
-                "cargo_replay_observed": "replay: running the driver directly" in stderr}
+                "cargo_replay_observed": "replay: running the driver directly" in stderr,
+                "summary_activity": summary_activity(stderr)}
     err = response.get("Err", response)
     message = err.get("error") or err.get("type") or json.dumps(err)
     status = "benign" if any(b in message for b in BENIGN_ERRORS) else "error"
     return {"status": status, "message": message, "seconds": seconds, "max_rss_mb": max_rss_mb,
             "phases": timings, "stats": stats, "counters": counters}
+
+
+def summary_activity(stderr):
+    """Distinguish observed zero work from disabled audit logging."""
+    events = re.findall(r'\bflowistry::audit\] audit (compiler|summary-compute|summary-hit|summary-verified)(?: ([^\n]*))?', stderr)
+    if not events:
+        return None
+    return {'compiler_invocations': sum(kind == 'compiler' for kind, _ in events),
+            'computations': [name for kind, name in events if kind == 'summary-compute'],
+            'hits': [name for kind, name in events if kind == 'summary-hit'],
+            'verified': [name for kind, name in events if kind == 'summary-verified']}
 
 
 def parse_counters(stderr):

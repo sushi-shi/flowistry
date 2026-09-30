@@ -48,7 +48,11 @@ fn engine() -> Option<&'static str> {
   ENGINE
     .get_or_init(|| {
       let data = fs::read(std::env::current_exe().ok()?).ok()?;
-      Some(fingerprint(|h| data.hash(h)))
+      let compiler = rustc_interface::util::rustc_version_str()?;
+      Some(fingerprint(|h| {
+        compiler.hash(h);
+        data.hash(h);
+      }))
     })
     .as_deref()
 }
