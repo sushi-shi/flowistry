@@ -171,4 +171,10 @@ retention. The packaged runtime at `24ed53ecb` passes all five Nix checks and
 323 frontend assertions; real-worker navigation and packaged cancellation pass
 in both modes. Large-project/performance and dependency-selective save gates
 remain; see [background evidence](neovim-background.md).
+[#56](https://github.com/sushi-shi/flowistry/pull/56) extends #55 with saved-file
+and affected-caller scheduling. Compiler-derived observations share the bounded
+dependency store; every worker retains full result validation. SigOnly callers
+remain independent of ordinary callee-body edits, and rapid saves coalesce in
+the editor. See [save scheduling](dependency-save-plan.md) for evidence and the
+remaining feature-11 acceptance gates.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).
