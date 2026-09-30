@@ -3,10 +3,7 @@ use std::{
   rc::Rc,
 };
 
-use indexical::{
-  IndexedValue,
-  bitset::rustc::{IndexMatrix, IndexSet},
-};
+use indexical::{IndexedValue, bitset::rustc::IndexSet};
 use log::{debug, trace};
 use rustc_data_structures::fx::FxHashMap as HashMap;
 use rustc_hir::def_id::DefId;
@@ -29,6 +26,7 @@ use smallvec::SmallVec;
 
 use super::{
   AnalysisSession,
+  domain::{LazyMatrix, RowMatrix, SeedRows},
   effects::CallEffects,
   mutation::{ModularMutationVisitor, Mutation, MutationStatus},
   shared_handles::SharedHandles,
@@ -47,8 +45,10 @@ use crate::{
 /// we use the bit-set data structures in [`rustc_index::bit_set`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_index/bit_set/index.html).
 /// However instead of using a bit-set directly, we use the [`indexical`] crate to map between raw indices and the objects they represent.
 ///
-/// The [`IndexMatrix`] maps from a [`NormPlace`] to a [`LocationOrArgSet`] via the [`IndexMatrix::row_set`] method. Rows are keyed by
+/// The [`LazyMatrix`] maps from a [`NormPlace`] to a [`LocationOrArgSet`] via the [`LazyMatrix::row_set`] method. Rows are keyed by
 /// normalized places (see [`PlaceInfo::normalize`]), never by raw [`Place`]s: use [`PlaceInfo::normalize`] to compute the key of a place.
+/// The rows of argument places, which start out depending on their argument, are stored once per body and are implicit in every
+/// state until they are written (see [`LazyMatrix`]); [`LazyMatrix::rows`] lists them too.
 /// The [`LocationOrArgSet`] is an
 /// [`IndexSet`](indexical::IndexSet) of locations (or arguments, see note below), which wraps a
 /// [`rustc_index::bit_set::HybridBitSet`](https://doc.rust-lang.org/nightly/nightly-rustc/rustc_index/bit_set/enum.HybridBitSet.html) and
@@ -68,7 +68,7 @@ use crate::{
 /// information flow analysis: an instruction `bb[0]: _2 = _1` (where `_1` is an argument) would set $\Theta(\verb|_2|) = \Theta(\verb|_1|) \cup \\{\verb|bb0\[0\]|\\}\$.
 /// However, $\Theta(\verb|_1|)$ would be empty, so it would be imposible to determine that `_2` depends on `_1`. To solve this issue, we
 /// enrich the domain of locations with arguments, using the [`LocationOrArg`] type. Any dependency can be on *either* a location or an argument.
-pub type FlowDomain<'tcx> = IndexMatrix<NormPlace<'tcx>, LocationOrArg>;
+pub type FlowDomain<'tcx> = LazyMatrix<NormPlace<'tcx>, LocationOrArg>;
 
 /// Data structure that holds context for performing the information flow analysis.
 pub struct FlowAnalysis<'a, 'tcx> {
@@ -104,6 +104,8 @@ pub struct FlowAnalysis<'a, 'tcx> {
 
   /// Counters of the transfer function.
   pub(crate) counters: TransferCounters,
+  /// The rows of argument places at the start of the body, shared by every state.
+  pub(crate) seeds: Rc<SeedRows<NormPlace<'tcx>, LocationOrArg>>,
 }
 
 /// Counters of the transfer function, see [`FlowStats`](super::FlowStats).
@@ -138,6 +140,18 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     assert_eq!(session.mode(), place_info.mode());
     let control_dependencies = body.control_dependencies();
     debug!("Control dependencies: {control_dependencies:?}");
+    // Every place that conflicts with a place reachable from an argument starts out
+    // depending on the argument.
+    let seeds = SeedRows::new(
+      place_info.location_domain(),
+      place_info.all_args().flat_map(|(arg, loc)| {
+        let place_info = &place_info;
+        place_info
+          .compute_conflicts(arg)
+          .into_iter()
+          .map(move |place| (place_info.normalize(place), loc))
+      }),
+    );
     FlowAnalysis {
       tcx,
       def_id,
@@ -149,6 +163,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       call_reads: RefCell::default(),
       shared_handles: None,
       counters: TransferCounters::default(),
+      seeds: Rc::new(seeds),
     }
   }
 
@@ -199,7 +214,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
   /// The union of the rows of `state` that influence each of `inputs`.
   pub(crate) fn deps_of_inputs<C: IndexedValue + 'static>(
     &self,
-    state: &IndexMatrix<NormPlace<'tcx>, C>,
+    state: &impl RowMatrix<NormPlace<'tcx>, C>,
     inputs: &[Place<'tcx>],
   ) -> IndexSet<C> {
     let mut deps = IndexSet::new(state.col_domain());
@@ -265,13 +280,16 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
   /// location of the mutations and to the terminators they are control-dependent on.
   ///
   /// This function expects *all* the mutations of a location at once.
-  pub(crate) fn transfer<C: IndexedValue + std::fmt::Debug + 'static>(
+  pub(crate) fn transfer<C, M>(
     &self,
-    state: &mut IndexMatrix<NormPlace<'tcx>, C>,
+    state: &mut M,
     mutations: &[Mutation<'tcx>],
     location: Location,
     seed: impl Fn(Location, &mut IndexSet<C>),
-  ) {
+  ) where
+    C: IndexedValue + std::fmt::Debug + 'static,
+    M: RowMatrix<NormPlace<'tcx>, C>,
+  {
     debug!("  Applying mutations {mutations:?}");
     let counters = &self.counters;
     counters.transfers.set(counters.transfers.get() + 1);
@@ -287,14 +305,13 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     };
 
     // Add every influence on `input` to `deps`.
-    let add_deps =
-      |state: &IndexMatrix<NormPlace<'tcx>, C>, input, target_deps: &mut IndexSet<C>| {
-        for relevant in self.influences(input) {
-          let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
-          trace!("    For relevant {relevant:?} for input {input:?}");
-          target_deps.union(relevant_deps);
-        }
-      };
+    let add_deps = |state: &M, input, target_deps: &mut IndexSet<C>| {
+      for relevant in self.influences(input) {
+        let relevant_deps = state.row_set(&self.place_info.normalize(relevant));
+        trace!("    For relevant {relevant:?} for input {input:?}");
+        target_deps.union(relevant_deps);
+      }
+    };
 
     // Register every explicitly provided input as an input.
     for (mt, deps) in mutations.iter().zip(&mut all_deps) {
@@ -372,18 +389,23 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
   const NAME: &'static str = "FlowAnalysis";
 
   fn bottom_value(&self, _body: &Body<'tcx>) -> Self::Domain {
-    FlowDomain::new(self.location_domain())
+    FlowDomain::new(&self.seeds)
   }
 
   fn initialize_start_block(&self, _body: &Body<'tcx>, state: &mut Self::Domain) {
-    for (arg, loc) in self.place_info.all_args() {
-      for place in self.place_info.conflicts(arg) {
-        debug!(
-          "arg={arg:?} / place={place:?} / loc={:?}",
-          self.location_domain().value(loc)
-        );
-        state.insert(self.place_info.normalize(*place), loc);
+    // Every seeded row (a place conflicting with a place reachable from an argument)
+    // starts out depending on its argument.
+    state.seed();
+
+    // The shadow replays the eager seeding: every row gets its argument explicitly.
+    #[cfg(feature = "shadow-eager")]
+    {
+      for (arg, loc) in self.place_info.all_args() {
+        for place in self.place_info.conflicts(arg) {
+          state.shadow_insert(self.place_info.normalize(*place), loc);
+        }
       }
+      state.check_all();
     }
   }
 

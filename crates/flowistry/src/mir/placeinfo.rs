@@ -277,25 +277,31 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
     self.counters.conflicts.lookup();
     self.conflicts_cache.get(&place, |place| {
       self.counters.conflicts.miss();
-      let children = self.children(place);
-      let parents = place
-        .projection
-        .iter()
-        .enumerate()
-        .map(|(i, elem)| {
-          let place = PlaceRef {
-            local: place.local,
-            projection: &place.projection[.. i],
-          };
-          (place, elem)
-        })
-        .take_while(|(place, elem)| {
-          place.ty(self.body.local_decls(), self.tcx).ty.is_box()
-            || !matches!(elem, PlaceElem::Deref)
-        })
-        .map(|(place_ref, _)| Place::from_ref(place_ref, self.tcx));
-      children.into_iter().chain(parents).collect()
+      self.compute_conflicts(place)
     })
+  }
+
+  /// Computes [`conflicts`](Self::conflicts) without caching the result, for places
+  /// that are queried once (e.g. when seeding the rows of the arguments).
+  pub(crate) fn compute_conflicts(&self, place: Place<'tcx>) -> PlaceSet<'tcx> {
+    let children = self.children(place);
+    let parents = place
+      .projection
+      .iter()
+      .enumerate()
+      .map(|(i, elem)| {
+        let place = PlaceRef {
+          local: place.local,
+          projection: &place.projection[.. i],
+        };
+        (place, elem)
+      })
+      .take_while(|(place, elem)| {
+        place.ty(self.body.local_decls(), self.tcx).ty.is_box()
+          || !matches!(elem, PlaceElem::Deref)
+      })
+      .map(|(place_ref, _)| Place::from_ref(place_ref, self.tcx));
+    children.into_iter().chain(parents).collect()
   }
 
   /// Returns all [direct](PlaceExt::is_direct) places that are reachable from `place`

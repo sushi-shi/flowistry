@@ -1,0 +1,7 @@
+fn f(v: &mut Vec<i32>, s: &(i32, String)) {
+  v.push(s.0);
+  let n = v.len();
+  `(n)`;
+}
+
+fn main() {}

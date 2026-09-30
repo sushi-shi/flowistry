@@ -1,0 +1,12 @@
+/* recurse */
+fn g(x: &mut (i32, i32), y: i32) {
+  x.1 = y;
+}
+
+fn main() {
+  `[let mut t = (1, 2);]`
+  `[let v = 3;]`
+  `[g(&mut t, v);]`
+  `[let z = t.1;]`
+  `[z;]`
+}

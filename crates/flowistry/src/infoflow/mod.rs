@@ -18,6 +18,7 @@ pub use self::{
   dependencies::{
     Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans,
   },
+  domain::{LazyMatrix, SeedRows},
   session::{AnalysisSession, SummaryStats},
 };
 use crate::{
@@ -33,6 +34,7 @@ use crate::{
 mod analysis;
 mod callsite;
 mod dependencies;
+mod domain;
 mod effects;
 mod interior;
 pub mod mutation;
@@ -100,6 +102,8 @@ pub struct FlowStats {
   pub transfers: usize,
   /// Mutations applied by those transfers.
   pub mutations: usize,
+  /// Rows seeded from the arguments at the start of the body (see [`SeedRows`]).
+  pub seed_rows: usize,
   /// How often the place queries were made and computed.
   pub place_caches: PlaceCacheStats,
 }
@@ -113,6 +117,7 @@ impl FlowStats {
       ("changed_joins", self.changed_joins),
       ("transfers", self.transfers),
       ("mutations", self.mutations),
+      ("seed_rows", self.seed_rows),
     ];
     counters.extend(self.place_caches.counters());
     counters
@@ -126,6 +131,8 @@ pub struct FlowSizeStats {
   pub locations: usize,
   /// Rows (places with a non-empty dependency set) summed over the states of all locations.
   pub rows: usize,
+  /// Rows stored explicitly (see [`LazyMatrix`]) summed over the states of all locations.
+  pub explicit_rows: usize,
   /// Sizes of the dependency sets of those rows, summed.
   pub row_entries: usize,
 }
@@ -144,6 +151,7 @@ impl<'tcx> FlowResults<'_, 'tcx> {
       changed_joins: engine.changed_joins,
       transfers: counters.transfers.get(),
       mutations: counters.mutations.get(),
+      seed_rows: self.analysis.seeds.len(),
       place_caches: self.analysis.place_info.cache_stats(),
     }
   }
@@ -157,10 +165,12 @@ impl<'tcx> FlowResults<'_, 'tcx> {
       ..FlowSizeStats::default()
     };
     for loc in body.all_locations() {
-      for (_, locations) in self.state_at(loc).rows() {
+      let state = self.state_at(loc);
+      for (_, locations) in state.rows() {
         stats.rows += 1;
         stats.row_entries += locations.count();
       }
+      stats.explicit_rows += state.explicit_len();
     }
     stats
   }
@@ -292,12 +302,13 @@ fn run_flow<'a, 'tcx>(
     let FlowSizeStats {
       locations: nloc,
       rows: np,
+      explicit_rows: ne,
       row_entries: nl,
     } = results.size_stats();
     let pavg = np as f64 / (nloc as f64);
     let lavg = nl as f64 / (nloc as f64);
     log::info!(
-      "Over {nloc} locations, total number of place entries: {np} (avg {pavg:.0}/loc), total size of location sets: {nl} (avg {lavg:.0}/loc)",
+      "Over {nloc} locations, total number of place entries: {np} (avg {pavg:.0}/loc, {ne} stored), total size of location sets: {nl} (avg {lavg:.0}/loc)",
     );
     if mode.context_mode == ContextMode::Recurse {
       log::info!("Callee summaries so far: {:?}", session.stats());

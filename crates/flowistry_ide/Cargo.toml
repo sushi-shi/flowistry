@@ -12,6 +12,7 @@ rustc_private = true
 
 [features]
 decompose = ["petgraph", "rayon"]
+shadow-eager = ["flowistry/shadow-eager"]
 
 [dependencies]
 flowistry = {version = "0.5.44", path = "../flowistry"}
