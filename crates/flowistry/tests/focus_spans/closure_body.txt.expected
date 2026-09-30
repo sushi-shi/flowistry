@@ -1,0 +1,10 @@
+fn scale(value: i32, factor: i32) -> i32 { value * factor }
+
+fn main() {
+  let factor = 3;
+  let f = |`[input: i32]`| {
+    `[let doubled = input * 2;]`
+    `[scale(doubled, ]`factor`[)]`
+  };
+  f(1);
+}
