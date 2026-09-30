@@ -18,7 +18,8 @@ cargo flowistry --context-mode Recurse result-index /project/src/lib.rs
 cargo flowistry --context-mode Recurse cancel-results /project/src/lib.rs
 ```
 
-`result-index` never starts Cargo or rustc. A `current` result lists each body's
+`result-index` performs no Cargo metadata/build work and never starts rustc.
+A `current` result lists each body's
 compiler-derived identity, display name, current range and availability, together
 with the package, crate types, target, configuration, mode and validation
 provenance. Its input snapshot must still match. Otherwise it reports `miss`.
