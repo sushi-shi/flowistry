@@ -68,3 +68,17 @@ latency, rapid-save/dependency-matrix or final corpus gates. Package validation 
 exact candidate evidence are recorded separately when complete. The previous
 coordinator's two full cache corpus runs continue against their own immutable
 executables and independent prepared roots.
+
+The final runtime candidate is `24ed53ecb` (`neovim-background-v2/`). All five
+root Nix checks and the actual launcher build pass. The frontend suite passes
+323 assertions: 242 existing, 21 stream, 37 scheduler and 23 subprocess-background
+checks. Existing package gates pass 756 source-selection, 50 precision, 101 summary
+and 45 editor-cache assertions, plus 51 body-cache and 32 snapshot-cache cases.
+All 14 backend discovery/worker scenarios pass at the frozen executable.
+
+The direct real-worker fixture passes 14 assertions in both modes; the expanded
+packaged-command fixture passes 16, additionally proving cancellation of a blocked
+compiler wrapper and its setsid child through the actual installed command.
+Both modes warmed all four fixture bodies and navigation invoked no compiler.
+[Exact build, runtime, harness and report hashes](measurements/neovim-background.json)
+record these checks. Fixture timings on this loaded host are not latency claims.
