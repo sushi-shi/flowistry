@@ -22,8 +22,9 @@ use std::{
   env, fs,
   hash::{DefaultHasher, Hash, Hasher},
   io::{BufRead, BufReader, Write},
+  os::unix::process::ExitStatusExt,
   path::{Path, PathBuf},
-  process::{Command, ExitCode, Stdio},
+  process::{Command, ExitCode, ExitStatus, Stdio},
   time::UNIX_EPOCH,
 };
 
@@ -526,5 +527,47 @@ pub fn try_replay(file: &Path, plugin_args: &str) -> Option<ExitCode> {
     }
   }
   let status = driver.wait().ok()?;
-  Some(ExitCode::from(status.code().unwrap_or(1) as u8))
+  Some(child_exit_code(status))
+}
+
+/// Keep signal termination distinguishable from an ordinary compiler error.
+/// In particular, a compiler killed at a memory cap must remain exit 137, even
+/// when it emitted no diagnostic before SIGKILL.
+pub(crate) fn child_exit_code(status: ExitStatus) -> ExitCode {
+  let code = match (status.code(), status.signal()) {
+    (Some(code), _) => code,
+    (_, Some(signal)) => {
+      eprintln!("Flowistry child terminated by signal {signal}");
+      128 + signal
+    }
+    _ => 1,
+  };
+  ExitCode::from(u8::try_from(code).unwrap_or(1))
+}
+
+#[cfg(test)]
+mod status_tests {
+  use super::*;
+
+  #[test]
+  fn preserves_normal_compiler_status() {
+    for code in [0, 1, 23, 137] {
+      let status = Command::new("sh")
+        .args(["-c", &format!("exit {code}")])
+        .status()
+        .unwrap();
+      assert_eq!(child_exit_code(status), ExitCode::from(code as u8));
+    }
+  }
+
+  #[test]
+  fn preserves_signal_killed_child_without_stderr() {
+    let output = Command::new("sh")
+      .args(["-c", "kill -KILL $$"])
+      .output()
+      .unwrap();
+    assert!(output.stderr.is_empty());
+    assert_eq!(output.status.signal(), Some(9));
+    assert_eq!(child_exit_code(output.status), ExitCode::from(137));
+  }
 }
