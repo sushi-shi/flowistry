@@ -1,0 +1,227 @@
+{
+  "backend_identity": "Both archived executables are byte-identical; the subsequent changes affect Lua/tests only.",
+  "build": {
+    "binaries": {
+      "cargo-flowistry": "86a334ab4c6cd46e5f81123fa2cb4833ab3c3c07ddbd3e3c1b76b24184419322",
+      "flowistry-driver": "df2adf4dbf64dc077117edb711367b65f5c945c515e3dfd04422bb67ce6c25ec"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T14:47:24.679925+00:00",
+    "revision": "fda9c7e8efca3e338334b5e7ff243205c990f7c9",
+    "rustflags": "",
+    "tree": "2626aeeb44909b402a23e360f352549629ab69fc"
+  },
+  "checks": {
+    "frontend_assertions": 366,
+    "ide_unit_tests": 20,
+    "live_editor_assertions": 31,
+    "publication_cases": 16,
+    "real_input_saves": 8,
+    "scheduler_assertions": 43
+  },
+  "equivalent_backend_build": {
+    "binaries": {
+      "cargo-flowistry": "86a334ab4c6cd46e5f81123fa2cb4833ab3c3c07ddbd3e3c1b76b24184419322",
+      "flowistry-driver": "df2adf4dbf64dc077117edb711367b65f5c945c515e3dfd04422bb67ce6c25ec"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T14:42:14.341958+00:00",
+    "revision": "689c60f09c1f1de6c07a1aee51aa6f6088ee2191",
+    "rustflags": "",
+    "tree": "764b1e45fe0922b945a6189236f75d74d31aa40e"
+  },
+  "harness": {
+    "nvim/tests/background_scheduler.lua": "27d882fda911ed7fe18104c6af9e0f1e14474bd1087117544942a6fa64e02436",
+    "nvim/tests/fake_backend.lua": "03a7361edf9ebd6e5a486250b52a6847aeed0ac35c69af0d2fc2cb550c5401e0",
+    "nvim/tests/fake_project.lua": "4040e2610835441f5fa137db40c719116d21b75a01dab9c643f518ab09569388",
+    "nvim/tests/inputs.lua": "d58d1153272b58ed691933224f87a628948ad2b1288f97ffc21466c029900f0e",
+    "nvim/tests/inputs_live.lua": "d6a2c5a4518e9bfb2a81725a3bef58bf19888c8ff849e07a0a88f550e3e9ae78",
+    "scripts/test-result-index.py": "c13b63a70e6b57991fdc0fcd9db0defc7f8ff1c44151c2d81553fd108aeb7ce6"
+  },
+  "limitations": [
+    "Save timings were recorded under simultaneous corpus load; not quiet distributions or a performance acceptance claim.",
+    "External writes while Neovim stays focused require explicit refresh or a subsequent focus return.",
+    "Full feature-11 and final release gates remain as specified in continuation-plan.md."
+  ],
+  "logs": {
+    "/home/sheep/Projects/flowistry/target/continuation-validation/editor-inputs-frontend-v3.log": "d1d2fcd1af990dbe4312d8cfda171570d0c21a38ada28edfd479fd5d9af5ba91",
+    "/home/sheep/Projects/flowistry/target/continuation-validation/editor-inputs-index-final-v1.log": "80418f2576c03828421dc76f00eb635703978e0f3497a352514cca7f6c8f140e",
+    "/home/sheep/Projects/flowistry/target/continuation-validation/editor-inputs-live-final-v3.log": "6888a52226cf882b8d55e28edf4b0cf0e20b265bd7d24d08a144468e0f87f630",
+    "/home/sheep/Projects/flowistry/target/continuation-validation/editor-inputs-scheduler-final-v1.log": "b4fcf890e69a4f339731794624361a51add894c747d31727a9d1c9eb1f8ed612",
+    "/home/sheep/Projects/flowistry/target/continuation-validation/editor-inputs-unit-final-v1.log": "b6a1f07e4d8bd7ebe453990da2d4cc3a8bc415371ce10105695de871b7d8d4b7"
+  },
+  "reports": {
+    "live": {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/editor-inputs-live-final-v3.json",
+      "report": {
+        "assertions": 31,
+        "observations": [
+          {
+            "input": "/tmp/nix-shell.yzzZ8Y/nvim.sheep/Be2kuc/0 inputs live/external.txt",
+            "loaded_save_ms": 252.474808,
+            "mode": "SigOnly"
+          },
+          {
+            "input": "/tmp/nix-shell.yzzZ8Y/nvim.sheep/Be2kuc/0 inputs live/dependency/src/lib.rs",
+            "loaded_save_ms": 240.563933,
+            "mode": "SigOnly"
+          },
+          {
+            "input": "/tmp/nix-shell.yzzZ8Y/nvim.sheep/Be2kuc/0 inputs live/build.txt",
+            "loaded_save_ms": 226.069882,
+            "mode": "SigOnly"
+          },
+          {
+            "input": "/tmp/nix-shell.yzzZ8Y/nvim.sheep/Be2kuc/0 inputs live/.cargo/config.toml",
+            "loaded_save_ms": 184.510062,
+            "mode": "SigOnly"
+          },
+          {
+            "input": "/tmp/nix-shell.yzzZ8Y/nvim.sheep/Be2kuc/0 inputs live/external.txt",
+            "loaded_save_ms": 319.710433,
+            "mode": "Recurse"
+          },
+          {
+            "input": "/tmp/nix-shell.yzzZ8Y/nvim.sheep/Be2kuc/0 inputs live/dependency/src/lib.rs",
+            "loaded_save_ms": 263.514024,
+            "mode": "Recurse"
+          },
+          {
+            "input": "/tmp/nix-shell.yzzZ8Y/nvim.sheep/Be2kuc/0 inputs live/build.txt",
+            "loaded_save_ms": 236.079011,
+            "mode": "Recurse"
+          },
+          {
+            "input": "/tmp/nix-shell.yzzZ8Y/nvim.sheep/Be2kuc/0 inputs live/.cargo/config.toml",
+            "loaded_save_ms": 298.279439,
+            "mode": "Recurse"
+          }
+        ],
+        "passed": true
+      },
+      "sha256": "ba34c7d73d759f0d8da006506cc228d4aa1e3804fa10c53f36da3a5000882c1e"
+    },
+    "publication": {
+      "cases": [
+        {
+          "case": "layout",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "concurrent-bodies",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "superseded",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "canceled",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "generation-corruption",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "new-external-input",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "configured-disk-budget",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "interrupted-publication",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "layout",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "concurrent-bodies",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "superseded",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "canceled",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "generation-corruption",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "new-external-input",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "configured-disk-budget",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "interrupted-publication",
+          "mode": "Recurse",
+          "passed": true
+        }
+      ],
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/editor-inputs-index-final-v1.json",
+      "sha256": "06d16a5b02029480e45de083b70ddce595d6d9ac878be35f7275e5ba26f15908"
+    }
+  },
+  "retained_unsuccessful_attempts": [
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/editor-inputs-live-final-v1.log",
+      "reason": "Fixture rewrote an already-loaded unrelated file between modes; Neovim requested overwrite confirmation and exited without the mandatory result artifact. Not a passing test; fixed with per-mode paths."
+    }
+  ],
+  "schema": 1,
+  "supplemental_harness": "The final scheduler test adds five discovery-race assertions after the frozen build; runtime Rust/Lua files remain byte-identical to fda9c7e8e."
+}

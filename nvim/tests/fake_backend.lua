@@ -88,4 +88,11 @@ local encoded = vim.json.encode(result)
 if vim.env.FLOWISTRY_TEST_MODE == "json" then encoded = "not json" end
 local gzip = vim.system({ "gzip", "-c" }, { stdin = encoded }):wait()
 assert(gzip.code == 0, gzip.stderr)
-io.write(vim.base64.encode(gzip.stdout))
+local output = vim.base64.encode(gzip.stdout)
+if vim.env.FLOWISTRY_RESULT_PROTOCOL == "1" then
+  output = vim.json.encode({ schema = 1, status = "current", output = output,
+    inputs = vim.env.FLOWISTRY_TEST_UNKNOWN_INPUTS and vim.NIL or { schema = 1,
+      roots = { vim.fn.getcwd() }, files = vim.env.FLOWISTRY_TEST_INPUT_FILES
+        and vim.json.decode(vim.env.FLOWISTRY_TEST_INPUT_FILES) or {} } })
+end
+io.write(output)

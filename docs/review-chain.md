@@ -177,4 +177,10 @@ dependency store; every worker retains full result validation. SigOnly callers
 remain independent of ordinary callee-body edits, and rapid saves coalesce in
 the editor. See [save scheduling](dependency-save-plan.md) for evidence and the
 remaining feature-11 acceptance gates.
+[#57](https://github.com/sushi-shi/flowistry/pull/57) follows #56 with editor
+invalidation for compiler-discovered includes, dependency roots, build inputs
+and Cargo configuration. Bounded watch hints come from the existing snapshot;
+new discovery guards and retained workspace identity protect asynchronous
+delivery. See [input invalidation](editor-input-invalidation.md) for live save
+tests, fallback behavior and the remaining plan gates.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

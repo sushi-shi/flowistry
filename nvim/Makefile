@@ -4,6 +4,7 @@ test:
 	nvim --headless -u NONE -i NONE -l tests/project_stream.lua
 	nvim --headless -u NONE -i NONE -l tests/background_scheduler.lua
 	nvim --headless -u NONE -i NONE -l tests/background.lua
+	nvim --headless -u NONE -i NONE -l tests/inputs.lua
 	nvim --headless -u NONE -i NONE -l tests/cancellation.lua
 
 test-ui:

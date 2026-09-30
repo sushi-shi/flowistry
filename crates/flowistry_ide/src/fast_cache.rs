@@ -799,7 +799,35 @@ fn protocol() -> bool {
   env::var("FLOWISTRY_RESULT_PROTOCOL").is_ok_and(|value| value == "1")
 }
 
-fn emit(data: &[u8], status: &str, ticket: Option<&Ticket>) {
+/// Editor invalidation hints derived from the very same snapshot inputs. They
+/// authorize cancellation only; readers still need normal result validation.
+fn input_watch(entry: &Entry) -> Option<Value> {
+  let aliases =
+    |path: &PathBuf| std::iter::once(path.clone()).chain(path.canonicalize().ok());
+  let roots: BTreeSet<_> = entry.roots.iter().flat_map(aliases).collect();
+  let files: BTreeSet<_> = entry
+    .snapshot
+    .keys()
+    .chain(&entry.files)
+    .flat_map(aliases)
+    .filter(|path| !roots.iter().any(|root| path.starts_with(root)))
+    .collect();
+  #[derive(Serialize)]
+  struct Watch {
+    schema: u32,
+    roots: BTreeSet<PathBuf>,
+    files: BTreeSet<PathBuf>,
+  }
+  let value = serde_json::to_value(Watch {
+    schema: 1,
+    roots,
+    files,
+  })
+  .ok()?;
+  (serde_json::to_vec(&value).ok()?.len() <= 256 * 1024).then_some(value)
+}
+
+fn emit(data: &[u8], status: &str, ticket: Option<&Ticket>, entry: Option<&Entry>) {
   if protocol() {
     let output =
       matches!(status, "current" | "uncached").then(|| String::from_utf8_lossy(data));
@@ -807,7 +835,7 @@ fn emit(data: &[u8], status: &str, ticket: Option<&Ticket>) {
       "{}",
       serde_json::json!({"schema": 1, "status": status,
       "revision": ticket.map(|t| &t.revision), "generation": ticket.map(|t| &t.generation),
-      "output": output})
+      "output": output, "inputs": entry.and_then(input_watch)})
     );
   } else {
     let _ = std::io::stdout().write_all(data);
@@ -924,7 +952,12 @@ fn cached_run() -> Option<ExitCode> {
         };
         if supports {
           let ticket = store.begin(&key, &entry.revision()).ok()?;
-          emit(response.output.as_bytes(), "current", Some(&ticket));
+          emit(
+            response.output.as_bytes(),
+            "current",
+            Some(&ticket),
+            Some(entry),
+          );
           return Some(ExitCode::SUCCESS);
         }
       }
@@ -1072,6 +1105,7 @@ fn cached_run() -> Option<ExitCode> {
     &output.stdout,
     state,
     publication.as_ref().or(Some(&ticket)),
+    (state == "current").then_some(&entry),
   );
   if protocol() && state == "superseded" {
     return Some(ExitCode::from(75));
@@ -1117,6 +1151,7 @@ pub fn run() -> ExitCode {
               "error"
             },
             None,
+            None,
           );
           return crate::replay::child_exit_code(output.status);
         }
@@ -1149,6 +1184,40 @@ pub fn run() -> ExitCode {
 #[cfg(test)]
 mod publication_tests {
   use super::*;
+
+  #[test]
+  #[cfg(unix)]
+  fn editor_watch_keeps_external_aliases_and_missing_configuration() {
+    let root = env::temp_dir().join(format!("flowistry-watch-{}", std::process::id()));
+    fs::create_dir_all(root.join("project")).unwrap();
+    let external = root.join("external.txt");
+    fs::write(&external, "input").unwrap();
+    let alias = root.join("project/link.txt");
+    std::os::unix::fs::symlink(&external, &alias).unwrap();
+    let absent = root.join(".cargo/config.toml");
+    let mut entry = Entry {
+      key: "key".into(),
+      package: "package".into(),
+      workspace: root.join("project"),
+      roots: vec![root.join("project")],
+      excluded: vec![],
+      files: vec![absent.clone()],
+      snapshot: [(alias, None)].into(),
+      responses: vec![],
+      provenance: None,
+      published: None,
+      checksum: String::new(),
+    };
+    let watch = input_watch(&entry).unwrap();
+    let files = watch["files"].as_array().unwrap();
+    assert!(files.contains(&serde_json::json!(external)));
+    assert!(files.contains(&serde_json::json!(absent)));
+    entry
+      .files
+      .push(PathBuf::from(format!("/{}", "x".repeat(256 * 1024))));
+    assert!(input_watch(&entry).is_none());
+    fs::remove_dir_all(root).unwrap();
+  }
 
   #[test]
   fn source_aba_is_rejected_while_cargo_can_replace_its_outputs() {
