@@ -20,6 +20,9 @@ use serde_json::Value;
 
 use crate::result_store::{Namespace, Store, Ticket};
 
+#[path = "layout_cache.rs"]
+mod layout;
+
 const CHILD: &str = "FLOWISTRY_CACHE_CHILD_INPUTS";
 const LIMIT: u64 = 32 * 1024 * 1024;
 
@@ -122,6 +125,8 @@ struct Entry {
   snapshot: Snapshot,
   responses: Vec<Response>,
   provenance: Option<Provenance>,
+  layout_blocked: Option<String>,
+  layout: Option<layout::Proof>,
   published: Option<Ticket>,
   checksum: String,
 }
@@ -155,6 +160,8 @@ impl Entry {
         &self.snapshot,
         &self.responses,
         &self.provenance,
+        &self.layout_blocked,
+        &self.layout,
         &self.published,
       ))
       .ok()?,
@@ -423,6 +430,8 @@ fn discover(key: String, directory: &Path, selected_file: &Path) -> Option<Entry
     snapshot: BTreeMap::new(),
     responses: vec![],
     provenance: None,
+    layout_blocked: layout::metadata_reason(&metadata, selected),
+    layout: None,
     published: None,
     checksum: String::new(),
   })
@@ -507,6 +516,21 @@ pub(crate) fn record_inputs(tcx: TyCtxt<'_>, bodies: Vec<BodyIdentity>) {
     configuration: digest(&tcx.sess.opts.dep_tracking_hash(true)),
     mode: format!("{:?}", flowistry::extensions::EvalMode::from_ambient()),
     bodies,
+    layout_safe: tcx.sess.opts.unstable_opts.crate_attr.is_empty()
+      && tcx.crates(()).iter().all(|&krate| {
+        let source = tcx.used_crate_source(krate);
+        let paths = source
+          .rlib
+          .iter()
+          .chain(source.rmeta.iter())
+          .chain(source.dylib.iter());
+        let mut count = 0;
+        let trusted = paths.into_iter().all(|path| {
+          count += 1;
+          path.starts_with(tcx.sess.opts.sysroot.path())
+        });
+        trusted && count > 0
+      }),
   };
   if let Ok(data) = serde_json::to_vec(&CompilerInputs {
     files: files.into_iter().collect(),
@@ -535,6 +559,7 @@ struct Provenance {
   configuration: String,
   mode: String,
   bodies: Vec<BodyIdentity>,
+  layout_safe: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -913,7 +938,7 @@ fn cached_run() -> Option<ExitCode> {
   let mut key_args = args[.. command_index + 2].to_vec();
   key_args[command_index] = "file-focus".into();
   let key = digest(&(
-    7u32,
+    8u32,
     env::current_dir().ok()?,
     env::current_exe().ok()?,
     &key_args,
@@ -925,9 +950,28 @@ fn cached_run() -> Option<ExitCode> {
     println!("{}", serde_json::json!({"schema": 1, "status": "canceled"}));
     return Some(ExitCode::SUCCESS);
   }
-  let mut previous = load(&store, &key).filter(|e| {
-    e.snapshot()
-      .is_some_and(|current| same_contents(&current, &e.snapshot))
+  let mut relocated = false;
+  let mut previous = load(&store, &key).and_then(|mut entry| {
+    let current = entry.snapshot()?;
+    if same_contents(&current, &entry.snapshot) {
+      return Some(entry);
+    }
+    if mode == "refresh" || crate::summary_cache::verify_summaries() {
+      return None;
+    }
+    match layout::relocate(&mut entry, current) {
+      Ok(()) => {
+        let ticket = store.begin(&key, &entry.revision()).ok()?;
+        save(&store, &mut entry, &ticket)?;
+        relocated = true;
+        log::info!(target: "flowistry::audit", "audit layout-hit");
+        Some(entry)
+      }
+      Err(reason) => {
+        log::debug!("layout fallback: {reason}");
+        None
+      }
+    }
   });
   if operation == "result-index" {
     let value =
@@ -950,12 +994,14 @@ fn cached_run() -> Option<ExitCode> {
         };
         if supports {
           let ticket = store.begin(&key, &entry.revision()).ok()?;
-          emit(
-            response.output.as_bytes(),
-            "current",
-            Some(&ticket),
-            Some(entry),
-          );
+          let output = if relocated {
+            let mut value = decode(response.output.as_bytes())?;
+            value["Ok"]["cache"]["validation"] = "layout".into();
+            encode(&value)?
+          } else {
+            response.output.clone()
+          };
+          emit(output.as_bytes(), "current", Some(&ticket), Some(entry));
           return Some(ExitCode::SUCCESS);
         }
       }
@@ -1022,6 +1068,7 @@ fn cached_run() -> Option<ExitCode> {
     log::debug!("fast cache: compiler recorded {} inputs", extra.files.len());
     entry.files.extend(extra.files);
     entry.provenance = Some(extra.provenance);
+    entry.layout = None;
     build_inputs(&mut entry)?;
     log::debug!("fast cache: collected build inputs");
     entry.snapshot = entry.snapshot()?;
@@ -1083,6 +1130,16 @@ fn cached_run() -> Option<ExitCode> {
     entry.responses.push(response);
     if entry.responses.len() > 128 {
       entry.responses.remove(0);
+    }
+    entry.layout = layout::capture(&entry, &extra.verified_sources)
+      .map_err(|reason| {
+        log::debug!("layout ineligible: {reason}");
+      })
+      .ok();
+    // Capturing source text must not publish bytes from a later editor revision.
+    if entry.snapshot()? != entry.snapshot {
+      rejection = "superseded";
+      return None;
     }
     let result = save(&store, &mut entry, &final_ticket);
     publication = Some(final_ticket);
@@ -1203,6 +1260,8 @@ mod publication_tests {
       snapshot: [(alias, None)].into(),
       responses: vec![],
       provenance: None,
+      layout_blocked: Some("test".into()),
+      layout: None,
       published: None,
       checksum: String::new(),
     };
@@ -1244,6 +1303,8 @@ mod publication_tests {
       .into(),
       responses: vec![],
       provenance: None,
+      layout_blocked: Some("test".into()),
+      layout: None,
       published: None,
       checksum: String::new(),
     };
