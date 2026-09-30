@@ -501,11 +501,10 @@ pub fn run_with_callbacks(
   if matches!(experiment.as_str(), "retain" | "stop" | "finish") {
     let directory = std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL_DIR")
       .expect("isolated incremental directory");
-    args.extend([
-      "-C".into(),
-      format!("incremental={directory}"),
-      "-Zincremental-info".into(),
-    ]);
+    args.extend(["-C".into(), format!("incremental={directory}")]);
+    if std::env::var("FLOWISTRY_EXPERIMENT_INCREMENTAL_STATS").as_deref() == Ok("1") {
+      args.push("-Zincremental-info".into());
+    }
   }
   args.extend(
     "-Z identify-regions -Z mir-opt-level=0 -A warnings -Z maximal-hir-to-mir-coverage"
