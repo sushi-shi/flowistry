@@ -189,3 +189,81 @@ take 45–95 s per position in either mode; with the defaults (60 positions,
 `-j 4`) it alone accounts for most of a roughly 40-minute run, while the other
 nine crates finish in about five minutes. Leave it out with explicit `--crate`
 options for a quick check.
+
+## Resumable combined-chain correctness runs
+
+Use `scripts/freeze-validation-build.py` to build a clean revision and archive
+only `cargo-flowistry`, `flowistry-driver`, and `build.json`. Reuse an existing
+Cargo target directory across revisions. The archive records the commit, tree,
+compiler, build flags and executable hashes; an existing archive is never replaced.
+
+```sh
+python3 scripts/freeze-validation-build.py --source /path/to/clean/worktree \
+  --target-dir /path/to/shared/cargo-target --output /path/to/new/archive
+FLOWISTRY_CACHE=off python3 scripts/smoke-real-crates.py /path/to/reference \
+  --compare /path/to/candidate --work-dir /path/to/existing/corpus \
+  --checkpoint-dir /path/to/checkpoints --memory-limit 6G -j 2 \
+  --json /path/to/report.json
+```
+
+Checkpoints commit one complete position/mode comparison at a time, including
+failures and differences. Restart the same command to resume. Evidence is keyed
+by both executable hashes, compiler version, harness code, all locked corpus
+files, settings, a private digest of the invocation environment, and the prepared
+source tree's content hash. Edited source during a comparison aborts instead of
+publishing a potentially stale checkpoint. A checksum detects damaged records;
+a process lock prevents two runs from writing to the same checkpoint directory.
+Full output retention, corpus updates, and repeated timing runs cannot use resume.
+
+The final JSON retains canonical output digests, original record timestamps,
+resume markers and the validation manifest. Checkpoint timings are historical
+observations, not a new benchmark: perform performance measurements in a separate
+fresh run. Skipped corpus entries now cause exit status 1 so an incomplete corpus
+cannot be mistaken for a completed gate. Report them and all status changes even
+if every successful pair agrees.
+
+Use #17 as the feature-complete semantic reference for the integrated chain;
+master predates deliberate precision changes. The independent engine-diff and
+shadow-eager build is a separate validation run. Keep cache-off comparison,
+compiler-validated cache reuse, and snapshot replay as distinct cases.
+
+Checkpoint runs give the compiler stable temporary directories under
+`CHECKPOINT_DIR/tmp`, including Nix's temporary-directory variables. Their actual
+values still participate in the environment fingerprint; changes are not simply
+ignored. Keep this directory until the validation report is complete.
+
+Audit a completed report against every locked position and both modes:
+
+```sh
+python3 scripts/summarize-validation.py /path/to/report.json \
+  --output /path/to/coverage-and-triage.json
+```
+
+The audit reports missing entries/positions, duplicates, skips, output differences,
+status changes and all non-benign failures separately. Matching crashes are not a
+pass. The current inventory is 24 entries (10 registry crates and 14 git projects);
+older handoffs incorrectly called it 25. A subset report therefore fails full
+coverage even when its successful comparisons have no differences.
+
+### File-focus and cache modes
+
+`--command file-focus` compares the file response at each locked cursor position.
+The canonical digest resolves every nested range table, preserves body locations,
+errors and maybe-slices, and excludes only `cache` statistics and each body's
+`cached` flag. Cache telemetry remains a separate field in the report.
+
+For cache reuse checks, compare the same frozen binary with different policies:
+
+```sh
+python3 scripts/smoke-real-crates.py /path/to/integrated \
+  --compare /path/to/integrated --command file-focus \
+  --base-cache off --compare-cache warm --cache-dir /path/to/isolated-cache \
+  --work-dir /path/to/corpus --memory-limit 6G -j 2 --json /path/to/warm.json
+```
+
+`refresh` forces compiler-validated misses and writes fresh entries; `warm` primes
+each selected position before recording its next response; `on` permits ordinary
+reuse. Explicit reuse policies require `--cache-dir`, with separate directories
+per backend. Priming failures remain visible even if the subsequent request
+succeeds. The coverage audit totals hits, misses and snapshot responses separately:
+an equivalent response alone does not prove a cache hit.

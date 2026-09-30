@@ -25,7 +25,7 @@ resolved list of output/status differences for the integrated backend.
 
 - Inventory the inherited pipelines and reuse their completed reports. Clearly
   distinguish original-branch evidence from evidence about the combined chain.
-- Use the corrected #19 canonicalizer on all 25 locked corpus entries, both
+- Use the corrected #19 canonicalizer on all 24 locked corpus entries (10 registry crates and 14 git projects), both
   SigOnly and Recurse, and all locked positions. Record missing prerequisites,
   skips, failures, timeouts and OOMs; successful-pair equality alone is not enough.
 - Compare the combined chain with the feature-complete #17 reference where the

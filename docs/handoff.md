@@ -144,3 +144,11 @@ Cargo target there. These are rebuildable artifacts from old test runs.
 caches, `target/engine`, `target/recurse`, current `review-chain`/`review-cache`
 builds, source worktrees and results were retained. The exact local deletion
 manifest is `target/cleanup-2026-09-30.json`.
+
+## Implementation has started
+
+The new chain starts at [#41](https://github.com/sushi-shi/flowistry/pull/41). See
+[continuation-progress.md](continuation-progress.md) for authoritative milestone
+status, frozen builds, active corpus paths and the inherited queue transition.
+The earlier process inventory above is historical; controllers 1221886, 1478783
+and 3549564 were retired when combined-chain validation began.
