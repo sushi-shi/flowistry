@@ -130,6 +130,19 @@ def main():
         source.write_text(good.replace('option_env!("FLOWISTRY_TEST_ENV")', 'option_env!("NIX_BUILD_TOP")'))
         run(False)
         run(False)  # Explicit semantic use of a transient variable disables replay.
+        # The compiler includes the end of a zero-width cursor span. A cached
+        # enclosing body must not hide the closure selected at that exact point.
+        closure = ' let closure = |input: i32| input + 1;'
+        source.write_text('fn main() {\n' + closure + '\n let output = closure(2);\n}\n')
+        run(False, line=0, column=0)
+        boundary = closure.index(';')
+        cold = run(False, line=1, column=boundary)
+        warm = run(True, line=1, column=boundary)
+        fresh = run(False, line=1, column=boundary, mode='off')
+        def selected(value):
+            return [body['range'] for body in value['bodies'] if body['focus']]
+        assert selected(cold) == selected(warm) == selected(fresh)
+        assert len(selected(warm)) == 1 and selected(warm)[0]['start']['line'] == 1
         print(f'Passed {count} fast-cache cases; {len(times)} hits invoked no compiler; warm request min={min(times):.3f}s max={max(times):.3f}s')
 
 
