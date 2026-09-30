@@ -1,6 +1,9 @@
 .PHONY: test test-ui test-live test-precision test-save test-summaries test-cache test-source-selection
 test:
 	nvim --headless -u NONE -i NONE -l tests/run.lua
+	nvim --headless -u NONE -i NONE -l tests/project_stream.lua
+	nvim --headless -u NONE -i NONE -l tests/background_scheduler.lua
+	nvim --headless -u NONE -i NONE -l tests/background.lua
 
 test-ui:
 	nvim --headless -n -i NONE --cmd 'let g:coc_start_at_startup=0' -c 'luafile tests/ui.lua'

@@ -209,6 +209,57 @@ struct Inventory {
   output: Option<FlowistryResult<Value>>,
 }
 
+/// Cargo remains responsible for workspace and target identity. Editors never
+/// need to guess a package name from a directory or invoke a different Cargo.
+pub(crate) fn targets() -> anyhow::Result<Value> {
+  let metadata = Selection::default().metadata()?;
+  let members = metadata["workspace_members"]
+    .as_array()
+    .context("missing workspace members")?;
+  let mut targets = Vec::new();
+  for package in metadata["packages"]
+    .as_array()
+    .context("missing packages")?
+  {
+    if !members.contains(&package["id"]) {
+      continue;
+    }
+    for target in package["targets"].as_array().context("missing targets")? {
+      let kinds = target["kind"].as_array().context("missing target kind")?;
+      let kind = if kinds.iter().any(|kind| {
+        matches!(
+          kind.as_str(),
+          Some("lib" | "rlib" | "dylib" | "cdylib" | "staticlib" | "proc-macro")
+        )
+      }) {
+        "lib"
+      } else if let Some(kind) = kinds.iter().find_map(|kind| match kind.as_str() {
+        Some(kind @ ("bin" | "example" | "test" | "bench")) => Some(kind),
+        _ => None,
+      }) {
+        kind
+      } else {
+        continue;
+      };
+      targets.push(json!({
+        "package": package["name"], "package_id":package["id"],
+        "manifest_path": package["manifest_path"], "target_kind":kind,
+        "target_name":target["name"], "src_path":target["src_path"],
+        "required_features":target.get("required-features").unwrap_or(&json!([])),
+        "supported":target["crate_types"].as_array().is_some_and(|types| types.len() == 1),
+      }));
+    }
+  }
+  targets.sort_by_key(|t| {
+    (
+      t["package"].as_str().unwrap_or_default().to_owned(),
+      t["target_kind"].as_str().unwrap_or_default().to_owned(),
+      t["target_name"].as_str().unwrap_or_default().to_owned(),
+    )
+  });
+  Ok(json!({"schema":1, "workspace_root":metadata["workspace_root"], "targets":targets}))
+}
+
 impl rustc_driver::Callbacks for Inventory {
   fn after_expansion<'tcx>(
     &mut self,

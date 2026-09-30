@@ -112,8 +112,8 @@ warm requests for the measured large game function took about 200 ms. After
 source or build inputs change, compiler validation runs, then the function cache
 can reuse unchanged analysis. Blank lines and formatting relocate highlights;
 changes to callees, types, constants, macros or build settings invalidate
-affected results. First-time analysis can still take seconds. There is no idle
-background cache warming yet. See [persistent caching](doc/cache.md) for scope,
+affected results. First-time analysis can still take seconds. Optional project
+background warming is described below. See [persistent caching](doc/cache.md) for scope,
 controls and limits.
 Unsaved Rust buffers or manifests in the workspace suspend new analysis; the
 plugin never writes buffers for you. Editing preserves the last successful
@@ -156,6 +156,7 @@ require("flowistry").setup({
   show_maybe = true,             -- tint code that matters only if shared handles alias
   parameter_types = true,        -- an argument's type selects its binding (map: &LevelMap)
   progress = false,              -- analysis popups; enabled by the Nix launcher
+  project = { enabled = false }, -- opt-in bounded workspace background analysis
 })
 ```
 
@@ -175,6 +176,52 @@ Older backends remain supported and keep their existing behavior.
 
 With `auto_enable=false`, use `:Flow on` when you want analysis. The launcher
 merges these overrides with its packaged backend settings.
+
+### Project background analysis
+
+On Linux with a working systemd user session, use `:Flow project` to toggle
+workspace warming, or configure `project = { enabled = true }`. It requires the
+shared cache and this repository's matching backend. The backend discovers Cargo
+workspace targets; the editor maintains one queue per workspace and visits its
+library/binary targets, prioritizing the active file and other enabled buffers.
+Targets requiring opt-in features are skipped by default. Exact target source
+files select that target; shared modules prefer their package's library. Override
+the selection when a module is shared by targets with different configurations:
+
+```lua
+project = {
+  enabled = true,
+  targets = { { package = "my-package", target_kind = "lib", target_name = "my_library" } },
+  -- targets may also be a function(workspace_root) returning such a list.
+  features = "optional-feature", -- applies to foreground and background together
+  idle_ms = 300,
+  memory_mib = 6144,             -- per compiler/Cargo worker scope
+  timeout_seconds = 600,        -- per worker; an oversized body cannot stop the queue
+  max_body_bytes = 8 * 1024 * 1024,
+  max_results_bytes = 16 * 1024 * 1024,
+}
+```
+
+Foreground requests cancel the workspace's current background worker and wait
+for cleanup before starting. Identical foreground requests share one operation.
+Warming resumes after foreground work settles. Saves cancel old generations;
+unsaved Rust/manifest buffers pause their workspace. This increment conservatively
+restarts the inventory after saves; dependency-selective save planning is separate
+work. Failed bodies remain visible in project status and do not block other bodies.
+
+The editor decodes only results for open enabled buffers. Background decode and
+retention budgets count uncompressed JSON bytes; actual Lua heap use also depends
+on representation and is not equal to those byte counts. Old background objects
+are evicted while their validated backend entries remain reusable. Larger results
+stay in the backend store and can be analyzed on demand. Foreground analysis keeps
+its existing behavior and the 600-line batch guard. The project-wide stream never
+claims that results from different saves form one current project snapshot.
+
+`:Flow stop` disables all buffers and background jobs and suspends automatic
+enabling; `:Flow start` restores automatic enabling. Ordinary `:Flow off` remains
+per-buffer. `require("flowistry").project_status()` exposes body/target progress,
+failed outcomes and retained background bytes; `:Flow log` includes its diagnostic.
+Background mode remains opt-in pending large-project and latency acceptance gates.
 
 `command`, when set, is the full backend command prefix. The plugin appends
 `spans FILE` or `focus FILE LINE COLUMN`; it does not invoke a shell. Custom commands

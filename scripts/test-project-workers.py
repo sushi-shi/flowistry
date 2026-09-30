@@ -76,6 +76,20 @@ def main():
         atomic_json(args.json, report)
         print(case + ': ' + ('PASS' if record['passed'] else 'FAIL ' + record['error']), flush=True)
 
+    def target_inventory():
+        result = subprocess.run([str(args.backend_dir.resolve() / 'cargo-flowistry'), 'flowistry', 'project-targets'],
+                                cwd=matrix.project, env=matrix.env('targets', 'on'), capture_output=True, timeout=30)
+        assert result.returncode == 0, result.stderr.decode()
+        value = decode(result.stdout)['Ok']
+        assert value['schema'] == 1 and Path(value['workspace_root']) == matrix.project, value
+        assert {(t['target_kind'], t['target_name']) for t in value['targets']} == {
+            ('lib', 'custom_library'), ('bin', 'custom-binary'), ('bin', 'file-focus')}, value
+        assert all(t['package'] == 'matrix_fixture' and t['package_id'] and t['supported'] for t in value['targets'])
+        assert all(Path(t['src_path']).is_file() and Path(t['manifest_path']).is_file() for t in value['targets'])
+        assert b'audit compiler' not in result.stderr, result.stderr.decode()
+        return value
+    check('project-targets', target_inventory)
+
     for mode in ('SigOnly', 'Recurse'):
         for kind, name, source in [('lib', 'custom_library', 'lib.rs'), ('bin', 'custom-binary', 'main.rs'), ('bin', 'file-focus', 'extra.rs')]:
             case = mode + '-' + kind + '-' + name
