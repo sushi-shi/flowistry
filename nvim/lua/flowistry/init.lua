@@ -317,6 +317,7 @@ update = function(state)
   if not state.context then
     state.operation = backend.context(state.root, config, callback(state, function(context)
       state.context = context
+      state.root = context.root
       if background then background:attach(state) end
     end))
     return
@@ -500,21 +501,20 @@ function M.setup(opts)
       -- path dependencies). Pending discovery also rejects intervening edits.
       input_epoch = input_epoch + 1
       local invalidated = {}
+      local configuration = name:match("Cargo%.toml$") or name:match("Cargo%.lock$")
+        or name:match("/%.cargo/config%.toml$") or name:match("/%.cargo/config$")
+        or name:match("/rust%-toolchain$") or name:match("/rust%-toolchain%.toml$")
       for _, state in pairs(all_states()) do
         local root = state.context and state.context.root or state.root
         if state.buf == args.buf or inputs:matches(root, name)
           or (args.event == "BufFilePost" and previous_name and inputs:matches(root, previous_name)) then
           invalidate(state, args.event ~= "BufReadPost" and args.event ~= "BufFilePost")
           if not invalidated[root or false] then
-            background:invalidate(root, args.event == "BufWritePost" and name or nil)
+            if configuration then background:rediscover(root)
+            else background:invalidate(root, args.event == "BufWritePost" and name or nil) end
             invalidated[root or false] = true
           end
-          if name:match("Cargo%.toml$") or name:match("Cargo%.lock$")
-            or name:match("/%.cargo/config%.toml$") or name:match("/%.cargo/config$")
-            or name:match("/rust%-toolchain$") or name:match("/rust%-toolchain%.toml$") then
-            state.context = nil
-            background:rediscover(root)
-          end
+          if configuration then state.context = nil end
           if args.event == "BufWritePost" then state.refresh_after_save = true end
           if state.retained and state.retained.inputs[name] == nil then
             state.retained.inputs[name] = saved_sources[name] or false
