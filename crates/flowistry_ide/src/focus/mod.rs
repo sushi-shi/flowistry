@@ -24,23 +24,41 @@ mod direct_influence;
 #[cfg(test)]
 mod tests;
 
+/// A place of the body. Its ranges are indices into [`FocusOutput::ranges`].
 #[derive(Debug, Serialize)]
 pub struct PlaceInfo {
-  pub range: CharRange,
-  pub ranges: Vec<CharRange>,
-  pub slice: Vec<CharRange>,
-  pub direct_influence: Vec<CharRange>,
-  /// Code that may be relevant only if separately held shared handles to state of
-  /// the same interior-mutable type (e.g. two `Rc<RefCell<T>>`) are one object.
-  /// Disjoint from `slice`, and omitted when empty.
+  pub range: u32,
+  pub ranges: Vec<u32>,
+  pub slice: Vec<u32>,
+  pub direct_influence: Vec<u32>,
+  /// Code relevant only when shared handles refer to the same state.
   #[serde(skip_serializing_if = "Vec::is_empty")]
-  pub maybe_slice: Vec<CharRange>,
+  pub maybe_slice: Vec<u32>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct FocusOutput {
+  /// The distinct ranges of the places. The slices of the places of a body mostly
+  /// share their ranges, so each is sent once and the places refer to it by index.
+  pub ranges: Vec<CharRange>,
   pub place_info: Vec<PlaceInfo>,
   pub containers: Vec<CharRange>,
+}
+
+/// Builds [`FocusOutput::ranges`].
+#[derive(Default)]
+struct RangeTable {
+  ranges: Vec<CharRange>,
+  indices: FxHashMap<CharRange, u32>,
+}
+
+impl RangeTable {
+  fn index(&mut self, range: CharRange) -> u32 {
+    *self.indices.entry(range).or_insert_with(|| {
+      self.ranges.push(range);
+      u32::try_from(self.ranges.len() - 1).unwrap()
+    })
+  }
 }
 
 pub fn focus(tcx: TyCtxt, body_id: BodyId) -> Result<FocusOutput> {
@@ -117,9 +135,10 @@ pub(crate) fn focus_with_session<'tcx>(
   let slices_timer = Instant::now();
   // The same spans (and direct-influence locations) recur across the places of a body,
   // so convert each once instead of once per place.
-  let mut range_cache: FxHashMap<Span, Vec<CharRange>> = FxHashMap::default();
+  let mut table = RangeTable::default();
+  let mut range_cache: FxHashMap<Span, Vec<u32>> = FxHashMap::default();
   let mut location_spans: FxHashMap<LocationOrArg, Vec<Span>> = FxHashMap::default();
-  let mut to_ranges = |spans: &[Span]| -> Vec<CharRange> {
+  let mut to_ranges = |table: &mut RangeTable, spans: &[Span]| -> Vec<u32> {
     let mut ranges = Vec::new();
     for span in spans {
       ranges.extend_from_slice(range_cache.entry(*span).or_insert_with(|| {
@@ -128,6 +147,7 @@ pub(crate) fn focus_with_session<'tcx>(
           .into_iter()
           .flatten()
           .filter_map(|span| CharRange::from_span(span, source_map).ok())
+          .map(|range| table.index(range))
           .collect()
       }));
     }
@@ -168,11 +188,11 @@ pub(crate) fn focus_with_session<'tcx>(
       continue;
     };
     slices.push(PlaceInfo {
-      range,
-      ranges: to_ranges(&[mir_span.span()]),
-      slice: to_ranges(&slice),
-      direct_influence: to_ranges(&direct_influence),
-      maybe_slice: to_ranges(&maybe_slice),
+      range: table.index(range),
+      ranges: to_ranges(&mut table, &[mir_span.span()]),
+      slice: to_ranges(&mut table, &slice),
+      direct_influence: to_ranges(&mut table, &direct_influence),
+      maybe_slice: to_ranges(&mut table, &maybe_slice),
     });
   }
   log::info!(
@@ -195,6 +215,7 @@ pub(crate) fn focus_with_session<'tcx>(
   }
 
   Ok(FocusOutput {
+    ranges: table.ranges,
     place_info: slices,
     containers,
   })

@@ -59,14 +59,14 @@ fn main() {
       let selected = output
         .place_info
         .iter()
-        .filter(|place| snippet(tcx, &place.range) == name)
+        .filter(|place| snippet(tcx, &output.ranges[place.range as usize]) == name)
         .collect::<Vec<_>>();
       assert!(!selected.is_empty(), "missing focus target {name}");
       for place in selected {
         let slice = place
           .slice
           .iter()
-          .map(|range| snippet(tcx, range))
+          .map(|range| snippet(tcx, &output.ranges[*range as usize]))
           .collect::<Vec<_>>()
           .join("\n");
         assert_eq!(
@@ -79,14 +79,14 @@ fn main() {
             !place
               .direct_influence
               .iter()
-              .map(|range| snippet(tcx, range))
+              .map(|range| snippet(tcx, &output.ranges[*range as usize]))
               .any(|text| text.contains("update"))
           );
         }
       }
     }
     let serialized = serde_json::to_value(&output).unwrap();
-    assert_eq!(serialized.as_object().unwrap().len(), 2);
+    assert_eq!(serialized.as_object().unwrap().len(), 3);
     for place in serialized["place_info"].as_array().unwrap() {
       let fields = place.as_object().unwrap();
       assert_eq!(fields.len(), 4);
@@ -125,17 +125,17 @@ fn main() {
       };
       let session = AnalysisSession::new(tcx, mode);
       let output = super::focus_with_session(&session, body_named(tcx, "main")).unwrap();
-      let join = |ranges: &[CharRange]| {
+      let join = |ranges: &[u32]| {
         ranges
           .iter()
-          .map(|range| snippet(tcx, range))
+          .map(|range| snippet(tcx, &output.ranges[*range as usize]))
           .collect::<Vec<_>>()
           .join("\n")
       };
       let seen = output
         .place_info
         .iter()
-        .find(|place| snippet(tcx, &place.range) == "seen")
+        .find(|place| snippet(tcx, &output.ranges[place.range as usize]) == "seen")
         .expect("missing focus target seen");
       let (slice, maybe) = (join(&seen.slice), join(&seen.maybe_slice));
       assert!(!slice.contains("*a.borrow_mut() = input"), "slice: {slice}");
@@ -145,9 +145,9 @@ fn main() {
       // R6: the maybe slice is disjoint from the slice.
       for place in &output.place_info {
         for maybe in &place.maybe_slice {
-          let maybe = maybe.to_span(tcx).unwrap();
+          let maybe = output.ranges[*maybe as usize].to_span(tcx).unwrap();
           for exact in &place.slice {
-            let exact = exact.to_span(tcx).unwrap();
+            let exact = output.ranges[*exact as usize].to_span(tcx).unwrap();
             assert!(
               !maybe.overlaps(exact),
               "{context_mode:?}: {maybe:?} overlaps {exact:?}"

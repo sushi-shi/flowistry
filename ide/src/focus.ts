@@ -24,6 +24,32 @@ interface Focus {
   containers: Range[];
 }
 
+// The output of the backend: places refer to the distinct ranges of the output
+// by their index in `ranges`.
+interface FocusOutput {
+  ranges: Range[];
+  place_info: {
+    range: number;
+    ranges: number[];
+    slice: number[];
+    direct_influence: number[];
+  }[];
+  containers: Range[];
+}
+
+let resolve_ranges = (output: FocusOutput): Focus => {
+  let get = (indices: number[]) => indices.map((i) => output.ranges[i]);
+  return {
+    place_info: output.place_info.map((place) => ({
+      range: output.ranges[place.range],
+      ranges: get(place.ranges),
+      slice: get(place.slice),
+      direct_influence: get(place.direct_influence),
+    })),
+    containers: output.containers,
+  };
+};
+
 class FocusBodyState {
   mark: vscode.Selection | null;
   focus: Focus;
@@ -48,14 +74,14 @@ class FocusBodyState {
       selection.anchor.line.toString(),
       selection.anchor.character.toString(),
     ];
-    let focus_res = await globals.call_flowistry<Focus>(cmd);
+    let focus_res = await globals.call_flowistry<FocusOutput>(cmd);
     console.log(focus_res);
 
     if (!is_ok(focus_res)) {
       return focus_res;
     }
 
-    return ok(new FocusBodyState(focus_res.value, doc));
+    return ok(new FocusBodyState(resolve_ranges(focus_res.value), doc));
   };
 
   private find_slice_at_selection = (
