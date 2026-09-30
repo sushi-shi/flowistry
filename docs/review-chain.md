@@ -39,9 +39,8 @@ no history rewriting; the commit tab consequently includes historical branches.
 | 25 | [#2](https://github.com/sushi-shi/flowistry/pull/2) | Persistent semantic and snapshot caches ported onto the typed core and range-table protocol. |
 | 26 | [#40](https://github.com/sushi-shi/flowistry/pull/40) | This review map, current handoff, and incremental-analysis plan. |
 
-**Excluded:** [#27](https://github.com/sushi-shi/flowistry/pull/27) is superseded by #33. Keep it out of the
-review sequence and close it after #33 lands. It remains open to preserve the
-original discussion. Closed #1/#4/#5 are historical predecessors of #15–#17.
+**Excluded:** [#27](https://github.com/sushi-shi/flowistry/pull/27) was closed as superseded by #33 with the owner’s approval. It is excluded from the
+review sequence; its branch and original discussion are retained. Closed #1/#4/#5 are historical predecessors of #15–#17.
 
 ## Editor review order
 

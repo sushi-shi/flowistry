@@ -24,7 +24,7 @@ remains available in git at `89211ad80:docs/handoff.md`.
 - Preserved typed callee summaries, interior mutability, shared-handle effects,
   precise focus spans, and indexed maybe-slices through the conflict resolutions.
 - Applied demand-driven queries and early output to file-focus; removed obsolete
-  scoped borrowck. #27 is superseded by #33 and should close only after #33 lands.
+  scoped borrowck. #27 was closed as superseded by #33 with the owner’s approval.
 - Ported #2 onto the full chain, with schema-2 portable range tables, cache integrity
   checks, and compatible Cargo/snapshot replay. This completes the implementation
   of the Phase 1 port; the Phase 0 decision/performance work remains pending.
