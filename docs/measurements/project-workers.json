@@ -1,0 +1,132 @@
+{
+  "build": {
+    "binaries": {
+      "cargo-flowistry": "699b775f2f1210bc57ab6bf31beb168bfa9d798467a71ae2479cedf5f8cfda70",
+      "flowistry-driver": "61383581b8747b08d1ac28e7996eaa3bd6556ebc6b85b8d3861fa776a1324f4e"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T09:33:27.615577+00:00",
+    "revision": "4b4915382d8f490afadc2be79badcc80cd64d99d",
+    "rustflags": "",
+    "tree": "59935cced3416c20f9336b948e123878ec3cbc0b"
+  },
+  "gates": {
+    "edits": {
+      "cases": 84,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "incremental_projects.py": "d791bf5710732cf7cfe0716d2052a5bfeb643c44114f2deb132bb29355f8694b",
+        "incremental_races.py": "a247abfb9b25498cf3e883d16c84fbd9319101148dce88335f37eae53ef90463",
+        "smoke-real-crates.py": "e5fe5c4a76948110b17e979bff9a893c2a9580eed829100fc14d9b9ff0a8b0fe",
+        "test-incremental-matrix.py": "3a03345a47d474bea7a8f583751a0c46c2570070b5d26fce252599dbd0daa826"
+      },
+      "passed": true
+    },
+    "filenames": {
+      "cases": 6,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "smoke-real-crates.py": "e5fe5c4a76948110b17e979bff9a893c2a9580eed829100fc14d9b9ff0a8b0fe",
+        "test-file-identities.py": "c68b82889cf7d86065595d58b1ced2b3e03c88abcc94905dc64ea960a0827995"
+      },
+      "passed": true
+    },
+    "publication": {
+      "cases": 16,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "test-result-index.py": "c13b63a70e6b57991fdc0fcd9db0defc7f8ff1c44151c2d81553fd108aeb7ce6"
+      },
+      "passed": true
+    },
+    "summaries": {
+      "cases": 18,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "test-summary-cache.py": "a40af32ac6003608a46aaff9e2798282acfc5d06839926e11885f86dbe3fd838"
+      },
+      "passed": true
+    },
+    "workers": {
+      "cases": 13,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "smoke-real-crates.py": "e5fe5c4a76948110b17e979bff9a893c2a9580eed829100fc14d9b9ff0a8b0fe",
+        "smoke_checkpoint.py": "5b0fbcdc51c14bb03aa7e51cdfbbad15b831804d842b81371e852aa9b02fadc8",
+        "test-project-workers.py": "8e877c9a74678e665fa4d115fc3fd4109e1329c0e09c902c673c4d5d5e1af105"
+      },
+      "passed": true
+    }
+  },
+  "ide_all_targets": "passed",
+  "logs": [
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-workers-v2-evidence/flowistry-project-final-v2-workers.log",
+      "sha256": "391645fd8b90ace31b96cb5fb22dbc1c152d805c9d7d1936cedac7d9ef1edfe3"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-workers-v2-evidence/flowistry-project-final-v2-edits.log",
+      "sha256": "9532c5e730a64a9997d999424a34268815f7067f5f52c4338e6f2c8654abe2a5"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-workers-v2-evidence/flowistry-project-final-v2-publication.log",
+      "sha256": "80418f2576c03828421dc76f00eb635703978e0f3497a352514cca7f6c8f140e"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-workers-v2-evidence/flowistry-project-final-v2-summaries.log",
+      "sha256": "e581736ddb86d1a1dedf6b409f4758a19bc12ef5cb515770c02338ef16e24e2d"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-workers-v2-evidence/flowistry-project-final-v2-filenames.log",
+      "sha256": "9f91523c8530b5e08dc3148744d52dd8010041221359cc4c46dd69ef7e019e86"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-workers-v2-evidence/flowistry-project-final-v2-ide.log",
+      "sha256": "3431a2fe42366763d1c6c52d5fc8e4ed8adb160b1eb1bdc2b2ca651dda032ec4"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-workers-v2-evidence/flowistry-project-final-v2-python.log",
+      "sha256": "8480d0d016090cf36f15f6cb5485bcfeda8557b22a11618d166690859be2be59"
+    }
+  ],
+  "python_regressions": 54,
+  "reports": [
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-final-v2-workers.json",
+      "sha256": "488df241c86cf1ed9bb4ee1f48e1cbd335db86b519ebee03df51994af88f36be"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-final-v2-edits.json",
+      "sha256": "4440569e02e8c373c6fc582dde2bb90f7771228552f028d23bb80321c248aec6"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-final-v2-publication.json",
+      "sha256": "4eadb3871350a97baa97c55d973c2ec6afd7a267d90999789abf6b5c245e160e"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-final-v2-summaries.json",
+      "sha256": "eb8dd2ce7e565bd8676fc0e02f8dd910db71accd12f017fdf9fddf81f2a2d03b"
+    },
+    {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/project-final-v2-filenames.json",
+      "sha256": "d22151614764928508143f9928f6307d7fc7f4b67d6af465e7c76e7d466270ce"
+    }
+  ],
+  "schema": 1,
+  "scope": "Project-worker foundation only. Public project scheduler, stream, cancellation, priorities and resource/performance gates remain pending.",
+  "total_process_cases": 137
+}
