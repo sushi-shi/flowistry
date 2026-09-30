@@ -29,7 +29,7 @@ share one package source, lock file, CI suite and PR chain. See
 | 9. Project command | Implemented in [#51](https://github.com/sushi-shi/flowistry/pull/51) and [#54](https://github.com/sushi-shi/flowistry/pull/54); acceptance pending | Explicit Cargo targets, portable inventories and body workers feed a streaming coordinator with priorities, cancellation and bounded workers. All 16 coordinator and 14 worker scenarios also pass at the #56 candidate. Large-project and performance gates remain. See [coordinator evidence](project-coordinator.md). |
 | 10. Neovim background work | Implemented in [#55](https://github.com/sushi-shi/flowistry/pull/55); acceptance pending | Candidate `24ed53ecb` passes all five package checks, 323 frontend assertions, 14 backend worker scenarios and real-worker editor tests in both modes, including actual packaged cancellation. Global worker and editor-retention bounds are enforced; large-project/performance and final gates remain. See [background notes](neovim-background.md). |
 | 11. Incremental saves | Implemented increments [#56](https://github.com/sushi-shi/flowistry/pull/56) and [#57](https://github.com/sushi-shi/flowistry/pull/57); acceptance pending | #56 passes eight save scenarios and all 84 existing edit cases with selective solver work. #57 adds compiler-input editor invalidation: 366 frontend assertions, 31 live-editor assertions, 20 IDE tests and 16 publication cases pass. The [compiler-state experiment](rustc-incremental-experiment.md) passes 510 fresh-oracle comparisons but all measured variants use more instructions; none is retained. Quiet save measurements and expanded final edit/concurrency gates remain. See [save scheduling](dependency-save-plan.md) and [input invalidation](editor-input-invalidation.md). |
-| 12. Layout reuse | Implemented candidate above #58; final gates pending | 48 layout/fallback cases, 16 publication cases, 84 edit/concurrency cases, 168 workspace tests and 18 live-editor assertions pass. Eligible edits relocate with zero compiler invocations; source-sensitive cases fall back. See [proof and limits](safe-layout-reuse.md). |
+| 12. Layout reuse | Implemented in [#59](https://github.com/sushi-shi/flowistry/pull/59); final gates pending | 48 layout/fallback cases, 16 publication cases, 84 edit/concurrency cases, 168 workspace tests and 18 live-editor assertions pass. Eligible edits relocate with zero compiler invocations; source-sensitive cases fall back. See [proof and limits](safe-layout-reuse.md). |
 | 13. Final release gates | Pending | Full corpus, edits, packaged editor and before/after evidence. |
 
 ## Active validation and retained evidence
@@ -214,11 +214,12 @@ validation harness until a slot is authoritatively free.
 
 ## Latest stack and cache-refresh milestone
 
-The newest published PR is [#58](https://github.com/sushi-shi/flowistry/pull/58),
-branch `experiment/rustc-incremental` in `/tmp/flowistry-rustc-incremental`.
+At this experiment checkpoint, the newest published PR was
+[#58](https://github.com/sushi-shi/flowistry/pull/58), branch
+`experiment/rustc-incremental` in `/tmp/flowistry-rustc-incremental`.
 It targets #57 (`fix/editor-input-invalidation`, `0d0108a96`) directly; #57's
 final paired-package CI passed. #58 preserves the experiment and reports, with
-production Rust and editor sources identical to #57. New work starts above #58.
+production Rust and editor sources identical to #57. Subsequent layout work now extends it as #59, described below.
 
 The coordinator cache-refresh run has completed with exact locked coverage:
 24 crates × 60 positions × two modes, 2,880 equal successful protocol responses,
@@ -242,8 +243,9 @@ Continue with step 12 and the outstanding gates in steps 1–4, 6–11 and 13.
 
 ## Layout continuation and terminal warm-cache gate
 
-Work continues directly above #58 in `/tmp/flowistry-layout-reuse`, branch
-`feat/safe-layout-reuse`. The final runtime candidate is `3ddebc5e3`, frozen as
+The newest published PR is [#59](https://github.com/sushi-shi/flowistry/pull/59),
+branch `feat/safe-layout-reuse` in `/tmp/flowistry-layout-reuse`, directly above
+#58. New work starts above #59. The final runtime candidate is `3ddebc5e3`, frozen as
 `layout-reuse-v3`. All five paired Nix checks pass on that exact revision. See [safe layout reuse](safe-layout-reuse.md) for eligibility,
 explicit conservative fallbacks and the new editor/compiler evidence.
 #58's final paired-package CI passed before this feature began.
