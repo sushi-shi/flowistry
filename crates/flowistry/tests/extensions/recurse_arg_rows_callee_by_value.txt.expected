@@ -1,0 +1,16 @@
+/* recurse */
+struct S { a: i32, b: (i32, i32) }
+
+fn g(s: S, k: i32) -> (i32, i32) {
+  let mut b = s.b;
+  b.0 = k + s.a;
+  b
+}
+
+fn main() {
+  `[let s = S { a: 1, b: (2, 3) };]`
+  `[let k = 4;]`
+  `[let r = g(s, k);]`
+  `[let z = r.1;]`
+  `[z;]`
+}

@@ -35,7 +35,7 @@ impl rustc_driver::Callbacks for Callbacks {
       let spans = spans
         .into_iter()
         .filter(|span| source_map.lookup_source_file(span.lo()).name == source_file.name)
-        .filter_map(|span| CharRange::from_span(span, source_map).ok())
+        .filter_map(|span| crate::positions::char_range(span, source_map).ok())
         .collect::<Vec<_>>();
       Ok(SpansOutput { spans })
     })());
