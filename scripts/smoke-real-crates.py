@@ -85,7 +85,10 @@ BENIGN_ERRORS = [
 CRASH_MARKER = re.compile(r"^thread '[^']*'(?: \(\d+\))? panicked at |internal compiler error:", re.M)
 
 # Timer output of the backend: `[<time> INFO  rustc_utils::timer] <phase> took <n>s`.
-PHASE_LOG = "rustc_utils::timer=info,flowistry_ide=info,flowistry::stats=info"
+# Row enumeration is diagnostic work; do not enable this for normal timings.
+PHASE_LOG = "rustc_utils::timer=info,flowistry_ide=info,flowistry=info"
+STORAGE_LINE = re.compile(r"\] Over (\d+) locations, total number of place entries: (\d+) "
+                          r"\(avg [^,]*, (\d+) stored\), total size of location sets: (\d+)")
 PHASE_LINE = re.compile(r"\] (.+?) took ([0-9.]+)s$", re.M)
 # Counters of the backend: `[<time> INFO  flowistry::stats] stat <name> = <n>`.
 STAT_LINE = re.compile(r"\] stat ([\w.]+) = (\d+)$", re.M)
@@ -680,7 +683,7 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
         return {"status": "timeout", "message": f"timed out after {timeout}s",
                 "seconds": round(time.monotonic() - start, 2),
                 "max_rss_mb": round(getattr(expired, "max_rss_kb", 0) / 1024)}
-    seconds = round(time.monotonic() - start, 2)
+    seconds = round(time.monotonic() - start, 6)
     max_rss_mb = round(res.max_rss_kb / 1024)
     response = None
     decode_error = None
@@ -719,7 +722,7 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
             places = sum(len(body.get("focus", {}).get("Ok", {}).get("place_info", []))
                          for body in output["bodies"] if isinstance(body.get("focus"), dict))
         return {"status": "ok", "seconds": seconds, "max_rss_mb": max_rss_mb, "output": output,
-                "phases": timings, "stats": stats, "places": places,
+                "phases": timings, "stats": stats, "storage": parse_storage(stderr) if phases else None, "places": places,
                 "cache": response.get("cache", output.get("cache")), "counters": counters,
                 "wire_bytes": len(tail[-1].strip().encode()),
                 "cargo_replay_observed": "replay: running the driver directly" in stderr,
@@ -755,6 +758,12 @@ def parse_counters(stderr):
     if set(values) != {"instructions", "cycles"}:
         raise ValueError("perf output is missing instruction/cycle counters")
     return values
+
+
+def parse_storage(stderr):
+    """Per-analysis row sums over locations, not unique heap allocations or peak RSS."""
+    return [dict(zip(('locations', 'logical_rows', 'stored_rows', 'row_entries'), map(int, match.groups())))
+            for match in STORAGE_LINE.finditer(stderr)]
 
 
 def parse_phases(stderr):

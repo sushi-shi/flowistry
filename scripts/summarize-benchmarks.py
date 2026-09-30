@@ -54,6 +54,7 @@ def summarize(report):
                                                    if s.get('counters') and 'cycles' in s['counters']]),
                            'wire_bytes': distribution([s['wire_bytes'] for s in samples if 'wire_bytes' in s]),
                            'cache_samples': [s.get('cache') for s in samples],
+                           'storage_samples': [s.get('storage') for s in samples],
                            'cargo_replay_observed': [s.get('cargo_replay_observed') for s in samples]}
                 for field in ('phases', 'stats'):
                     keys = sorted({key for sample in samples for key in (sample.get(field) or {})})
