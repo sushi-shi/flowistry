@@ -39,10 +39,59 @@ impl InteriorMutation {
   }
 }
 
+/// The kinds of shared handles to interior-mutable state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Handle<'tcx> {
+  /// A shared reference `&T`: its state is its pointee, a place of the body.
+  Ref { pointee: ErasedTy<'tcx> },
+  /// An `Rc<T>`, `Arc<T>` or one of their `Weak`s: its pointee is not a place of
+  /// the body, so the handle stands for it.
+  Owning { pointee: ErasedTy<'tcx> },
+}
+
+impl<'tcx> Handle<'tcx> {
+  /// The handle of type `ty`, if it is a shared handle to state that is not
+  /// `Freeze`.
+  pub fn parse(
+    tcx: TyCtxt<'tcx>,
+    typing_env: TypingEnv<'tcx>,
+    ty: ErasedTy<'tcx>,
+  ) -> Option<Self> {
+    let handle = match ty.ty().kind() {
+      TyKind::Ref(_, pointee, Mutability::Not) => Handle::Ref {
+        pointee: ErasedTy::new(tcx, *pointee),
+      },
+      TyKind::Adt(adt_def, args)
+        if matches!(
+          tcx.crate_name(adt_def.did().krate).as_str(),
+          "alloc" | "std"
+        ) && matches!(
+          tcx.item_name(adt_def.did()).as_str(),
+          "Rc" | "Arc" | "Weak"
+        ) =>
+      {
+        Handle::Owning {
+          pointee: ErasedTy::new(tcx, args.type_at(0)),
+        }
+      }
+      _ => return None,
+    };
+    (!handle.pointee().is_freeze(tcx, typing_env)).then_some(handle)
+  }
+
+  /// The type of the shared state.
+  pub fn pointee(self) -> ErasedTy<'tcx> {
+    match self {
+      Handle::Ref { pointee } | Handle::Owning { pointee } => pointee,
+    }
+  }
+}
+
 /// The places a callee may write through the interior mutability of the state that
 /// `place` gives it shared access to: the innermost places that are not `Freeze`
 /// among what is reachable from `place` through shared references (not `Freeze`
-/// sibling fields, which stay independent).
+/// sibling fields, which stay independent), and the `Rc`/`Arc` handles to such state
+/// (see [`Handle::Owning`]).
 ///
 /// The places are ordered deterministically (see [`cmp_places_structurally`]).
 pub(crate) fn interior_mutable_places<'tcx>(
@@ -52,17 +101,30 @@ pub(crate) fn interior_mutable_places<'tcx>(
   let tcx = place_info.tcx;
   let body = place_info.body;
   let typing_env = TypingEnv::post_analysis(tcx, place_info.def_id);
-  let is_freeze = |place: Place<'tcx>| {
-    ErasedTy::new(tcx, place.ty(&body.local_decls, tcx).ty).is_freeze(tcx, typing_env)
-  };
+  let erased_ty =
+    |place: Place<'tcx>| ErasedTy::new(tcx, place.ty(&body.local_decls, tcx).ty);
+  let is_freeze = |place: Place<'tcx>| erased_ty(place).is_freeze(tcx, typing_env);
   let mutable = place_info.reachable_values(place, Mutability::Mut);
   let mut places = place_info
     .reachable_values(place, Mutability::Not)
     .iter()
     .filter(|shared| **shared != place && !mutable.contains(*shared))
-    .filter(|shared| !is_freeze(**shared))
-    .flat_map(|shared| place_info.children(*shared))
-    .filter(|child| place_info.children(*child).len() == 1 && !is_freeze(*child))
+    .flat_map(|shared| {
+      if !is_freeze(*shared) {
+        place_info
+          .children(*shared)
+          .into_iter()
+          .filter(|child| place_info.children(*child).len() == 1 && !is_freeze(*child))
+          .collect::<Vec<_>>()
+      } else if matches!(
+        Handle::parse(tcx, typing_env, erased_ty(*shared)),
+        Some(Handle::Owning { .. })
+      ) {
+        vec![*shared]
+      } else {
+        Vec::new()
+      }
+    })
     .collect::<Vec<_>>();
   places.sort_by(|p1, p2| {
     cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)

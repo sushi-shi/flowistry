@@ -79,6 +79,10 @@ pub enum CalleeEffect {
 
   /// A write through a pointer passed as an argument.
   ArgPointee(Precision),
+
+  /// A write to the state shared through a handle passed by value as an argument,
+  /// e.g. through an `Rc<RefCell<T>>`: the handle stands for its pointee.
+  SharedState(Precision),
 }
 
 /// How precisely a callee effect is translated into a caller place.
@@ -107,7 +111,8 @@ impl MutationKind {
         // Several coarsened return effects can land on the same caller place, each
         // covering only a part of it: none of them overwrites the whole place.
         CalleeEffect::Return(Precision::Coarsened) => MutationStatus::Possibly,
-        CalleeEffect::ArgPointee(Precision::Exact | Precision::Coarsened) => {
+        CalleeEffect::ArgPointee(Precision::Exact | Precision::Coarsened)
+        | CalleeEffect::SharedState(Precision::Exact | Precision::Coarsened) => {
           MutationStatus::Possibly
         }
       },
@@ -651,6 +656,8 @@ fn f(x: i32) { let u = U { b: x }; }
       (MutationKind::CalleeEffect(Return(Coarsened)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Exact)), Possibly),
       (MutationKind::CalleeEffect(ArgPointee(Coarsened)), Possibly),
+      (MutationKind::CalleeEffect(SharedState(Exact)), Possibly),
+      (MutationKind::Destructor, Possibly),
     ];
     for (kind, status) in cases {
       assert_eq!(kind.status(), status, "{kind:?}");

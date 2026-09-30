@@ -11,6 +11,7 @@ use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_utils::{BodyExt, block_timer};
 
+use self::shared_handles::SharedHandles;
 pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
   callsite::{FallbackReason, UnsupportedOp},
@@ -32,6 +33,7 @@ mod interior;
 pub mod mutation;
 mod recursive;
 mod session;
+mod shared_handles;
 mod simple_args;
 mod summary;
 
@@ -121,17 +123,62 @@ pub fn compute_flow_with_session<'a, 'tcx>(
   body_id: BodyId,
   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
 ) -> FlowResults<'a, 'tcx> {
-  let tcx = session.tcx();
-  let mode = session.mode();
-  debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
+  let place_info = build_place_info(session, body_id, body_with_facts);
+  run_flow(session, body_with_facts, place_info, None)
+}
 
+/// Computes information flow for a MIR body like [`compute_flow_with_session`], but
+/// assuming that separately held shared handles to state of the same
+/// interior-mutable type (e.g. two `Rc<RefCell<T>>`, or two `&Cell<T>`) may point to
+/// the same object: a write to the state of one handle possibly writes the state of
+/// the others.
+///
+/// Dependencies present here but not in the result of
+/// [`compute_flow_with_session`] are possible, not certain. Returns `None` when no
+/// two handles of the body share a state type, as the result would then equal the
+/// exact one.
+pub fn compute_flow_with_shared_handles<'a, 'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+) -> Option<FlowResults<'a, 'tcx>> {
+  let place_info = build_place_info(session, body_id, body_with_facts);
+  let shared_handles = SharedHandles::build(&place_info)?;
+  Some(run_flow(
+    session,
+    body_with_facts,
+    place_info,
+    Some(shared_handles),
+  ))
+}
+
+fn build_place_info<'a, 'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_id: BodyId,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+) -> PlaceInfo<'a, 'tcx> {
+  let tcx = session.tcx();
+  debug!("{}", body_with_facts.body.to_string(tcx).unwrap());
   let def_id = tcx.hir_body_owner_def_id(body_id).to_def_id();
-  let place_info = PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, mode);
+  let place_info =
+    PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, session.mode());
   if log::log_enabled!(log::Level::Debug) && place_info.arg_pointers_truncated() {
     debug!(
       "Arguments hold pointers nested deeper than {MAX_ARG_POINTER_DEPTH} projections; the loans behind them are ignored"
     );
   }
+  place_info
+}
+
+fn run_flow<'a, 'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
+  place_info: PlaceInfo<'a, 'tcx>,
+  shared_handles: Option<SharedHandles<'tcx>>,
+) -> FlowResults<'a, 'tcx> {
+  let tcx = session.tcx();
+  let mode = session.mode();
+  let def_id = place_info.def_id;
   let location_domain = place_info.location_domain().clone();
 
   let body = &body_with_facts.body;
@@ -139,8 +186,9 @@ pub fn compute_flow_with_session<'a, 'tcx>(
   let results = {
     block_timer!("Flow");
 
-    let analysis =
+    let mut analysis =
       FlowAnalysis::with_session(tcx, def_id, body, place_info, session.clone());
+    analysis.shared_handles = shared_handles;
     engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
     // analysis.into_engine(tcx, body).iterate_to_fixpoint()
   };
