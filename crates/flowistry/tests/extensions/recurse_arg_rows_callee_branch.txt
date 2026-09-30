@@ -1,0 +1,15 @@
+/* recurse */
+fn g(x: &mut (i32, i32), c: bool, y: i32) {
+  if c {
+    x.0 = y;
+  }
+}
+
+fn main() {
+  let mut t = (1, 2);
+  let c = true;
+  let y = 3;
+  g(&mut t, c, y);
+  let z = t.0;
+  `(z)`;
+}

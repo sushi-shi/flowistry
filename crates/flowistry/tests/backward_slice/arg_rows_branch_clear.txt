@@ -1,0 +1,9 @@
+fn f(mut a: (i32, i32), c: bool, b: i32) {
+  if c {
+    a = (b, b);
+  }
+  let z = a.0;
+  `(z)`;
+}
+
+fn main() {}
