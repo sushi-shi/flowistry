@@ -1,6 +1,40 @@
 {
   "build": {
     "binaries": {
+      "cargo-flowistry": "691654cb0555e5dbfac81e3a95af0ff4e0ccfe1bc9228cf70f3e2df58807e11b",
+      "flowistry-driver": "6709545f48a60052a9d09a454d4dfcfb6f7cda7ae17c5dad6d66251ceff9306f"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T15:44:39.979614+00:00",
+    "revision": "3ddebc5e3982b4ecc1b92ccab269e59e3a1f12ae",
+    "rustflags": "",
+    "tree": "2b69cc52ed31539834191f9e8a0f0ce0621e922e"
+  },
+  "excluded_attempts": {
+    "layout-body-index-v1": "Harness omitted mandatory package/target selection; public worker correctly rejected the request. Fixed in v2.",
+    "layout-reuse-v1": "Proof initially treated imported sysroot sources as local; identified by quick probe, corrected before eligibility assertions."
+  },
+  "final_ide": {
+    "passed": 23,
+    "raw_log": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-ide-final-v1.log",
+    "sha256": "b87fadc1819a8232b2f8ec67e0272b1396047938889cb7bd8df94fbff14e7d04"
+  },
+  "initial_build": {
+    "binaries": {
       "cargo-flowistry": "2ecc3e2de2dc02154e4caa7c9a4dc49c489e659e815611117735b975496985f7",
       "flowistry-driver": "4fe2c187ae7c7c80d671e3b7cfa82be786e5508844088a34c3641e23fcece666"
     },
@@ -24,14 +58,7 @@
     "rustflags": "",
     "tree": "cfa9b4a2dea11351d6c73f8df0aadf5e359d7f9d"
   },
-  "pending": [
-    "final retained-size-cap candidate revalidation",
-    "paired package",
-    "final-stack corpus",
-    "performance/resource gates"
-  ],
-  "performance_caveat": "Live save times are loaded observations, not quiet distributions.",
-  "runs": {
+  "initial_runs": {
     "layout-edit-matrix-v1": {
       "cases": 84,
       "harness": {
@@ -1053,11 +1080,1076 @@
       "sha256": "a8a212562d100fb27f1b3348f69e2971fcec0f24025b7334aee5e2d13b5092b9"
     }
   },
+  "package": {
+    "all_five_checks_passed": true,
+    "logs": {
+      "/home/sheep/Projects/flowistry/target/continuation-validation/layout-package-cache-v1.log": "0757ff849afa5b3eef6c7db56afba422036378edd009e622cc53d4b4aac1cf62",
+      "/home/sheep/Projects/flowistry/target/continuation-validation/layout-package-frontend-v1.log": "371fd7ef2b853e2f05d671fb3a8447a2a983f85e69cc8af86890c593b75962b3",
+      "/home/sheep/Projects/flowistry/target/continuation-validation/layout-package-v1.log": "8361cc36f990de39d6f1435fc30c94f5917e05f9622ae8cab81d5fb81fe16101"
+    },
+    "revision": "3ddebc5e3982b4ecc1b92ccab269e59e3a1f12ae",
+    "roots": {
+      "/tmp/flowistry-layout-validation-v1": "/nix/store/4kr1gixjh9spm676j65q7zisrnnsk2bs-flowistry-nvim-frontend",
+      "/tmp/flowistry-layout-validation-v1-1": "/nix/store/j8zz1kfybw09w08impxc4yj7pwd4daib-flowistry-nvim-source-selection",
+      "/tmp/flowistry-layout-validation-v1-2": "/nix/store/x2zs045y858fcmrjr80288by7c7cc4gp-flowistry-nvim-summaries",
+      "/tmp/flowistry-layout-validation-v1-3": "/nix/store/anspqglj0p5a0fxvf32zb1csfshndiwl-flowistry-nvim-cache",
+      "/tmp/flowistry-layout-validation-v1-4": "/nix/store/4ghkzqhvrvzjk9sw70ky9r1vnbmpdjsy-flowistry-nvim-package"
+    }
+  },
+  "pending": [
+    "final-stack full corpus and independent reference gates",
+    "performance/resource acceptance gates"
+  ],
+  "performance_caveat": "Live save times are loaded observations, not quiet distributions.",
+  "runs": {
+    "layout-body-index-v2": {
+      "cases": 2,
+      "harness": "e20b27603073a1601a12d121309db8fccf085bf0e2e91b1344184d6d81feb8c2",
+      "outcomes": [
+        {
+          "case": "body-focus-and-index",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "body-focus-and-index",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "raw_report": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-body-index-v2.json",
+      "sha256": "ebf6800789d93b516b2ab584f0bb63b2955172c77bdb21c353ae9103760d0833"
+    },
+    "layout-edit-final-v1": {
+      "cases": 84,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "incremental_projects.py": "d791bf5710732cf7cfe0716d2052a5bfeb643c44114f2deb132bb29355f8694b",
+        "incremental_races.py": "a247abfb9b25498cf3e883d16c84fbd9319101148dce88335f37eae53ef90463",
+        "smoke-real-crates.py": "752e262e95ae78e69353ad5a2917a511b61d5d5f4701e2560c37fcc02b3e27b1",
+        "test-incremental-matrix.py": "3a03345a47d474bea7a8f583751a0c46c2570070b5d26fce252599dbd0daa826"
+      },
+      "outcomes": [
+        {
+          "case": "unchanged-save",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "leading-layout",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "interior-layout",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "unicode-comment",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "body-comment",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "rustfmt",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "literal",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "restored-mtime",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "control-flow",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "callee",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "unrelated-body",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "recursive-cycle",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "signature",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "field-type",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "trait-callee",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "trait-resolution",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "file-move",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "module-add",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "module-remove",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "feature",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "cfg",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "cargo-config",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "dependency",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "build-input",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "build-script",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "include",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "environment",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "proc-macro",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "compile-error",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "closure",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "corrupt-and-partial-writes",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "save-during-compile",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "two-quick-saves",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "cancel-during-compile",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "concurrent-refresh",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "error-recovery",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "undo",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "unchanged-save",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "leading-layout",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "interior-layout",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "unicode-comment",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "body-comment",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "rustfmt",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "literal",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "restored-mtime",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "control-flow",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "callee",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "unrelated-body",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "recursive-cycle",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "signature",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "field-type",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "trait-callee",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "trait-resolution",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "file-move",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "module-add",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "module-remove",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "feature",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "cfg",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "cargo-config",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "dependency",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "build-input",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "build-script",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "include",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "environment",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "proc-macro",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "compile-error",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "closure",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "corrupt-and-partial-writes",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "save-during-compile",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "two-quick-saves",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "cancel-during-compile",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "concurrent-refresh",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "error-recovery",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "undo",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "either-layout",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "either-body",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "either-layout",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "either-body",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "smallvec-layout",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "smallvec-body",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "smallvec-callee",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "smallvec-layout",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "smallvec-body",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "smallvec-callee",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "raw_report": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-edit-final-v1.json",
+      "sha256": "490b27700876ec6151e28a4f880db88b7a8cbbd0b57748ad423e5889d2ef166a"
+    },
+    "layout-editor-final-v1": {
+      "assertions": 18,
+      "observations": [
+        {
+          "loaded_save_ms": 45.042235,
+          "mode": "SigOnly"
+        },
+        {
+          "loaded_save_ms": 47.936857,
+          "mode": "Recurse"
+        }
+      ],
+      "passed": true,
+      "raw_report": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-editor-final-v1.json",
+      "sha256": "c9b6f291ba99cb873a4c42add7a284eebbacca82927e45403d67938d86268766"
+    },
+    "layout-final-v1": {
+      "cases": 46,
+      "harness": "7a2f513cf2b12e69657891341d9e69a9a06caad3b22d7d61d57573e3543a44a4",
+      "outcomes": [
+        {
+          "case": "lib-leading-lines",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "bin-leading-lines",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "bin",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "rustfmt",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "interior-indent",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "closure-indent",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "callee-layout",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "both-files",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "comment-text",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "new-comment",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "semantic-edit",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "line-macro",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "doc-comment",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "source-location",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "include",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "cfg-attribute",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "build-script",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "dependency",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "input-membership",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "manifest-change",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "cargo-config",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "wrapper",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "proof-corruption",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "refresh",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "lib-leading-lines",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "bin-leading-lines",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "bin",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "rustfmt",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "interior-indent",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "closure-indent",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "callee-layout",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "both-files",
+          "error": null,
+          "expected_compilers": 0,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "comment-text",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "new-comment",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "semantic-edit",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "line-macro",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "doc-comment",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "source-location",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "include",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "cfg-attribute",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "build-script",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "dependency",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "input-membership",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "manifest-change",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "cargo-config",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "wrapper",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "proof-corruption",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "refresh",
+          "error": null,
+          "expected_compilers": 1,
+          "kind": "lib",
+          "mode": "Recurse",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "raw_report": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-final-v1.json",
+      "sha256": "e8f594b1ed3b1a311c1c161fda4addf25a32928c242b72ca62ec0b8b8a3970f6"
+    },
+    "layout-index-final-v1": {
+      "cases": 16,
+      "harness": {
+        "incremental_matrix.py": "997ef429667184b2d8f99845df2b2e90698ea533e11f1a85f7bdc4521577c576",
+        "test-result-index.py": "c13b63a70e6b57991fdc0fcd9db0defc7f8ff1c44151c2d81553fd108aeb7ce6"
+      },
+      "outcomes": [
+        {
+          "case": "layout",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "concurrent-bodies",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "superseded",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "canceled",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "generation-corruption",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "new-external-input",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "configured-disk-budget",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "interrupted-publication",
+          "error": null,
+          "mode": "SigOnly",
+          "passed": true
+        },
+        {
+          "case": "layout",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "concurrent-bodies",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "superseded",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "canceled",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "generation-corruption",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "new-external-input",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "configured-disk-budget",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        },
+        {
+          "case": "interrupted-publication",
+          "error": null,
+          "mode": "Recurse",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "raw_report": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-index-final-v1.json",
+      "sha256": "1000a9c3891cced49e1dd7aa5f4948434525bfdad5de8c44c9bcbc09ccb392fd"
+    }
+  },
   "schema": 1,
   "scope": "Step 12 focused proof and fallback validation; final-stack gates remain pending.",
   "workspace": {
     "passed": 168,
     "raw_log": "/home/sheep/Projects/flowistry/target/continuation-validation/layout-workspace-v1.log",
+    "scope": "Initial workspace suite before retained-source cap correction; final IDE suite and all process/package gates revalidated below.",
     "sha256": "eb4f6669d8fd87df62da1cdf7690d93525b384dac603973ae921c6236612d461"
   }
 }

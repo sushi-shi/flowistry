@@ -39,6 +39,7 @@ def main():
  p.add_argument('--work-dir',type=Path,required=True)
  p.add_argument('--json',type=Path,required=True)
  p.add_argument('--rustfmt',required=True)
+ p.add_argument('--index-only',action='store_true')
  args=p.parse_args()
  m=Matrix(args.backend_dir,args.work_dir,files=FILES,anchor='let café')
  report={'schema':1,'candidate':build_metadata(args.backend_dir),'reference':build_metadata(args.reference_dir),
@@ -86,6 +87,45 @@ def main():
   report['records'].append(record);atomic_json(args.json,report)
   print(mode,name,'PASS' if passed else 'FAIL: '+error,flush=True)
 
+ def body_index(mode):
+  m.reset();m.source=m.project/'src/lib.rs';key=mode+'-body-index';records={}
+  original_command=m.command
+  def scoped_command(mode,source=None):
+   args=original_command(mode,source)
+   return args[:2]+['--package','matrix_fixture','--target-kind','lib','--target-name','matrix_fixture']+args[2:]
+  m.command=scoped_command
+  def command(operation,identity=None):
+   args=m.command(mode)[:-2];args[args.index('file-focus')]=operation
+   if identity:args.append(identity)
+   start=time.monotonic();result=subprocess.run(args,cwd=m.project,env=m.env(key,'on',PROTOCOL),capture_output=True,timeout=120)
+   assert result.returncode==0,result.stderr.decode()
+   if operation=='result-index':
+    assert b'audit compiler' not in result.stderr
+    return json.loads(result.stdout),result.stderr.decode()
+   return observation(result,time.monotonic()-start)
+  try:
+   records['cold']=m.run(key,mode,extra=PROTOCOL);require_success(records['cold'])
+   before,_=command('result-index')
+   selected=next(body for body in before['bodies'] if body['name']=='selected')
+   records['body_cold']=command('body-focus',selected['identity']);require_success(records['body_cold'])
+   m.write(LIB,'\n\n'+m.source.read_text())
+   after,stderr=command('result-index')
+   assert 'audit layout-hit' in stderr,stderr
+   moved=next(body for body in after['bodies'] if body['identity']==selected['identity'])
+   assert moved['available'] and moved['range']['start']['line']==selected['range']['start']['line']+2
+   assert before['revision']!=after['revision'] and before['generation']!=after['generation']
+   records['body_warm']=command('body-focus',selected['identity'])
+   records['fresh']=reference(key,mode)
+   require_success(records['body_warm']);require_success(records['fresh'])
+   assert_equivalent(records['body_warm'],records['fresh'])
+   assert records['body_warm']['compiler_invocations']==0 and not records['body_warm']['solved_bodies']
+   records['index_before']=before;records['index_after']=after
+   passed,error=True,None
+  except Exception as exc:passed,error=False,str(exc)
+  m.command=original_command
+  report['records'].append({'mode':mode,'case':'body-focus-and-index','passed':passed,'error':error,'observations':records})
+  atomic_json(args.json,report);print(mode,'body-focus-and-index','PASS' if passed else 'FAIL: '+error,flush=True)
+
  def rustfmt(m):
   subprocess.run([args.rustfmt,'--edition','2021',str(m.source)],check=True,capture_output=True)
  def corrupt(m):
@@ -102,6 +142,8 @@ def main():
  newline=lambda m:m.write(str(m.source.relative_to(m.root)),'\n\n'+m.source.read_text())
  def add(text):return lambda m:m.write(LIB,text+m.source.read_text())
  for mode in ('SigOnly','Recurse'):
+  body_index(mode)
+  if args.index_only:continue
   for kind in ('lib','bin'):
    case(mode,kind+'-leading-lines',noop,newline,0,kind)
   case(mode,'rustfmt',lambda m:m.write(LIB,SOURCE.replace('    let café','\t let café')),rustfmt,0)

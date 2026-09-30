@@ -29,7 +29,7 @@ share one package source, lock file, CI suite and PR chain. See
 | 9. Project command | Implemented in [#51](https://github.com/sushi-shi/flowistry/pull/51) and [#54](https://github.com/sushi-shi/flowistry/pull/54); acceptance pending | Explicit Cargo targets, portable inventories and body workers feed a streaming coordinator with priorities, cancellation and bounded workers. All 16 coordinator and 14 worker scenarios also pass at the #56 candidate. Large-project and performance gates remain. See [coordinator evidence](project-coordinator.md). |
 | 10. Neovim background work | Implemented in [#55](https://github.com/sushi-shi/flowistry/pull/55); acceptance pending | Candidate `24ed53ecb` passes all five package checks, 323 frontend assertions, 14 backend worker scenarios and real-worker editor tests in both modes, including actual packaged cancellation. Global worker and editor-retention bounds are enforced; large-project/performance and final gates remain. See [background notes](neovim-background.md). |
 | 11. Incremental saves | Implemented increments [#56](https://github.com/sushi-shi/flowistry/pull/56) and [#57](https://github.com/sushi-shi/flowistry/pull/57); acceptance pending | #56 passes eight save scenarios and all 84 existing edit cases with selective solver work. #57 adds compiler-input editor invalidation: 366 frontend assertions, 31 live-editor assertions, 20 IDE tests and 16 publication cases pass. The [compiler-state experiment](rustc-incremental-experiment.md) passes 510 fresh-oracle comparisons but all measured variants use more instructions; none is retained. Quiet save measurements and expanded final edit/concurrency gates remain. See [save scheduling](dependency-save-plan.md) and [input invalidation](editor-input-invalidation.md). |
-| 12. Layout reuse | Implemented candidate above #58; final gates pending | 46 layout/fallback cases, 16 publication cases, 84 edit/concurrency cases, 168 workspace tests and 18 live-editor assertions pass. Eligible edits relocate with zero compiler invocations; source-sensitive cases fall back. See [proof and limits](safe-layout-reuse.md). |
+| 12. Layout reuse | Implemented candidate above #58; final gates pending | 48 layout/fallback cases, 16 publication cases, 84 edit/concurrency cases, 168 workspace tests and 18 live-editor assertions pass. Eligible edits relocate with zero compiler invocations; source-sensitive cases fall back. See [proof and limits](safe-layout-reuse.md). |
 | 13. Final release gates | Pending | Full corpus, edits, packaged editor and before/after evidence. |
 
 ## Active validation and retained evidence
@@ -243,8 +243,8 @@ Continue with step 12 and the outstanding gates in steps 1–4, 6–11 and 13.
 ## Layout continuation and terminal warm-cache gate
 
 Work continues directly above #58 in `/tmp/flowistry-layout-reuse`, branch
-`feat/safe-layout-reuse`. The runtime candidate is `e25fe7ecb`, frozen as
-`layout-reuse-v2`. See [safe layout reuse](safe-layout-reuse.md) for eligibility,
+`feat/safe-layout-reuse`. The final runtime candidate is `3ddebc5e3`, frozen as
+`layout-reuse-v3`. All five paired Nix checks pass on that exact revision. See [safe layout reuse](safe-layout-reuse.md) for eligibility,
 explicit conservative fallbacks and the new editor/compiler evidence.
 #58's final paired-package CI passed before this feature began.
 
@@ -257,3 +257,13 @@ Both earlier coordinator corpus jobs have ended; their prepared roots are no
 longer reserved. Preserve their raw reports and immutable candidate. This is
 coverage for `2fae9dd12`, not the newer layout tip, and is not quiet performance
 evidence. Earlier statements that either job is running are historical.
+
+
+Two final-candidate corpus runs are now live at `layout-reuse-v3`: cache-off versus
+warm with the h19 prepared corpus (PID 282293 at launch), and cache-off versus
+refresh with the engine prepared corpus (PID 298836 at launch). Reports/stores/
+checkpoints use the `layout-cache-warm` and `layout-cache-refresh` prefixes under
+the validation root; harness snapshots are `layout-cache-harness.py` and
+`layout-cache-checkpoint.py`. Recheck live PIDs before acting. Each has two workers
+and a 6 GiB per-request cap. Do not mutate either prepared root or start a third
+heavy harness. Quiet measurements must wait for these jobs to finish.

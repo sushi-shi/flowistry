@@ -67,21 +67,24 @@ The response-cache key version advances to 8; old response entries safely miss.
 
 ## Validation
 
-The runtime candidate is frozen at `e25fe7ecb` in
-`target/continuation-validation/layout-reuse-v2`. Exact checksums and raw-report
+The runtime candidate is frozen at `3ddebc5e3` in
+`target/continuation-validation/layout-reuse-v3`. Exact checksums and raw-report
 references are retained in [the report](measurements/safe-layout-reuse.json).
 
-- 46 process cases pass across both modes, including library/binary targets,
+- 48 process cases pass across both modes, including library/binary targets,
   Unicode, closures, indexed maybe-slices, single/multiple source edits and
   rustfmt. Eligible cases each invoke zero compilers and zero solvers, publish a
   new revision/generation, and match an independently frozen #57 cache-off
-  backend. Comment/semantic edits, source-sensitive constructs, dependencies,
+  backend. Two additional checks validate stable body-identity replay and updated
+  result-index ranges/generations. Comment/semantic edits, source-sensitive constructs, dependencies,
   configuration, wrappers, new inputs, corruption and refresh invoke the
   compiler and match the same independent oracle.
 - All 16 existing versioned-publication cases and all 84 existing edit/concurrency
   cases pass, including curated real-project edits and cancellation/recovery.
-- All 168 workspace tests pass, including punctuation/Unicode checks and an
-  input change after the initial proof snapshot that must reject publication.
+- All 168 workspace tests passed on the initial candidate. All 23 IDE tests
+  passed again after correcting the aggregate retained-source bound. These
+  include punctuation/Unicode checks and an input change after the initial proof
+  snapshot that must reject publication.
 - The real headless Neovim rustfmt-save test passes 18 assertions across both
   modes. Layout-reused highlights exactly match fresh compiler extmarks after
   resetting editor state and disabling reuse. The test is included in the root
@@ -91,5 +94,6 @@ The saved editor times in the live report are observations under host load, not
 quiet latency distributions or proof of the provisional 300 ms performance gate.
 Most dependency-heavy projects are currently ineligible and continue using
 compiler-validated semantic reuse. Broader eligibility requires a stronger proof,
-not removal of these checks. The final full corpus, package CI and remaining
+not removal of these checks. All five root Nix package checks passed on the final runtime. The final full
+corpus, remote package CI and remaining
 performance/resource acceptance gates must still pass at the final stack.
