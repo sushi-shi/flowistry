@@ -20,6 +20,16 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(result, {'compiler_invocations': 1, 'computations': ['leaf'],
                                   'hits': ['leaf'], 'verified': ['leaf']})
 
+    def test_storage_diagnostics_preserve_each_analysis_without_claiming_heap_size(self):
+        text = ('[INFO flowistry::infoflow] Over 7 locations, total number of place entries: 20300000 '
+                '(avg 2900000/loc, 1170000 stored), total size of location sets: 99 (avg 14/loc)\n'
+                '[INFO flowistry::infoflow] Over 2 locations, total number of place entries: 8 '
+                '(avg 4/loc, 3 stored), total size of location sets: 12 (avg 6/loc)\n')
+        self.assertEqual(smoke.parse_storage(text), [
+            {'locations': 7, 'logical_rows': 20300000, 'stored_rows': 1170000, 'row_entries': 99},
+            {'locations': 2, 'logical_rows': 8, 'stored_rows': 3, 'row_entries': 12}])
+        self.assertEqual(smoke.parse_storage('unrelated log'), [])
+
     def args(self):
         return SimpleNamespace(repeat=3, timeout=20, phases=False, memory_limit='6G', keep_outputs=False)
 

@@ -3,6 +3,9 @@
 State: 2026-09-30. Start with #14 and follow the table. Every backend PR targets
 the previous PR's branch; only #14 targets master. Nothing has been merged.
 The independent stacks have been integrated, including the formerly old-core #2.
+The [latest branch audit](measurements/review-chain-60.json) covers all 46 open
+PRs through #60: one chain, each base head an ancestor, every incremental diff
+nonempty, and the table below matching GitHub's branch order.
 
 Use each PR's **Files changed** tab to review its incremental change. Existing
 commit ancestry is retained through merge commits, allowing normal pushes with
@@ -38,6 +41,26 @@ no history rewriting; the commit tab consequently includes historical branches.
 | 24 | [#34](https://github.com/sushi-shi/flowistry/pull/34) | Replay the compiler command when Cargo inputs are unchanged; preserve failure status. |
 | 25 | [#2](https://github.com/sushi-shi/flowistry/pull/2) | Persistent semantic and snapshot caches ported onto the typed core and range-table protocol. |
 | 26 | [#40](https://github.com/sushi-shi/flowistry/pull/40) | This review map, current handoff, and incremental-analysis plan. |
+| 27 | [#41](https://github.com/sushi-shi/flowistry/pull/41) | Resumable combined-corpus validation and exact coverage audits. |
+| 28 | [#42](https://github.com/sushi-shi/flowistry/pull/42) | Interleaved performance samples, isolated replay and distribution reports. |
+| 29 | [#43](https://github.com/sushi-shi/flowistry/pull/43) | Integrated Recurse row groups and independent reference checks; performance acceptance pending. |
+| 30 | [#44](https://github.com/sushi-shi/flowistry/pull/44) | Fresh-root templates for seed rows; performance acceptance pending. |
+| 31 | [#45](https://github.com/sushi-shi/flowistry/pull/45) | HIR hashing investigation and rejected compiler shortcuts. |
+| 32 | [#46](https://github.com/sushi-shi/flowistry/pull/46) | Preserve compiler signal failures through replay and snapshot wrappers. |
+| 33 | [#47](https://github.com/sushi-shi/flowistry/pull/47) | Edit/concurrency oracle and compiler/body-work tracing. |
+| 34 | [#48](https://github.com/sushi-shi/flowistry/pull/48) | Shared result index, bounded store and versioned publication. |
+| 35 | [#49](https://github.com/sushi-shi/flowistry/pull/49) | Portable persisted callee summaries and dependency observations. |
+| 36 | [#50](https://github.com/sushi-shi/flowistry/pull/50) | File-focus filename mappings and portable result-index file identities. |
+| 37 | [#51](https://github.com/sushi-shi/flowistry/pull/51) | Explicit Cargo target inventories and project worker foundation. |
+| 38 | [#52](https://github.com/sushi-shi/flowistry/pull/52) | Constructor-field highlighting, comment exclusion and parameter-type selection. |
+| 39 | [#53](https://github.com/sushi-shi/flowistry/pull/53) | Import Neovim history and bind editor/backend packages to one source tree. |
+| 40 | [#54](https://github.com/sushi-shi/flowistry/pull/54) | Streaming project coordinator, priorities, bounded workers and cancellation. |
+| 41 | [#55](https://github.com/sushi-shi/flowistry/pull/55) | Opt-in Neovim background warming and foreground priority. |
+| 42 | [#56](https://github.com/sushi-shi/flowistry/pull/56) | Saved-file and affected-caller scheduling with full validation. |
+| 43 | [#57](https://github.com/sushi-shi/flowistry/pull/57) | Editor invalidation for compiler-discovered external inputs and configuration. |
+| 44 | [#58](https://github.com/sushi-shi/flowistry/pull/58) | Compiler incremental-state experiment, rejected on measured regressions. |
+| 45 | [#59](https://github.com/sushi-shi/flowistry/pull/59) | Proven-safe layout relocation before compiler startup, with conservative fallback. |
+| 46 | [#60](https://github.com/sushi-shi/flowistry/pull/60) | Guarded predecessor measurement queue and final reference-build evidence; acceptance pending. |
 
 **Excluded:** [#27](https://github.com/sushi-shi/flowistry/pull/27) was closed as superseded by #33 with the owner’s approval. It is excluded from the
 review sequence; its branch and original discussion are retained. Closed #1/#4/#5 are historical predecessors of #15–#17.
@@ -103,11 +126,12 @@ restack the remaining PRs onto the resulting master commit and verify the next
 PR's three-dot diff before proceeding. A rewrite/force-push still needs the
 owner's explicit go-ahead; this preparation used only normal pushes.
 
-## Unsubmitted optimization work
+## Original unsubmitted optimization work
 
-Local Recurse row-group experiments, seed-row construction, HIR hashing, Phase 0
-measurements, and future background/project analysis are described in
-[the handoff](handoff.md). They have not been silently included in these PRs.
+The original local Recurse row-group, seed-row and HIR hashing experiments are
+described in [the handoff](handoff.md). Their integrations and decisions now have
+separate continuation PRs below, followed by project/background and save handling.
+Performance retention decisions and the remaining acceptance gates stay explicit.
 
 The next work is specified in the [feature-by-feature continuation plan](continuation-plan.md).
 It extends this chain with validation, the remaining optimization experiments,
@@ -194,5 +218,12 @@ punctuation jointness and exact comment tokens, relocates response/index ranges,
 and falls back for source observers or unknown cases. Its 48 targeted cases,
 84 existing edit/concurrency cases, 16 publication cases, final IDE tests and all
 five paired package checks pass. See [eligibility and evidence](safe-layout-reuse.md).
+[#60](https://github.com/sushi-shi/flowistry/pull/60) follows #59 with a pinned,
+serial acceptance queue. It audits both final corpus reports, waits for a quiet
+host, and separates eight-sample predecessor timing from storage diagnostics.
+Its 61 Python regressions and package CI at `8872856ed` pass; a small final
+engine/eager-reference smoke check agrees in both modes. Actual optimization
+measurements and full final reference coverage remain pending. See
+[the queue policy](acceptance-measurement-queue.md).
 This is the current tip of the unified backend/editor chain.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

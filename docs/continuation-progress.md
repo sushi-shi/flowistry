@@ -1,7 +1,11 @@
 # Continuation implementation progress
 
-The [full plan](continuation-plan.md) remains the objective. No milestone is
-complete merely because tooling or a subset of its tests passes.
+The [full plan](continuation-plan.md) is **paused at the user's request**. The
+queue and both candidate corpus runs were stopped on 2026-09-30; do not resume
+from the historical live-job descriptions below. No milestone is complete merely
+because tooling or a subset of its tests passes. The subsequent review fixes and
+finished project-measurement harness are recorded in [review-fixes.md](review-fixes.md).
+The table below preserves outstanding acceptance gates, not an active work queue.
 
 The live highlighting report was addressed after #51 in
 [#52](https://github.com/sushi-shi/flowistry/pull/52) and
@@ -19,7 +23,7 @@ share one package source, lock file, CI suite and PR chain. See
 | Step | State | Evidence / next gate |
 |---|---|---|
 | 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Full #17/integrated coverage: 2,827 equal successful pairs, 48 paired benign selections and five reference-OOM/integrated-success outcomes; see [combined-corpus-results.md](combined-corpus-results.md). Independent reference coverage is complete but five checks remain resource-limited. The legacy file-cache run completed with 2,878 equal successes and two decoder failures; the filename-fixed coordinator candidate now passes all 2,880 cache-off/refresh pairs. The coordinator warm-cache gate also passes all 2,880 pairs. Final-tip gates remain. |
-| 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
+| 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 61 current harness regressions pass; real interleaved perf and isolated-replay probes work. A pinned immediate-base queue now waits for the two current corpus runs; actual results, project/save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Full Recurse equality passed, [#43](https://github.com/sushi-shi/flowistry/pull/43); acceptance pending | 1,416 equal successful pairs and 24 matching benign selections cover all locked Recurse positions. 107 core tests pass with engine-diff/shadow-eager. Full reference and quiet stress performance gates remain; see [recurse-row-groups.md](recurse-row-groups.md). |
 | 4. Seed rows | Full corpus equality passed, [#44](https://github.com/sushi-shi/flowistry/pull/44); acceptance pending | All 2,880 locked selections agree: 2,832 successful pairs and 48 matching benign selections. 108 core tests pass; enhanced reference and quiet seed-construction/stress measurements remain. See [seed-row-experiment.md](seed-row-experiment.md). |
 | 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
@@ -243,9 +247,9 @@ Continue with step 12 and the outstanding gates in steps 1–4, 6–11 and 13.
 
 ## Layout continuation and terminal warm-cache gate
 
-The newest published PR is [#59](https://github.com/sushi-shi/flowistry/pull/59),
+At this checkpoint, the newest published PR was [#59](https://github.com/sushi-shi/flowistry/pull/59),
 branch `feat/safe-layout-reuse` in `/tmp/flowistry-layout-reuse`, directly above
-#58. New work starts above #59. The final runtime candidate is `3ddebc5e3`, frozen as
+#58. The acceptance continuation below now extends it. The final runtime candidate is `3ddebc5e3`, frozen as
 `layout-reuse-v3`. All five paired Nix checks pass on that exact revision. See [safe layout reuse](safe-layout-reuse.md) for eligibility,
 explicit conservative fallbacks and the new editor/compiler evidence.
 #58's final paired-package CI passed before this feature began.
@@ -269,3 +273,30 @@ the validation root; harness snapshots are `layout-cache-harness.py` and
 `layout-cache-checkpoint.py`. Recheck live PIDs before acting. Each has two workers
 and a 6 GiB per-request cap. Do not mutate either prepared root or start a third
 heavy harness. Quiet measurements must wait for these jobs to finish.
+
+
+## Guarded acceptance continuation
+
+The newest published PR is [#60](https://github.com/sushi-shi/flowistry/pull/60),
+`/tmp/flowistry-acceptance`, branch `test/final-acceptance`, directly above
+#59 (`62bd531ab`). Both #59's final remote paired-package CI and #60's check at
+`8872856ed` passed. New work extends #60. The backend/editor
+runtime remains identical to frozen `3ddebc5e3`; this increment prepares actual
+acceptance measurements and independent reference validation.
+
+The quiet optimization queue is live: PID 480300, start tick 98440171, with
+state/plan/log under `optimization-acceptance-v1/`. It is waiting for the two
+current corpus PIDs and will audit both final reports before measuring. See
+[the queue](acceptance-measurement-queue.md) and [manifest](measurements/optimization-acceptance-queue.json).
+Do not start a duplicate queue or another heavy job while its quiet measurements
+are pending/running. Its 16 jobs cover row-group/seed predecessor pairs; they do
+not replace project/save performance, stress budgets or the rest of the plan.
+
+`final-reference-v1/` now freezes the final runtime with
+`flowistry/engine-diff,flowistry/shadow-eager`, built at `0c4947745` in the shared
+release target under a 3 GiB build cap. A small aggregate smoke check agrees with
+`layout-reuse-v3/` in both modes and exercises three Recurse groups/54 grouped
+rows. Full final reference coverage and the five prior resource-limited checks
+are still pending. After the quiet measurements, inspect targeted reference
+resource use before choosing a bounded higher-cap/split-reference strategy;
+do not blindly repeat the old failing 6 GiB requests or label them passed.
