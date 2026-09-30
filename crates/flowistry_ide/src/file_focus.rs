@@ -89,10 +89,11 @@ impl rustc_driver::Callbacks for Callbacks {
         bodies.push(BodyOutput {
           range,
           focus: if self.position.is_none() || selected == Some(id) {
-            Some(
-              crate::focus::focus_with_session(&session, id)
-                .map_err(|error| error.to_string()),
-            )
+            Some(if tcx.typeck(tcx.hir_body_owner_def_id(id)).tainted_by_errors.is_some() {
+              Err("the selected function does not type-check".to_string())
+            } else {
+              crate::focus::focus_with_session(&session, id).map_err(|error| error.to_string())
+            })
           } else {
             None
           },
