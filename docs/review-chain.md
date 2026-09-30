@@ -102,3 +102,7 @@ owner's explicit go-ahead; this preparation used only normal pushes.
 Local Recurse row-group experiments, seed-row construction, HIR hashing, Phase 0
 measurements, and future background/project analysis are described in
 [the handoff](handoff.md). They have not been silently included in these PRs.
+
+The next work is specified in the [feature-by-feature continuation plan](continuation-plan.md).
+It extends this chain with validation, the remaining optimization experiments,
+and background/project analysis plus incremental save handling.

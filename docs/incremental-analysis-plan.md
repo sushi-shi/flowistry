@@ -5,8 +5,10 @@ at the end of the [review chain](review-chain.md), with cross-process and editor
 validation passing. Phase 0 measurements and later background/project work remain
 pending. The plan below retains the design and decision criteria.
 
-Status: plan only. Implementation starts after the engine perf work lands and the
-Phase 0 measurements confirm it is worth it (see "Gate").
+The [feature-by-feature continuation plan](continuation-plan.md) is now the
+execution order. The design below is background; its original deferral gates no
+longer cancel the requested background/save work. Measurements determine the
+implementation and rollout. No merge of the existing stack is needed to begin.
 
 ## Goals
 
@@ -26,11 +28,11 @@ Phase 0 measurements confirm it is worth it (see "Gate").
 
 | Piece | Where | State |
 |---|---|---|
-| One process per request (cargo + rustc start) | backend | typical 0.4–1 s; large functions take seconds; just runs out of memory (engine plan in progress) |
+| One compiler process on an analysis miss | integrated backend | snapshot hits skip startup; current combined-chain latency and memory baselines are pending |
 | `file-focus`: a file's bodies in one compiler session | #14 (review) | nvim batch mode is optional, off by default, and limited to files of at most 600 lines |
 | Callee summaries shared per session | #15 (review) | per process only |
-| Per-function persistent cache: keys include the backend, compiler options, crate metadata, declarations, the body's MIR, region topology, borrow facts, HIR mapping, and in Recurse its transitive local callees; portable token-relative ranges | old #2, not rebased | measured: replay without starting cargo/rustc took 0.2 s vs 3.2 s |
-| Snapshot replay: a saved-input fingerprint answers before cargo/rustc start | old #2 | needs to watch every build input (manifests, lock, build scripts, env) |
+| Per-function persistent cache: keys include the backend, compiler options, crate metadata, declarations, the body's MIR, region topology, borrow facts, HIR mapping, and in Recurse its transitive local callees; portable token-relative ranges | integrated #2 | schema-2 indexed portable ranges; cross-process and editor tests pass; combined performance measurements pending |
+| Snapshot replay: a saved-input fingerprint answers before cargo/rustc start | integrated #2 | validated snapshots cover source/build inputs; broader modification-matrix tests remain planned |
 | Editor-side retention and pin tracking across edits | flowistry.nvim | works per function |
 | Locked corpus plus smoke/perf harness (`--compare --phases --repeat`) | #10 | the base for the tests below |
 
@@ -38,15 +40,15 @@ Phase 0 measurements confirm it is worth it (see "Gate").
 
 ### A. Result store
 
-The persistent cache from #2, rebased onto the typed core, becomes the single place
-results live.
+The persistent cache from #2 is now ported onto the typed core. Extend it into the
+shared result store; do not introduce competing invalidation rules.
 
 - **Background analysis fills it; editor requests read it.** A hit costs no compile.
 - **Keys stay compiler-validated,** as in #2.
-- **Callee summaries are persisted too.** The typed core's `EffectPath` has no
-  `'tcx`, so a summary serializes naturally. It is keyed by the callee's
-  fingerprint and its own transitive callees. A changed function then reuses the
-  summaries of all its unchanged callees across processes.
+- **Persisted callee summaries are planned.** Audit all fields and define an
+  explicitly portable schema; a missing lifetime alone does not establish
+  portability. Key summaries by the callee's validated semantic inputs and
+  dependencies, preserving recursive-component and fallback behavior.
 
 ### B. `project` command: the whole crate in one session
 
@@ -56,8 +58,9 @@ results live.
   priority positions first, then the rest of their files, then everything else.
 - Streams one record per body, and writes each result into the store as soon as
   it is done.
-- Memory stays bounded by releasing each body's borrowck facts and flow results
-  after it is used. This depends on the engine fixes; just must not blow up.
+- Release Flowistry-owned per-body results promptly. Compiler arenas and query
+  caches may retain borrow facts until process exit, so use bounded worker batches
+  if measurements require it; do not assume all per-body memory is reclaimable.
 - Workspaces run one process per package, in parallel and at low priority
   (`nice`), and can be cancelled.
 
@@ -65,8 +68,10 @@ results live.
 
 Each tier is tried in order. The first that applies answers.
 
-1. **Nothing semantic changed** (whitespace, comments, formatting): relocate the
-   existing ranges by token index, as #2 does. No compile.
+1. **Proven-safe layout edits:** relocate existing ranges by token index without
+   compilation only where all observable semantic inputs are proven unchanged.
+   Macros, source includes, doc comments and build scripts require conservative
+   fallback; see feature 12 of the continuation plan.
 2. **Build inputs unchanged since the last validated run:** the snapshot replays
    the stored response. No compile.
 3. **Otherwise:**
@@ -161,8 +166,10 @@ Pass criteria:
 - No stale results.
 - No crashes.
 - Latency per tier recorded.
-- The layout-only group never compiles.
-- Unchanged bodies are never re-analysed.
+- Proven-safe layout cases do not compile; unsupported/source-sensitive cases
+  invalidate or fall back to compiler validation.
+- Validated unchanged bodies do not rerun the solver unless their dependencies
+  or analysis context changed. Compiler validation can still be necessary.
 
 ## Risks
 

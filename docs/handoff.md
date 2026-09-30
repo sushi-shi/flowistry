@@ -95,6 +95,10 @@ report before cleanup. Tests and commands themselves are committed.
 
 ## Remaining optimization work
 
+The owner has requested all three remaining areas. Follow the
+[feature-by-feature continuation plan](continuation-plan.md) for implementation
+order, dependencies and completion gates.
+
 Historical measurements from the original branches (not fresh timings of this
 combined chain) reduced just `src/error.rs 926 10`, SigOnly, from master OOM at
 6 GB to about 0.7 seconds of analysis plus 0.34 seconds of rustc. Typical
