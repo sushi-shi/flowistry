@@ -540,12 +540,17 @@ impl BodyIdentity {
     tcx: TyCtxt<'_>,
     id: rustc_hir::BodyId,
     range: &rustc_utils::source_map::range::CharRange,
+    filename: &str,
   ) -> Self {
     let def = tcx.hir_body_owner_def_id(id);
+    let mut range = serde_json::to_value(range).unwrap();
+    // The result index outlives the compiler. Its bodies are all scoped to the
+    // requested file; retain that path instead of a response-local interner slot.
+    range["filename"] = Value::String(filename.to_owned());
     Self {
       identity: format!("{:?}", tcx.def_path_hash(def.to_def_id())),
       name: tcx.def_path_str(def),
-      range: serde_json::to_value(range).unwrap(),
+      range,
     }
   }
 }

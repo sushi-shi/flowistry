@@ -165,6 +165,8 @@ def check(matrix, mode, name):
         index = observations['initial_index'] = control(matrix, case, mode, 'result-index')
         if not selected(index)['available']:
             raise AssertionError('selected body missing from index')
+        if selected(index)['range']['filename'] != str(matrix.source):
+            raise AssertionError('persistent body index lacks the requested file identity')
         if any(body['available'] for body in index['bodies'] if body['name'] == 'unrelated'):
             raise AssertionError('unanalyzed body was advertised as available')
         if index['revision'] != cold['publication']['revision']:

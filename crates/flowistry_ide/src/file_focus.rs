@@ -129,7 +129,12 @@ impl rustc_driver::Callbacks for Callbacks {
         let Ok(range) = crate::positions::char_range(span, source_map) else {
           continue;
         };
-        identities.push(crate::fast_cache::BodyIdentity::new(tcx, id, &range));
+        identities.push(crate::fast_cache::BodyIdentity::new(
+          tcx,
+          id,
+          &range,
+          &self.filename,
+        ));
         let previous_hits = cache.hits.get();
         let focus = if self.position.is_none() || selected == Some(id) {
           Some(
