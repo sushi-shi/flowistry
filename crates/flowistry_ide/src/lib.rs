@@ -31,6 +31,7 @@ mod focus;
 mod playground;
 mod plugin;
 mod positions;
+mod project;
 mod replay;
 mod result_store;
 mod spans;

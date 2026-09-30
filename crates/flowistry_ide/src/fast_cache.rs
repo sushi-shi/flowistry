@@ -298,14 +298,22 @@ fn discover(key: String, directory: &Path, selected_file: &Path) -> Option<Entry
   let mut files = BTreeSet::new();
   let packages = metadata["packages"].as_array()?;
   let selected_file = selected_file.canonicalize().ok()?;
+  files.insert(selected_file.clone());
+  let explicit_package = crate::plugin::selected_package();
   let selected = packages
     .iter()
     .filter(|p| p["source"].is_null())
     .filter_map(|p| {
       let manifest = Path::new(p["manifest_path"].as_str()?);
       let root = manifest.parent()?;
-      selected_file
-        .starts_with(root)
+      explicit_package
+        .as_deref()
+        .map_or_else(
+          || selected_file.starts_with(root),
+          |selected| {
+            p["name"].as_str() == Some(selected) || p["id"].as_str() == Some(selected)
+          },
+        )
         .then_some((root.components().count(), p["id"].as_str()?))
     })
     .max_by_key(|(depth, _)| *depth)?
@@ -718,6 +726,8 @@ fn encode(value: &Value) -> Option<String> {
 struct Response {
   bodies: Vec<((u64, u64), (u64, u64), bool)>,
   output: String,
+  #[serde(default)]
+  selected_identity: Option<String>,
 }
 impl Response {
   fn supports(&self, position: Option<(u64, u64)>) -> bool {
@@ -759,6 +769,7 @@ fn prepare(mut value: Value) -> Option<Response> {
   Some(Response {
     bodies: ranges,
     output: encode(&value)?,
+    selected_identity: None,
   })
 }
 fn load(store: &Store, key: &str) -> Option<Entry> {
@@ -828,18 +839,27 @@ fn index(entry: &Entry, ticket: &Ticket) -> Value {
 fn cached_run() -> Option<ExitCode> {
   let mut args = env::args().skip(1).collect::<Vec<_>>();
   let command_index = args.iter().position(|a| {
-    matches!(a.as_str(), "file-focus" | "result-index" | "cancel-results")
+    matches!(
+      a.as_str(),
+      "file-focus" | "body-focus" | "result-index" | "cancel-results"
+    )
   })?;
   let operation = args[command_index].clone();
+  let identity = (operation == "body-focus")
+    .then(|| args.get(command_index + 2).cloned())
+    .flatten();
   let position = match args.len() - command_index {
     2 => None,
+    3 if operation == "body-focus" && identity.is_some() => None,
     4 if operation == "file-focus" => Some((
       args[command_index + 2].parse().ok()?,
       args[command_index + 3].parse().ok()?,
     )),
     _ => return None,
   };
-  args[command_index] = "file-focus".into();
+  if operation != "body-focus" {
+    args[command_index] = "file-focus".into();
+  }
   args[command_index + 1] = Path::new(&args[command_index + 1])
     .canonicalize()
     .ok()?
@@ -867,11 +887,13 @@ fn cached_run() -> Option<ExitCode> {
   let environment: BTreeMap<_, _> = env::vars_os()
     .filter(|(k, _)| !k.to_str().is_some_and(transient_env))
     .collect();
+  let mut key_args = args[.. command_index + 2].to_vec();
+  key_args[command_index] = "file-focus".into();
   let key = digest(&(
     7u32,
     env::current_dir().ok()?,
     env::current_exe().ok()?,
-    &args[.. command_index + 2],
+    &key_args,
     environment,
   ));
   let store = Store::open(&directory).ok()?;
@@ -898,7 +920,12 @@ fn cached_run() -> Option<ExitCode> {
   if mode != "refresh" && !crate::summary_cache::verify_summaries() {
     if let Some(entry) = &previous {
       for response in &entry.responses {
-        if response.supports(position) {
+        let supports = if let Some(identity) = &identity {
+          response.selected_identity.as_ref() == Some(identity)
+        } else {
+          response.selected_identity.is_none() && response.supports(position)
+        };
+        if supports {
           let ticket = store.begin(&key, &entry.revision()).ok()?;
           emit(response.output.as_bytes(), "current", Some(&ticket));
           return Some(ExitCode::SUCCESS);
@@ -956,7 +983,11 @@ fn cached_run() -> Option<ExitCode> {
       log::debug!("fast cache: inputs changed during analysis");
       return None;
     }
-    let response = prepare(decode(&output.stdout)?)?;
+    let mut response = prepare(decode(&output.stdout)?)?;
+    if identity.is_some() && !response.bodies.iter().any(|(_, _, analyzed)| *analyzed) {
+      return None;
+    }
+    response.selected_identity = identity.clone();
     log::debug!("fast cache: decoded response");
     let preflight = entry.snapshot.clone();
     let extra: CompilerInputs = serde_json::from_slice(&fs::read(&inputs).ok()?).ok()?;
@@ -1018,7 +1049,9 @@ fn cached_run() -> Option<ExitCode> {
     {
       entry.responses = latest.responses;
     }
-    entry.responses.retain(|old| old.bodies != response.bodies);
+    entry.responses.retain(|old| {
+      old.bodies != response.bodies || old.selected_identity != response.selected_identity
+    });
     entry.responses.push(response);
     if entry.responses.len() > 128 {
       entry.responses.remove(0);

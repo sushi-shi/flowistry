@@ -32,6 +32,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Parser, Serialize, Deserialize)]
 pub struct FlowistryPluginArgs {
+  // Keep the launcher lock alive until rustc_plugin's Cargo child has exited.
+  // It never crosses the serialized CLI/driver boundary.
+  #[arg(skip)]
+  #[serde(skip)]
+  cargo_lock: Option<std::fs::File>,
+  #[command(flatten)]
+  pub(crate) selection: crate::project::Selection,
   #[clap(long)]
   bench: Option<bool>,
 
@@ -48,6 +55,17 @@ pub struct FlowistryPluginArgs {
 
 #[derive(Subcommand, Serialize, Deserialize)]
 enum FlowistryCommand {
+  /// Enumerate compiler-discovered bodies for the explicitly selected target.
+  #[command(hide = true)]
+  ProjectBodies {
+    file: String,
+  },
+  /// Analyze one portable body identity in a fresh worker.
+  #[command(hide = true)]
+  BodyFocus {
+    file: String,
+    identity: String,
+  },
   /// List currently validated body results without invoking the compiler.
   ResultIndex {
     file: String,
@@ -94,6 +112,15 @@ enum FlowistryCommand {
 /// commands that do not run the driver on a crate.
 pub fn replay_request() -> Option<(String, PathBuf)> {
   let args = FlowistryPluginArgs::try_parse_from(env::args().skip(1)).ok()?;
+  // The legacy replay selector infers a target from a path. Explicit target
+  // requests must use Cargo until replay records model that selection too.
+  if args.selection.package.is_some()
+    || args.selection.features.is_some()
+    || args.selection.all_features
+    || args.selection.no_default_features
+  {
+    return None;
+  }
   use FlowistryCommand::*;
   let file = match &args.command {
     Spans { file }
@@ -101,7 +128,12 @@ pub fn replay_request() -> Option<(String, PathBuf)> {
     | Focus { file, .. }
     | Decompose { file, .. }
     | Playground { file, .. } => PathBuf::from(file),
-    Preload | RustcVersion | ResultIndex { .. } | CancelResults { .. } => return None,
+    Preload
+    | RustcVersion
+    | ResultIndex { .. }
+    | CancelResults { .. }
+    | ProjectBodies { .. }
+    | BodyFocus { .. } => return None,
   };
   Some((serde_json::to_string(&args).ok()?, file))
 }
@@ -113,6 +145,13 @@ pub(crate) fn result_control_request() -> bool {
       FlowistryCommand::ResultIndex { .. } | FlowistryCommand::CancelResults { .. }
     )
   })
+}
+
+pub(crate) fn selected_package() -> Option<String> {
+  FlowistryPluginArgs::try_parse_from(env::args().skip(1))
+    .ok()?
+    .selection
+    .package
 }
 
 pub struct FlowistryPlugin;
@@ -128,7 +167,38 @@ impl RustcPlugin for FlowistryPlugin {
   }
 
   fn args(&self, target_dir: &Utf8Path) -> RustcPluginArgs<FlowistryPluginArgs> {
-    let args = FlowistryPluginArgs::parse_from(env::args().skip(1));
+    let mut args = FlowistryPluginArgs::parse_from(env::args().skip(1));
+    if matches!(
+      args.command,
+      FlowistryCommand::ProjectBodies { .. } | FlowistryCommand::BodyFocus { .. }
+    ) && args.selection.package.is_none()
+    {
+      eprintln!(
+        "flowistry: project body workers require explicit package and target selection"
+      );
+      exit(2);
+    }
+    // rustc_plugin removes selected library artifacts before launching Cargo.
+    // Serialize that preparation with every other Flowistry Cargo launcher that
+    // uses the same target directory, including foreground/file-focus requests.
+    let lock = (|| -> std::io::Result<std::fs::File> {
+      std::fs::create_dir_all(target_dir)?;
+      let lock = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(target_dir.join(".flowistry-launch.lock"))?;
+      lock.lock()?;
+      Ok(lock)
+    })();
+    match lock {
+      Ok(lock) => args.cargo_lock = Some(lock),
+      Err(error) => {
+        eprintln!("flowistry: cannot lock Cargo target directory: {error}");
+        exit(2);
+      }
+    }
 
     let cargo_path = env::var("CARGO_PATH").unwrap_or_else(|_| "cargo".to_string());
 
@@ -153,6 +223,7 @@ impl RustcPlugin for FlowistryPlugin {
     };
 
     let file = match &args.command {
+      ProjectBodies { file } | BodyFocus { file, .. } => file,
       FileFocus { file, .. } => file,
       Spans { file, .. } => file,
       Focus { file, .. } => file,
@@ -162,9 +233,17 @@ impl RustcPlugin for FlowistryPlugin {
     };
 
     RustcPluginArgs {
-      filter: CrateFilter::CrateContainingFile(PathBuf::from(file)),
+      filter: if args.selection.package.is_some() {
+        CrateFilter::OnlyWorkspace
+      } else {
+        CrateFilter::CrateContainingFile(PathBuf::from(file))
+      },
       args,
     }
+  }
+
+  fn modify_cargo(&self, cargo: &mut Command, args: &Self::Args) {
+    args.selection.modify_cargo(cargo);
   }
 
   fn run(
@@ -184,6 +263,12 @@ impl RustcPlugin for FlowistryPlugin {
 
     use FlowistryCommand::*;
     match plugin_args.command {
+      ProjectBodies { .. } => postprocess(crate::project::discover(&compiler_args)),
+      BodyFocus { file, identity } => postprocess(crate::file_focus::analyze_body(
+        &compiler_args,
+        file,
+        identity,
+      )),
       FileFocus {
         file,
         pos_line,

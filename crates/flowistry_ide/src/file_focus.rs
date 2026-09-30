@@ -77,6 +77,7 @@ struct Callbacks {
   filename: String,
   eval_mode: EvalMode,
   position: Option<CharPos>,
+  identity: Option<String>,
   output: Option<FlowistryResult<FileOutput>>,
 }
 
@@ -100,7 +101,22 @@ impl rustc_driver::Callbacks for Callbacks {
         .find_source_file(source_map)
         .map_err(|_| FlowistryError::FileNotFound)?;
       let candidates = find_bodies(tcx);
-      let selected = if let Some(position) = self.position {
+      let selected = if let Some(identity) = &self.identity {
+        let matching = candidates
+          .iter()
+          .filter(|(_, id)| {
+            let def = tcx.hir_body_owner_def_id(*id);
+            format!("{:?}", tcx.def_path_hash(def.to_def_id())) == *identity
+          })
+          .map(|(_, id)| *id)
+          .collect::<Vec<_>>();
+        if matching.len() != 1 {
+          return Err(FlowistryError::AnalysisError {
+            error: "body identity is missing or ambiguous in the current compiler".into(),
+          });
+        }
+        Some(matching[0])
+      } else if let Some(position) = self.position {
         let target = crate::positions::Chars(CharRange {
           start: position,
           end: position,
@@ -118,6 +134,16 @@ impl rustc_driver::Callbacks for Callbacks {
       } else {
         None
       };
+      if self.identity.is_some()
+        && !candidates.iter().any(|(span, id)| {
+          Some(*id) == selected
+            && source_map.lookup_source_file(span.lo()).name == file.name
+        })
+      {
+        return Err(FlowistryError::AnalysisError {
+          error: "body identity is not in the requested file".into(),
+        });
+      }
       // The bodies of the file share their callee summaries.
       let cache = crate::cache::FocusCache::new(tcx);
       let session = cache.session(tcx, self.eval_mode);
@@ -136,7 +162,9 @@ impl rustc_driver::Callbacks for Callbacks {
           &self.filename,
         ));
         let previous_hits = cache.hits.get();
-        let focus = if self.position.is_none() || selected == Some(id) {
+        let focus = if (self.position.is_none() && self.identity.is_none())
+          || selected == Some(id)
+        {
           Some(
             if tcx
               .typeck(tcx.hir_body_owner_def_id(id))
@@ -192,6 +220,23 @@ pub fn analyze(
   let mut callbacks = Callbacks {
     filename,
     position,
+    identity: None,
+    eval_mode: EVAL_MODE.copied().unwrap_or_default(),
+    output: None,
+  };
+  crate::plugin::run_with_callbacks(args, &mut callbacks)?;
+  callbacks.output.unwrap()
+}
+
+pub fn analyze_body(
+  args: &[String],
+  filename: String,
+  identity: String,
+) -> FlowistryResult<FileOutput> {
+  let mut callbacks = Callbacks {
+    filename,
+    identity: Some(identity),
+    position: None,
     eval_mode: EVAL_MODE.copied().unwrap_or_default(),
     output: None,
   };
