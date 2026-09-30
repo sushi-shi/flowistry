@@ -8,6 +8,16 @@ flow and constructing slices again. Both `focus` and `file-focus` support this.
 The cache belongs to the shared Rust backend. It stores portable source ranges,
 never rustc pointers, `DefId`s, borrow tables or session-owned callee summaries.
 
+The cache now uses the typed analysis session and the indexed range-table output,
+including shared-handle `maybe_slice` ranges. Schema 2 stores each portable range
+once, validates every index, and checksums the complete payload. Old semantic
+entries are misses. Snapshot keys include the backend executable, so upgrading
+the backend cannot replay a response from the previous output format.
+
+Demand-driven analysis checks the selected body and the callees it needs. A type
+error in an unrelated, unused function does not prevent a successful request;
+an error in the selected body fails and is never stored as a successful result.
+
 ## Cache validity
 
 The key includes the backend executable and schema, analysis mode, compiler

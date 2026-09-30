@@ -12,14 +12,16 @@ use rustc_data_structures::{
 };
 use rustc_hir::def_id::LocalDefId;
 use rustc_middle::{mir::TerminatorKind, ty::TyCtxt};
-use crate::mir::borrowck::body_with_borrowck_facts as get_body_with_borrowck_facts;
 
 use super::{
   callsite::FallbackReason,
   recursive::resolve_callee,
   summary::{self, CalleeSummary},
 };
-use crate::extensions::EvalMode;
+use crate::{
+  extensions::EvalMode,
+  mir::borrowck::body_with_borrowck_facts as get_body_with_borrowck_facts,
+};
 
 /// Counters of an [`AnalysisSession`].
 #[derive(Clone, Debug, Default)]

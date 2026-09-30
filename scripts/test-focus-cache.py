@@ -26,6 +26,26 @@ fn main() {
 '''
 
 
+def expanded(value):
+    """Compare semantic ranges, independently of range-table insertion order."""
+    if isinstance(value, dict):
+        if "place_info" in value and "ranges" in value:
+            table = value["ranges"]
+            places = []
+            for entry in value["place_info"]:
+                item = dict(entry, range=table[entry["range"]])
+                for field in ("ranges", "slice", "direct_influence", "maybe_slice"):
+                    if field in item:
+                        item[field] = [table[index] for index in item[field]]
+                places.append(item)
+            value = {k: v for k, v in value.items() if k != "ranges"}
+            value["place_info"] = places
+        return {k: expanded(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expanded(v) for v in value]
+    return value
+
+
 def canonical(value):
     if isinstance(value, dict):
         return {k: canonical(v) for k, v in sorted(value.items()) if k not in ('filename', 'cache', 'cached')}
@@ -87,7 +107,7 @@ def main():
             except Exception as error:
                 raise AssertionError(f'case {count + 1}: {error}\n{result.stderr.decode()}') from error
             count += 1
-            return output
+            return expanded(output)
 
         fresh = run(False)
         assert canonical(run(True, fast=True)) == canonical(fresh)
@@ -114,8 +134,8 @@ def main():
         run(False)
         source.write_text(SOURCE.replace('let input = VALUE', 'let input = VALUE + 1'))
         run(False)
-        # Do not cache a compile failure, even if the selected body is unchanged.
-        source.write_text(SOURCE + '\nfn broken() { let x: i32 = true; }\n')
+        # Reject a type error in the selected body. Unrelated bodies are demand-checked.
+        source.write_text(SOURCE.replace('let input = VALUE;', 'let input: i32 = true;'))
         result = subprocess.run([backend, '--context-mode', 'Recurse', 'file-focus', str(source), '11', '7'],
                                 cwd=root, env=dict(os.environ, FLOWISTRY_CACHE_DIR=str(cache)), capture_output=True, timeout=120)
         assert b'mismatched types' in result.stderr

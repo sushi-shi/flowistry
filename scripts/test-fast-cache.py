@@ -122,7 +122,7 @@ def main():
         run(False)
         run(True)
         good = source.read_text()
-        source.write_text(good + '\nfn broken() { let a: i32 = true; }\n')
+        source.write_text(good.replace('let output =', 'let broken: i32 = true; let output ='))
         run(False, success=False)
         source.write_text(good)
         run(True)  # Undo restores the previous successful snapshot.

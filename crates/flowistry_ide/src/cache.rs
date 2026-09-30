@@ -10,7 +10,10 @@ use std::{
   time::{SystemTime, UNIX_EPOCH},
 };
 
-use flowistry::{extensions::ContextMode, infoflow::AnalysisSession};
+use flowistry::{
+  extensions::ContextMode, infoflow::AnalysisSession,
+  mir::borrowck::body_with_borrowck_facts as get_body_with_borrowck_facts,
+};
 use rustc_data_structures::{
   fingerprint::Fingerprint,
   stable_hasher::{HashStable, StableHasher},
@@ -18,13 +21,10 @@ use rustc_data_structures::{
 use rustc_hir::{self as hir, BodyId, HirId, OwnerNode};
 use rustc_middle::ty::{self, TyCtxt, TypeVisitable, TypeVisitor};
 use rustc_span::Span;
-use rustc_utils::{
-  source_map::range::{CharPos, CharRange},
-};
+use rustc_utils::source_map::range::{CharPos, CharRange};
 use serde::{Deserialize, Serialize};
 
 use crate::focus::{FocusOutput, PlaceInfo};
-use flowistry::mir::borrowck::body_with_borrowck_facts as get_body_with_borrowck_facts;
 
 const SCHEMA: u32 = 2;
 const MAX_ENTRY: u64 = 32 * 1024 * 1024;
@@ -210,7 +210,8 @@ impl FocusCache {
     } else {
       vec![root]
     };
-    dependencies.sort_by_cached_key(|def| format!("{:?}", tcx.def_path_hash(def.to_def_id())));
+    dependencies
+      .sort_by_cached_key(|def| format!("{:?}", tcx.def_path_hash(def.to_def_id())));
     tcx.with_stable_hashing_context(|mut hcx| {
       fingerprint(|h| {
         self.context.hash(h);
@@ -441,9 +442,14 @@ struct Entry {
 }
 impl Entry {
   fn checksum(&self) -> Option<String> {
-    let bytes =
-      serde_json::to_vec(&(self.schema, &self.key, &self.ranges, &self.containers, &self.places))
-        .ok()?;
+    let bytes = serde_json::to_vec(&(
+      self.schema,
+      &self.key,
+      &self.ranges,
+      &self.containers,
+      &self.places,
+    ))
+    .ok()?;
     Some(fingerprint(|h| bytes.hash(h)))
   }
   fn capture(key: String, source: &Source, output: &FocusOutput) -> Option<Self> {
@@ -492,9 +498,13 @@ impl Entry {
         .collect::<Option<Vec<_>>>()
     };
     for place in &self.places {
-      if std::iter::once(&place.range).chain(&place.ranges).chain(&place.slice)
-        .chain(&place.direct_influence).chain(&place.maybe_slice)
-        .any(|index| *index as usize >= self.ranges.len()) {
+      if std::iter::once(&place.range)
+        .chain(&place.ranges)
+        .chain(&place.slice)
+        .chain(&place.direct_influence)
+        .chain(&place.maybe_slice)
+        .any(|index| *index as usize >= self.ranges.len())
+      {
         return None;
       }
     }

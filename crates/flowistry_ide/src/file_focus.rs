@@ -97,21 +97,35 @@ impl rustc_driver::Callbacks for Callbacks {
         };
         let previous_hits = cache.hits.get();
         let focus = if self.position.is_none() || selected == Some(id) {
-            Some(if tcx.typeck(tcx.hir_body_owner_def_id(id)).tainted_by_errors.is_some() {
+          Some(
+            if tcx
+              .typeck(tcx.hir_body_owner_def_id(id))
+              .tainted_by_errors
+              .is_some()
+            {
               Err("the selected function does not type-check".to_string())
             } else {
-              cache.focus(tcx, id, session.clone()).map_err(|error| error.to_string())
-            })
-          } else {
-            None
-          };
+              cache
+                .focus(tcx, id, session.clone())
+                .map_err(|error| error.to_string())
+            },
+          )
+        } else {
+          None
+        };
         bodies.push(BodyOutput {
           range,
           cached: focus.as_ref().map(|_| cache.hits.get() > previous_hits),
           focus,
         });
       }
-      Ok(FileOutput { bodies, cache: CacheStats { hits: cache.hits.get(), misses: cache.misses.get() } })
+      Ok(FileOutput {
+        bodies,
+        cache: CacheStats {
+          hits: cache.hits.get(),
+          misses: cache.misses.get(),
+        },
+      })
     })());
     crate::fast_cache::record_inputs(tcx);
     if tcx.dcx().has_errors().is_none() {
