@@ -25,15 +25,15 @@ def main():
     args.source, args.target_dir, args.output = (p.resolve() for p in (args.source, args.target_dir, args.output))
     if args.output.exists():
         parser.error('output exists; choose a new archive, never overwrite evidence')
-    if git(args.source, 'status', '--porcelain', '--untracked-files=no'):
-        parser.error('source has tracked modifications; commit the candidate first')
+    if git(args.source, 'status', '--porcelain', '--untracked-files=all'):
+        parser.error('source has modifications or untracked files; commit the candidate first')
     revision = git(args.source, 'rev-parse', 'HEAD')
     command = ['cargo', 'build', '--locked', '--release', '-p', 'flowistry_ide', '-j', '4']
     if args.features:
         command += ['--features', args.features]
     subprocess.run(command, cwd=args.source,
                    env=dict(os.environ, CARGO_TARGET_DIR=str(args.target_dir)), check=True)
-    if git(args.source, 'rev-parse', 'HEAD') != revision or git(args.source, 'status', '--porcelain', '--untracked-files=no'):
+    if git(args.source, 'rev-parse', 'HEAD') != revision or git(args.source, 'status', '--porcelain', '--untracked-files=all'):
         raise RuntimeError('source changed during build; refusing to attest the output')
     args.output.mkdir(parents=True)
     binaries = {}
