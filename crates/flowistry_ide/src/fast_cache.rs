@@ -764,13 +764,7 @@ fn cached_run() -> Option<ExitCode> {
   let saved = store_result().is_some();
   log::debug!("fast cache: saved response: {saved}");
   let _ = fs::remove_file(inputs);
-  Some(ExitCode::from(
-    output
-      .status
-      .code()
-      .and_then(|c| u8::try_from(c).ok())
-      .unwrap_or(1),
-  ))
+  Some(crate::replay::child_exit_code(output.status))
 }
 
 pub fn run() -> ExitCode {

@@ -120,4 +120,6 @@ also pending.
 Then [#44](https://github.com/sushi-shi/flowistry/pull/44) tests fresh-root type
 templates for seed construction. Its semantic regressions pass; retention still
 depends on full corpus and performance evidence.
+[#45](https://github.com/sushi-shi/flowistry/pull/45) records the HIR hashing
+investigation and rejected compiler shortcuts; it retains no compiler change.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

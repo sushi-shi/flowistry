@@ -9,7 +9,7 @@ complete merely because tooling or a subset of its tests passes.
 | 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Port prepared, [#43](https://github.com/sushi-shi/flowistry/pull/43); gates pending | Only experiment `ab7857370` ported; 107 core tests pass with engine-diff/shadow-eager. Bounded-scan integration, symmetric matrix equality and independent ungrouped checks added. See [recurse-row-groups.md](recurse-row-groups.md). Acceptance still depends on completed baseline gates and integrated corpus/performance evidence. |
 | 4. Seed rows | Candidate prepared, [#44](https://github.com/sushi-shi/flowistry/pull/44); gates pending | Fresh-root type templates preserve the traversal cutoff, with bounded temporary storage and shadow comparison to original seeds. 108 core tests pass; two-mode small-case comparison passes, full corpus and stress measurements pending. See [seed-row-experiment.md](seed-row-experiment.md). |
-| 5. HIR hashing | Investigated; no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
+| 5. HIR hashing | Investigated, [#45](https://github.com/sushi-shi/flowistry/pull/45); no compiler change retained | Three normal-release profiles and pinned compiler source identify metadata-driven HIR owner hashing. Examined shortcuts do not bypass it safely; see [hir-hashing-experiment.md](hir-hashing-experiment.md). No speedup claimed. |
 | 6. Edit/concurrency harness | Pending | Existing cache regression scripts are the starting fixtures. |
 | 7. Shared result index | Pending | Versioned publication and bounded persistent storage. |
 | 8. Persisted summaries | Pending | Portable schema, dependency graph and invalidation. |
@@ -54,6 +54,11 @@ All new heavy artifacts use
   and Bevy source aliases can fail preparation in that version. Keep completed
   checkpoints with their original manifest; missing entries require a fixed-harness
   rerun. No full coverage claim can be made from this partial evidence.
+- Four empty-output reference failures are confirmed memory-cgroup OOM kills;
+  one other just Recurse case timed out at 600 seconds. See
+  [reference-failure-triage.md](reference-failure-triage.md). Compiler replay and
+  snapshot wrappers now preserve signal termination for future runs. The frozen
+  reference executable and raw recorded failures remain unchanged.
 
 The combined run uses the already-prepared corpus at
 `$S/h19/target/smoke-crates`; the inherited timing uses a separate engine corpus.
