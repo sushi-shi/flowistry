@@ -1,6 +1,8 @@
 local repo = vim.fn.getcwd()
 vim.opt.rtp:prepend(repo)
 local flow = require("flowistry")
+local backend = require("flowistry.backend")
+local original_context = backend.context
 local root = vim.fn.tempname() .. " inputs é"
 local project = root .. "/project"
 vim.fn.mkdir(project .. "/src", "p")
@@ -89,6 +91,25 @@ local ok, err = xpcall(function()
   save(other)
   await(function() return flow.status() == "active" end, "unknown-input fallback recovers after save")
 
+  -- Cargo can discover a workspace above the nearest package manifest. Keep
+  -- that identity when an ancestor configuration edit clears compiler context.
+  backend.context = function(path, config, done)
+    return original_context(path, config, function(error, context)
+      if context then context.root = root end
+      done(error, context)
+    end)
+  end
+  setup()
+  await(function() return flow.status() == "active" end, "parent workspace context is discovered")
+  local configuration = load(files[4]); before = calls()
+  edit(configuration)
+  await(function() return flow.status() == "waiting for save" end, "configuration rediscovery retains parent workspace watches")
+  vim.wait(100, function() return false end, 10)
+  check(calls() == before, "dirty parent configuration cannot restart compilation")
+  save(configuration)
+  await(function() return flow.status() == "active" end, "parent configuration save recovers")
+  backend.context = original_context
+
   local watch = require("flowistry.inputs").new()
   watch:observe(project, false, "a")
   watch:observe(project, { schema = 1, roots = {}, files = {} }, "b")
@@ -100,6 +121,7 @@ local ok, err = xpcall(function()
   check(watch:matches(project, "/outside/unlisted"), "watch budget overflow falls back conservatively")
 end, debug.traceback)
 flow.stop()
+backend.context = original_context
 if not ok then io.stderr:write(err .. "\n"); vim.cmd("cquit 1") end
 print(("Flowistry input invalidation: %d assertions passed"):format(passed))
 vim.cmd("qa!")
