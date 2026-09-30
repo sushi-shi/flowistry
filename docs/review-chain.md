@@ -164,4 +164,11 @@ Linux/systemd memory/time bounds, resumable reuse, and descendant cancellation.
 Its 16 coordinator and 13 worker scenarios pass, alongside 38 IDE tests and 55
 Python regressions. Full cache corpus runs and large-project measurements remain
 acceptance gates; see [the coordinator evidence](project-coordinator.md).
+[#55](https://github.com/sushi-shi/flowistry/pull/55) adds opt-in Neovim workspace
+warming above #54: backend-owned target discovery, foreground priority and
+coalescing, global worker/decode limits, generation guards and bounded editor
+retention. The packaged runtime at `24ed53ecb` passes all five Nix checks and
+323 frontend assertions; real-worker navigation and packaged cancellation pass
+in both modes. Large-project/performance and dependency-selective save gates
+remain; see [background evidence](neovim-background.md).
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

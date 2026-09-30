@@ -1,0 +1,242 @@
+{
+  "build": {
+    "binaries": {
+      "cargo-flowistry": "1d014c6b968d446e3dd92774953bedfc0aade1bc825e87bfa564fd61f2c561fa",
+      "flowistry-driver": "e935e12e84efc8c5e2a1dfc59d6d38dc4262228d84fe8a166d33d9b836c549a2"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T13:53:29.998480+00:00",
+    "revision": "24ed53ecb9a5f6e11294a87a4f58902bca313ecc",
+    "rustflags": "",
+    "tree": "83e709967d6e936845e4e2ae869b1e515eec476d"
+  },
+  "checks": {
+    "background_process_assertions": 23,
+    "cross_process_cache_cases": 51,
+    "editor_cache_assertions": 45,
+    "fast_cache_cases": 32,
+    "fast_cache_zero_compiler_hits": 17,
+    "frontend_assertions": 242,
+    "installed_plugin_and_launcher": "passed",
+    "precision_assertions": 50,
+    "scheduler_assertions": 37,
+    "source_selection_assertions": 756,
+    "stream_assertions": 21,
+    "summary_assertions": 101
+  },
+  "harness": {
+    "nvim/tests/background.lua": "5ccfc3ec36fa52a5d3b887ab5dfdf5a51aa26370c4142b545d5db9fc90324e7a",
+    "nvim/tests/background_live.lua": "5d271f7ed88e62637a911a06c40b8aa76fb91f7f1503c55c607313bce7cc6da9",
+    "nvim/tests/background_scheduler.lua": "fb21406dc196c078c11e30031ea84aa22aafb657b2836e36319180a833829d19",
+    "nvim/tests/fake_project.lua": "f421e1e82aa79de67adf4bea43a2b609c9ac94932397e14929b72b65486d1433",
+    "nvim/tests/project_stream.lua": "92c163b6fd971f3ddff7edf739bcf539f3ec1546d7d8540ac749cfc4ac8fc2e1",
+    "scripts/test-project-workers.py": "86dfcf26fe2449e58d980c504822a54dc26e6049cdfe489b5432c945fcc67649"
+  },
+  "limitations": [
+    "Focused fixtures and packaging checks, not whole-project throughput/latency or hard editor RSS measurements.",
+    "Background is opt-in; dependency-selective saves and final release gates remain.",
+    "The packaged live cancellation fixture was expanded after the source freeze; runtime files are verified byte-identical to the frozen candidate."
+  ],
+  "package_log": {
+    "path": "/home/sheep/Projects/flowistry/target/continuation-validation/background-package-v2.log",
+    "sha256": "5d583a4f8783dfd1ecb1c762ab654167b8bfbd88a3c48b2c5420091d1334b851"
+  },
+  "packaged_outputs": {
+    "cache": "/nix/store/sxigvls6vpn7817k9bi21j7q5p0w3cxl-flowistry-nvim-cache",
+    "frontend": "/nix/store/n3wkr95f6aalrvzawd3i6pi40z5xd6gb-flowistry-nvim-frontend",
+    "launcher": "/nix/store/v565lyp8dd1w4jhlwi0pfqkj1m64p724-flowistry-nvim",
+    "package": "/nix/store/86nna5zvdp6zxgxa1zy9pwwbwa0k9kw6-flowistry-nvim-package",
+    "source_selection": "/nix/store/3gn1076m49pl683sfwqwbc69rcd67499-flowistry-nvim-source-selection",
+    "summaries": "/nix/store/njd1iv5mv0z7f12fmi9jwb76hdif4njx-flowistry-nvim-summaries"
+  },
+  "reports": [
+    {
+      "log": {
+        "path": "/home/sheep/Projects/flowistry/target/continuation-validation/background-targets-final-v2.log",
+        "sha256": "da8e389b7c631c4176c958bbe758557641d8e2467cbefc4adc12afdf83b6a077"
+      },
+      "outcomes": [
+        {
+          "case": "project-targets",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-lib-custom_library",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-bin-custom-binary",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-bin-file-focus",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-features",
+          "passed": true
+        },
+        {
+          "case": "SigOnly-errors",
+          "passed": true
+        },
+        {
+          "case": "Recurse-lib-custom_library",
+          "passed": true
+        },
+        {
+          "case": "Recurse-bin-custom-binary",
+          "passed": true
+        },
+        {
+          "case": "Recurse-bin-file-focus",
+          "passed": true
+        },
+        {
+          "case": "Recurse-features",
+          "passed": true
+        },
+        {
+          "case": "Recurse-errors",
+          "passed": true
+        },
+        {
+          "case": "invalid-target",
+          "passed": true
+        },
+        {
+          "case": "missing-selection",
+          "passed": true
+        },
+        {
+          "case": "launcher-lock",
+          "passed": true
+        }
+      ],
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/background-targets-final-v2.json",
+      "sha256": "2fc32404f0ffb018bcd362bc52caef71859cad133fed47325c08a7c37446c3d2"
+    },
+    {
+      "log": {
+        "path": "/home/sheep/Projects/flowistry/target/continuation-validation/background-live-final-v2.log",
+        "sha256": "884a5f76fd59bcd333b6143a3a6bf3fd4a175ace7a5b13621da6fe1900942993"
+      },
+      "outcomes": {
+        "assertions": 14,
+        "fixture": "/tmp/nix-shell.oBk2or/nvim.sheep/iNQ8yU/0 background live",
+        "observations": [
+          {
+            "compiler_invocations": 6,
+            "mode": "SigOnly",
+            "project": {
+              "completed": 4,
+              "failed": 0,
+              "retained_result_bytes": 5303,
+              "status": "complete",
+              "target": "background_fixture",
+              "targets_completed": 1,
+              "targets_total": 1,
+              "total": 4
+            }
+          },
+          {
+            "compiler_invocations": 12,
+            "mode": "Recurse",
+            "project": {
+              "completed": 4,
+              "failed": 0,
+              "retained_result_bytes": 5268,
+              "status": "complete",
+              "target": "background_fixture",
+              "targets_completed": 1,
+              "targets_total": 1,
+              "total": 4
+            }
+          }
+        ]
+      },
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/background-live-final-v2.json",
+      "sha256": "00c197b0e05466a9f323a0f4f9e04a8b71a841d6c064f8e6663365f3d77251d7"
+    },
+    {
+      "log": {
+        "path": "/home/sheep/Projects/flowistry/target/continuation-validation/background-packaged-live-v2.log",
+        "sha256": "eb7b53aaf911d35abeb468817375077f7b0d0213a20e8f4ff40944f2db1bfa01"
+      },
+      "outcomes": {
+        "assertions": 16,
+        "fixture": "/tmp/nix-shell.DAvWxL/nvim.sheep/ctTRC2/0 background live",
+        "observations": [
+          {
+            "compiler_invocations": 6,
+            "mode": "SigOnly",
+            "project": {
+              "completed": 4,
+              "failed": 0,
+              "retained_result_bytes": 5297,
+              "status": "complete",
+              "target": "background_fixture",
+              "targets_completed": 1,
+              "targets_total": 1,
+              "total": 4
+            }
+          },
+          {
+            "compiler_invocations": 12,
+            "mode": "Recurse",
+            "project": {
+              "completed": 4,
+              "failed": 0,
+              "retained_result_bytes": 5269,
+              "status": "complete",
+              "target": "background_fixture",
+              "targets_completed": 1,
+              "targets_total": 1,
+              "total": 4
+            }
+          },
+          {
+            "cancellation": true,
+            "command": [
+              "/nix/store/v81bnadjvlhgbq6pjbfdczq1fr9bvzdh-flowistry-backend-0.5.44-24ed53e/bin/flowistry-backend"
+            ],
+            "processes": [
+              {
+                "pid": 3301211,
+                "start": "97643745"
+              },
+              {
+                "pid": 3301213,
+                "start": "97643748"
+              }
+            ]
+          }
+        ]
+      },
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/background-packaged-live-v2.json",
+      "sha256": "2658500e9e9c9972b9f746a70d79ea9f64236d2de6e3339ea2d7b91a11a2f042"
+    }
+  ],
+  "runtime": {
+    "nvim/lua/flowistry/backend.lua": "688d8f1990687b5043241c2d8415c5707c755626fabc66178c8aee13fc49e284",
+    "nvim/lua/flowistry/background.lua": "5d53570e38c57a522b1201dbc455a01c2373b78a43ba555d5dcc9aeca83effbc",
+    "nvim/lua/flowistry/init.lua": "2c9d95801f8c33ad184ba3f62c1f01d49a6c3e56e55af78ced47224dd5dcc2c8",
+    "nvim/plugin/flowistry.lua": "ee5171e1fc79addc57f689821a5bfb4eaa8a20bcdf03311ba286555264db0028"
+  },
+  "schema": 1,
+  "source": "24ed53ecb9a5f6e11294a87a4f58902bca313ecc"
+}

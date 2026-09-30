@@ -55,6 +55,8 @@ pub struct FlowistryPluginArgs {
 
 #[derive(Subcommand, Serialize, Deserialize)]
 enum FlowistryCommand {
+  /// List workspace targets for editor background scheduling without compiling.
+  ProjectTargets,
   /// Stream all bodies of an explicit target using bounded, restartable workers.
   Project(crate::project_coordinator::Options),
   /// Enumerate compiler-discovered bodies for the explicitly selected target.
@@ -135,6 +137,7 @@ pub fn replay_request() -> Option<(String, PathBuf)> {
     | ResultIndex { .. }
     | CancelResults { .. }
     | Project(..)
+    | ProjectTargets
     | ProjectBodies { .. }
     | BodyFocus { .. } => return None,
   };
@@ -158,10 +161,21 @@ pub(crate) fn selected_package() -> Option<String> {
 }
 
 pub(crate) fn project_request() -> Option<std::process::ExitCode> {
-  if !env::args().any(|arg| arg == "project") {
+  if !env::args().any(|arg| matches!(arg.as_str(), "project" | "project-targets")) {
     return None;
   }
   let args = FlowistryPluginArgs::try_parse_from(env::args().skip(1)).ok()?;
+  if matches!(args.command, FlowistryCommand::ProjectTargets) {
+    let result =
+      crate::project::targets().map_err(|error| FlowistryError::AnalysisError {
+        error: format!("{error:#}"),
+      });
+    return Some(if postprocess(result).is_ok() {
+      std::process::ExitCode::SUCCESS
+    } else {
+      std::process::ExitCode::FAILURE
+    });
+  }
   let FlowistryCommand::Project(options) = args.command else {
     return None;
   };

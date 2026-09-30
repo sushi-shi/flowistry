@@ -10,6 +10,7 @@ local disabled = {}
 local configured = false
 local uv = vim.uv or vim.loop
 local progress_timer
+local background
 local defaults = {
   auto_enable = true,
   toolchain = "nightly-2026-05-01",
@@ -29,6 +30,8 @@ local defaults = {
   show_maybe = true,
   parameter_types = true, -- Focusing an argument's type selects its binding.
   progress = false, -- Session launcher enables analysis progress popups.
+  project = { enabled = false, idle_ms = 300, memory_mib = 6144, timeout_seconds = 600,
+    max_workspaces = 1, max_body_bytes = 8 * 1024 * 1024, max_results_bytes = 16 * 1024 * 1024 },
 }
 local config = vim.deepcopy(defaults)
 local update
@@ -62,6 +65,7 @@ local function pin_position(state)
 end
 
 local function dispose(buf)
+  if background and states[buf] then background:detach(states[buf]) end
   if states[buf] then stop(states[buf]); clear_pin(states[buf]); states[buf] = nil end
   if suspended[buf] then stop(suspended[buf]); clear_pin(suspended[buf]); suspended[buf] = nil end
   render.clear(buf)
@@ -214,6 +218,54 @@ local function prepare_focus(state, value)
   return result
 end
 
+local function new_background()
+  return require("flowistry.background").new(config, {
+    valid = function(state) return states[state.buf] == state and vim.api.nvim_buf_is_valid(state.buf) end,
+    dirty = dirty,
+    progress = function() vim.cmd("redrawstatus") end,
+    result = function(state, value, event)
+      -- A compiler result describes saved bytes. A changed disk file that has
+      -- not yet been reloaded into this buffer must never color the old text.
+      local ok, lines = pcall(vim.fn.readfile, vim.api.nvim_buf_get_name(state.buf))
+      if not ok or not vim.deep_equal(lines, vim.api.nvim_buf_get_lines(state.buf, 0, -1, false)) then return end
+      assert(type(value.bodies) == "table" and vim.islist(value.bodies), "Missing background bodies")
+      local convert = ranges.converter(state.buf, state.context.root, value.bodies[1] and value.bodies[1].range.filename)
+      state.bodies = state.bodies or {}
+      for _, item in ipairs(value.bodies) do
+        local range = convert(item.range)
+        if range then
+          local found
+          for _, existing in ipairs(state.bodies) do if vim.deep_equal(existing.range, range) then found = existing; break end end
+          if not found then found = { range = range }; state.bodies[#state.bodies + 1] = found end
+          if item.focus ~= vim.NIL and item.focus then
+            if not found.focus or found.background_identity then found.background_identity = event.body.identity end
+            if item.focus.Ok then found.focus, found.error = prepare_focus(state, item.focus.Ok), nil
+            elseif item.focus.Err then found.focus, found.error = nil, item.focus.Err
+            else error("Invalid background body result") end
+            found.cached = item.cached == true
+          end
+        end
+      end
+      if current() == state.buf and not state.busy then update(state) end
+    end,
+    evict = function(state, identity)
+      for _, bodies in ipairs({ state.bodies or {}, state.retained and state.retained.bodies or {} }) do
+        for _, body in ipairs(bodies) do
+          if body.background_identity == identity then body.focus, body.background_identity = nil, nil end
+        end
+      end
+    end,
+  })
+end
+
+local function request(state, args, request_config, handler)
+  if not config.project.enabled then return backend.request(state.context, args, request_config, handler) end
+  request_config = vim.tbl_extend("force", request_config, { selection = background:selection(state) })
+  return background:foreground(state.context, backend.key(state.context, args, request_config), function(done)
+    return backend.request(state.context, args, request_config, done)
+  end, handler)
+end
+
 update = function(state)
   if states[state.buf] ~= state or current() ~= state.buf then return end
   -- Saving from Insert mode can let rustfmt replace whole lines and displace
@@ -241,6 +293,7 @@ update = function(state)
   if not state.context then
     state.operation = backend.context(state.root, config, callback(state, function(context)
       state.context = context
+      if background then background:attach(state) end
     end))
     return
   end
@@ -257,7 +310,7 @@ update = function(state)
         phase = "Analyzing function"
       end
       local request_config = vim.tbl_extend("force", config, { cache_refresh = state.cache_refresh })
-      state.operation = backend.request(state.context, args, request_config, callback(state, function(value)
+      state.operation = request(state, args, request_config, callback(state, function(value)
         assert(type(value.bodies) == "table" and vim.islist(value.bodies), "Missing bodies")
         local source_id = value.bodies[1] and value.bodies[1].range.filename
         local convert = ranges.converter(state.buf, state.context.root, source_id)
@@ -279,7 +332,7 @@ update = function(state)
       end, phase))
       return
     end
-    state.operation = backend.request(state.context, { "spans", filename }, config, callback(state, function(value)
+    state.operation = request(state, { "spans", filename }, config, callback(state, function(value)
       assert(type(value.spans) == "table" and vim.islist(value.spans), "Missing spans")
       local source_id = value.spans[1] and value.spans[1].filename
       local convert = ranges.converter(state.buf, state.context.root, source_id)
@@ -312,7 +365,7 @@ update = function(state)
     -- ranges are half-open: at that boundary the cursor selects its parent.
     local request_pos = config.batch and body.range.start or pos
     local char = ranges.position(state.buf, { request_pos[1] + 1, request_pos[2] })
-    state.operation = backend.request(state.context, {
+    state.operation = request(state, {
       config.batch and "file-focus" or "focus", filename, tostring(char[1]), tostring(char[2]),
     }, vim.tbl_extend("force", config, { cache_refresh = state.cache_refresh }), callback(state, function(value)
       state.retained, state.cache_refresh = nil, nil
@@ -323,6 +376,7 @@ update = function(state)
         if vim.deep_equal(convert(item.range), body.range) and item.focus ~= vim.NIL then
           if item.focus.Ok then
             body.focus = prepare_focus(state, item.focus.Ok)
+            body.background_identity = nil
             body.cached = item.cached == true
           elseif item.focus.Err then body.error = item.focus.Err
           else error("Invalid selected function result") end
@@ -357,6 +411,7 @@ function M.setup(opts)
   local mode = opts and opts.context_mode
   assert(mode == nil or mode == "SigOnly" or mode == "Recurse", "context_mode must be SigOnly or Recurse")
   if progress_timer then progress_timer:stop(); progress_timer:close() end
+  if background then background:close() end
   for _, state in pairs(all_states()) do stop(state); clear_pin(state); render.clear(state.buf) end
   states, suspended, disabled = {}, {}, {}
   local packaged_ok, packaged = pcall(require, "flowistry.packaged")
@@ -367,6 +422,12 @@ function M.setup(opts)
   assert(type(config.cache) == "boolean", "cache must be a boolean")
   assert(config.cache_dir == nil or (type(config.cache_dir) == "string" and config.cache_dir ~= ""), "cache_dir must be a nonempty path")
   assert(not config.command or (vim.islist(config.command) and #config.command > 0), "command must be an argv list")
+  assert(type(config.project) == "table" and type(config.project.enabled) == "boolean", "project.enabled must be a boolean")
+  assert(not config.project.enabled or config.cache, "project background analysis requires cache=true")
+  for _, name in ipairs({ "idle_ms", "memory_mib", "timeout_seconds", "max_workspaces", "max_body_bytes", "max_results_bytes" }) do
+    assert(type(config.project[name]) == "number" and config.project[name] > 0, "project." .. name .. " must be positive")
+  end
+  background = new_background()
   render.highlights()
   local group = vim.api.nvim_create_augroup("Flowistry", { clear = true })
   local observed_ticks, observed_names, saved_sources = {}, {}, {}
@@ -416,6 +477,11 @@ function M.setup(opts)
         if state.buf == args.buf or inside_root(name, root)
           or (args.event == "BufFilePost" and previous_name and inside_root(previous_name, root)) then
           invalidate(state, args.event ~= "BufReadPost" and args.event ~= "BufFilePost")
+          background:invalidate(root)
+          if name:match("Cargo%.toml$") or name:match("Cargo%.lock$") then
+            state.context = nil
+            background:rediscover(root)
+          end
           if args.event == "BufWritePost" then state.refresh_after_save = true end
           if state.retained and state.retained.inputs[name] == nil then
             state.retained.inputs[name] = saved_sources[name] or false
@@ -457,6 +523,7 @@ function M.setup(opts)
   })
   vim.api.nvim_create_autocmd("VimLeavePre", {
     group = group, callback = function()
+      background:close()
       for _, state in pairs(states) do stop(state) end
       if progress_timer and not progress_timer:is_closing() then progress_timer:stop(); progress_timer:close() end
       progress_timer = nil
@@ -495,6 +562,7 @@ function M.enable(quiet)
   suspended[buf] = nil
   disabled[buf] = nil
   states[buf] = state
+  if state.context then background:attach(state) end
   update(state)
   if state.status == "waiting for save" and not quiet then notify("Save modified Rust buffers in this project to analyze them.") end
 end
@@ -504,6 +572,7 @@ function M.disable(buf)
   disabled[buf] = true
   local state = states[buf]
   if state then
+    background:detach(state)
     stop(state)
     clear_pin(state)
     states[buf], suspended[buf] = nil, state
@@ -549,10 +618,43 @@ end
 function M.refresh()
   -- Also refresh sibling buffers whose dependencies may have changed on disk.
   for _, state in pairs(all_states()) do
+    background:rediscover(state.context and state.context.root or state.root)
     invalidate(state)
     state.context, state.cache_stats, state.cache_refresh = nil, nil, true
   end
   if states[current()] then update(states[current()]) else M.enable() end
+end
+
+function M.project()
+  if not configured then M.setup() end
+  if not config.project.enabled and not config.cache then
+    notify("Enable the shared cache before starting project background analysis.", vim.log.levels.WARN); return
+  end
+  config.project.enabled = not config.project.enabled
+  background:close()
+  for _, state in pairs(all_states()) do invalidate(state, true); state.context = nil end
+  background = new_background()
+  if states[current()] then update(states[current()]) else M.enable() end
+  notify("project background analysis " .. (config.project.enabled and "enabled" or "disabled"))
+end
+
+function M.stop()
+  if not configured then M.setup({ auto_enable = false }) end
+  config.auto_enable = false
+  for buf in pairs(states) do M.disable(buf) end
+  background:close()
+  background = new_background()
+end
+
+function M.start()
+  if not configured then M.setup() end
+  config.auto_enable, disabled = true, {}
+  M.enable(true)
+end
+
+function M.project_status(buf)
+  local state = states[buf or current()]
+  return state and background:status(state.context and state.context.root or state.root) or nil
 end
 
 function M.cache_status(buf)
@@ -586,14 +688,21 @@ function M.indicator(buf)
     ["analysis unavailable"] = "Analysis unavailable for this function",
     error = "ERROR - :Flowistry log",
   }
+  local project = M.project_status(buf)
+  local work = project and project.status == "running" and
+    (" (project %d/%s)"):format(project.completed, project.total or "?") or ""
+  if project and (project.failed > 0 or project.status == "unavailable") then work = work .. " (project incomplete)" end
   return "Flowistry: " .. (labels[state.status] or state.status)
     .. (state.stale and " (showing saved analysis)" or "")
     .. (not state.stale and state.slice and state.cached and " (disk cache)" or "")
+    .. work
 end
 
 function M.log()
   local state = states[current()]
   local message = state and state.error or "No Flowistry error for this buffer."
+  local project = M.project_status()
+  if project and project.error then message = message .. "\nProject analysis:\n" .. project.error end
   vim.cmd("botright new")
   local buf = current()
   vim.bo[buf].buftype, vim.bo[buf].bufhidden, vim.bo[buf].swapfile = "nofile", "wipe", false

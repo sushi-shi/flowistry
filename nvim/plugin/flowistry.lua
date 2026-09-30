@@ -1,9 +1,9 @@
 if vim.g.loaded_flowistry then return end
 vim.g.loaded_flowistry = true
 
-local commands = { "toggle", "enable", "disable", "mark", "unmark", "refresh", "types", "log" }
+local commands = { "toggle", "enable", "disable", "mark", "unmark", "refresh", "types", "project", "start", "stop", "log" }
 local aliases = { on = "enable", off = "disable", pin = "mark", unpin = "unmark" }
-local actions = { "on", "off", "pin", "unpin", "toggle", "refresh", "types", "log" }
+local actions = { "on", "off", "pin", "unpin", "toggle", "refresh", "types", "project", "start", "stop", "log" }
 local function dispatch(args)
   if args.args == "" then
     vim.ui.select(actions, { prompt = "Flowistry action:" }, function(action)
