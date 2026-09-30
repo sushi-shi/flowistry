@@ -1,0 +1,2224 @@
+{
+  "binaries": {
+    "cargo-flowistry": "747ea579d93ecdece48ffadd9a705cd692d0584c97ba64c55e6babe6a6f1c385",
+    "flowistry-driver": "f0183bfd2d9b0f5d106b3cf551005f3c344ad3a28f8903c52c0b265c15160c25"
+  },
+  "build": {
+    "binaries": {
+      "cargo-flowistry": "747ea579d93ecdece48ffadd9a705cd692d0584c97ba64c55e6babe6a6f1c385",
+      "flowistry-driver": "f0183bfd2d9b0f5d106b3cf551005f3c344ad3a28f8903c52c0b265c15160c25"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T03:43:41.103447+00:00",
+    "revision": "79930142f8a0827f7de082ad72c21ddfe7471636",
+    "rustflags": "",
+    "tree": "e3de216ce7097d5c10f6024403217cc7696cdc49"
+  },
+  "cases": {
+    "body-comment": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "build-input": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "build-script": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "callee": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 24,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "cancel-during-compile": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "cargo-config": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "cfg": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "closure": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "compile-error": {
+      "Recurse": {
+        "exit_codes": [
+          101,
+          101
+        ],
+        "expected_type_errors": true,
+        "fresh_compiler": 1,
+        "fresh_solver_count": 0,
+        "matching_output": null,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          101,
+          101
+        ],
+        "expected_type_errors": true,
+        "fresh_compiler": 1,
+        "fresh_solver_count": 0,
+        "matching_output": null,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "concurrent-refresh": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 0,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 0,
+        "reuse_solver_bodies": []
+      }
+    },
+    "control-flow": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 6,
+        "matching_output": true,
+        "maybe_slice_indices": 26,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 26,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "corrupt-and-partial-writes": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "dependency": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "either-body": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 1,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "Either::<L, R>::is_left"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 1,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "Either::<L, R>::is_left"
+          ]
+        ]
+      }
+    },
+    "either-layout": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 1,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 1,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "environment": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "error-recovery": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 0,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 0,
+        "reuse_solver_bodies": []
+      }
+    },
+    "feature": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "field-type": {
+      "Recurse": {
+        "exit_codes": [
+          101,
+          101
+        ],
+        "expected_type_errors": true,
+        "fresh_compiler": 1,
+        "fresh_solver_count": 0,
+        "matching_output": null,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          101,
+          101
+        ],
+        "expected_type_errors": true,
+        "fresh_compiler": 1,
+        "fresh_solver_count": 0,
+        "matching_output": null,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "file-move": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "renamed::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "include": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "interior-layout": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "leading-layout": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "literal": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "module-add": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "module-remove": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "proc-macro": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "recursive-cycle": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 8,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "cycle_a"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "restored-mtime": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "rustfmt": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "save-during-compile": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "signature": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "smallvec-body": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "SmallVec::<A>::is_empty"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::len"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::triple"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::spilled"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::inline_capacity"
+          ],
+          [
+            "summary",
+            "SmallVecData::<A>::heap"
+          ],
+          [
+            "shared",
+            "SmallVec::<A>::is_empty"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "SmallVec::<A>::is_empty"
+          ],
+          [
+            "shared",
+            "SmallVec::<A>::is_empty"
+          ]
+        ]
+      }
+    },
+    "smallvec-callee": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 8,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "SmallVec::<A>::is_empty"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::len"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::capacity"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::triple"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::spilled"
+          ],
+          [
+            "summary",
+            "SmallVec::<A>::inline_capacity"
+          ],
+          [
+            "summary",
+            "SmallVecData::<A>::heap"
+          ],
+          [
+            "shared",
+            "SmallVec::<A>::is_empty"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "smallvec-layout": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 0,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "trait-callee": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "trait-resolution": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "summary",
+            "configured"
+          ],
+          [
+            "summary",
+            "State::update"
+          ],
+          [
+            "summary",
+            "child::apply"
+          ],
+          [
+            "summary",
+            "<State as Choice>::choice"
+          ],
+          [
+            "summary",
+            "selected::{closure#0}"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": [
+          [
+            "focus",
+            "selected"
+          ],
+          [
+            "shared",
+            "selected"
+          ]
+        ]
+      }
+    },
+    "two-quick-saves": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "unchanged-save": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 0,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 0,
+        "reuse_solver_bodies": []
+      }
+    },
+    "undo": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "unicode-comment": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    },
+    "unrelated-body": {
+      "Recurse": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 7,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      },
+      "SigOnly": {
+        "exit_codes": [
+          0,
+          0
+        ],
+        "fresh_compiler": 1,
+        "fresh_solver_count": 2,
+        "matching_output": true,
+        "maybe_slice_indices": 23,
+        "passed": true,
+        "reuse_compiler": 1,
+        "reuse_solver_bodies": []
+      }
+    }
+  },
+  "coverage_complete": true,
+  "detailed_report": {
+    "path": "/home/sheep/Projects/flowistry/target/continuation-validation/edit-matrix-complete.json",
+    "sha256": "20dc639c8d9f6ed3c6b816887722a1ddec07df7f28ae5ae2ad1b36818bed0142"
+  },
+  "harness": {
+    "incremental_matrix.py": "61448b97e01c80ee6bf707351bc644960d477fd667bd4a65e1b4cb8026a5c4b5",
+    "incremental_projects.py": "d791bf5710732cf7cfe0716d2052a5bfeb643c44114f2deb132bb29355f8694b",
+    "incremental_races.py": "a247abfb9b25498cf3e883d16c84fbd9319101148dce88335f37eae53ef90463",
+    "smoke-real-crates.py": "889af7a25db997d87ff86dc54542a2cb57a398373fb2285acaeeeaea2c400276",
+    "test-incremental-matrix.py": "3a03345a47d474bea7a8f583751a0c46c2570070b5d26fce252599dbd0daa826"
+  },
+  "harness_failures": [],
+  "passed": true,
+  "pending": [
+    "versioned publication / background-worker scenarios added with those features"
+  ],
+  "real_projects": {
+    "either": {
+      "corpus_entry": {
+        "name": "either",
+        "prune": [],
+        "sha256": "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34",
+        "version": "1.18.0"
+      },
+      "prepared_source_digest": "e298e1fc84229dd2e3c0fc63bb50a1db8278f26105f1bb24550062f3aa79ff96",
+      "source": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/either-1.18.0"
+    },
+    "smallvec": {
+      "corpus_entry": {
+        "name": "smallvec",
+        "prune": [
+          "bincode",
+          "malloc_size_of",
+          "unty"
+        ],
+        "sha256": "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891",
+        "version": "1.16.1"
+      },
+      "prepared_source_digest": "f3f26be2ebff56e977186e51d33795a888b8b558d524974d9b88a49aaa9a16dc",
+      "source": "/tmp/claude-1000/-home-sheep-Projects-flowistry/447566e4-c0fd-4024-8821-02de994cb283/scratchpad/h19/target/smoke-crates/smallvec-1.16.1"
+    }
+  },
+  "schema": 1,
+  "scope": "full current matrix"
+}

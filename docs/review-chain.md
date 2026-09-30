@@ -124,4 +124,8 @@ depends on full corpus and performance evidence.
 investigation and rejected compiler shortcuts; it retains no compiler change.
 [#46](https://github.com/sushi-shi/flowistry/pull/46) preserves compiler signal
 termination through replay/snapshot wrappers and records the reference OOM triage.
+[#47](https://github.com/sushi-shi/flowistry/pull/47) adds compiler/body-work tracing
+and the edit/concurrency oracle: all 84 current cases pass in both modes, including
+isolated real-project edits. Versioned publication/background cases and full
+release gates remain pending.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

@@ -428,6 +428,8 @@ fn run_flow<'a, 'tcx>(
   let body = &body_with_facts.body;
 
   let results = {
+    log::info!(target: "flowistry::audit", "audit solve {} {}",
+      if shared_handles.is_some() { "shared" } else { "focus" }, tcx.def_path_str(def_id));
     block_timer!("Flow");
 
     let mut analysis =
