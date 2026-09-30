@@ -10,6 +10,10 @@ COMMANDS                                                   *:Flowistry*
 :Flow toggle             Toggle focus; also accepts refresh and log.
 :Flow types              Toggle parameter-type selection (map: &LevelMap).
 
+A red 📌 marks the pinned line in the sign column, above ordinary letter marks.
+Unpinning reveals those marks again. The marker follows edits and formatting;
+it hides when the target is lost and returns when undo recovers the target.
+
 The longer command names remain available:
 
 :Flowistry                Show an action menu.
@@ -20,6 +24,10 @@ The longer command names remain available:
 :Flowistry unmark         Resume tracking the cursor.
 :Flowistry refresh        Invalidate analysis caches and retry.
 :Flowistry log            Open the current buffer's error log; q closes it.
+
+Analysis errors appear in a small, non-focusing popup like analysis progress.
+The popup shows the diagnostic and closes after five seconds. :Flow log keeps
+the full details. Saving retries analysis and preserves the last valid display.
 
 SETUP                                                      *flowistry-setup*
 >
@@ -82,6 +90,7 @@ HIGHLIGHTS                                                 *flowistry-highlights
 
 FlowistryDim             Unrelated code (muted blue-gray, separate from comments).
 FlowistryFocus           Word under the cursor (default: Visual).
+FlowistryPin             Red gutter pin, higher priority than ordinary mark signs.
 FlowistryInfluence       Direct influence (CursorLine; opt in: show_influence).
 FlowistryMaybe           Code relevant only if two shared handles to the same
                          interior-mutable type (e.g. Rc<RefCell<T>> clones) are

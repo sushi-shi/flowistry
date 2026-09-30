@@ -3,8 +3,11 @@
 Updated 2026-09-30 after taking over the latest Claude optimization session.
 The Neovim plugin has since moved into `nvim/`; see
 [the migration guide](neovim-monorepo.md) for the shared package and review chain.
-The latest continuation is [#60](https://github.com/sushi-shi/flowistry/pull/60),
-`test/final-acceptance` in `/tmp/flowistry-acceptance`, based directly on #59.
+The current tip is [#61](https://github.com/sushi-shi/flowistry/pull/61),
+`feat/neovim-pin-marker` in `/tmp/flowistry-pin-marker`, based directly on #60.
+The repository default `top` points to the same commit while PR source branches
+remain intact for review. #61 adds red gutter pins above letter tags and small
+actual-error popups. Its frontend and configured CoC UI tests pass.
 The broad implementation/acceptance plan is **paused at the user's request**.
 The measurement queue and both layout-candidate corpus runs were stopped on
 2026-09-30; partial checkpoints remain evidence, not completed acceptance.

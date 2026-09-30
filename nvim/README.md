@@ -36,6 +36,9 @@ Root flake outputs:
 - `.#backend` (also the default package): editor-independent Rust backend.
 - `.#toolchain`: matching Rust compiler.
 
+See [the everyday setup guide](doc/setup.md) for two-letter shortcuts, optional
+CoC settings without automatic builds, and manual build commands. **CoC is not
+required**: Flowistry works with built-in LSP, other clients, or no language server.
 See [NixOS and Home Manager setup](doc/nix.md) for installation. Linux packages
 exist for x86_64 and aarch64. [Callee analysis](doc/summaries.md) explains the
 optional `context_mode = "Recurse"` mode; signature-based analysis is the default.
@@ -73,6 +76,11 @@ are available.
 4. Run `:Flow pin` to pin the focus while reading other code. Repeat it on the
    pinned variable to unpin; use it on another variable to move the pin.
    `:Flow unpin` resumes cursor tracking from anywhere. `:Flow off` disables it.
+
+A red 📌 in the sign column marks the pinned line. It takes priority over ordinary
+letter-mark signs without deleting them; unpinning reveals them again. The marker
+follows edits and formatting, disappears if the pinned token is removed, and
+returns if undo restores it. Customize its color with `FlowistryPin`.
 
 | Command | Action |
 | --- | --- |
@@ -120,6 +128,9 @@ plugin never writes buffers for you. Editing preserves the last successful
 highlights and moves pins with the text. The status marks this as saved analysis.
 Saving reanalyzes automatically, retaining the pin. Failed compilation preserves
 the previous display until a successful save or explicit disable.
+An analysis failure shows a small, non-focusing error popup in the same area as
+analysis progress. It contains the compiler diagnostic, closes after five seconds,
+and keeps the full details in `:Flow log`.
 Pins survive formatters that replace entire buffer lines, including rust.vim's
 rustfmt-on-save. Source differences remap the pinned token after line or column
 changes. If the target cannot be recovered, the status says `pinned target
