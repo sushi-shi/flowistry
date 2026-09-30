@@ -3,6 +3,14 @@
 Updated 2026-09-30 after taking over the latest Claude optimization session.
 The Neovim plugin has since moved into `nvim/`; see
 [the migration guide](neovim-monorepo.md) for the shared package and review chain.
+The latest continuation is [#58](https://github.com/sushi-shi/flowistry/pull/58),
+`experiment/rustc-incremental`, based directly on #57. Its compiler-state
+experiment is rejected on measured instruction regressions; the production
+code remains unchanged. The full coordinator cache-refresh corpus passed all
+2,880 comparisons. See [current progress](continuation-progress.md) for the
+remaining warm-cache run and all thirteen milestone gates. Earlier process
+and worktree descriptions below are historical.
+
 Master remains `f8b5582b7` (#18); nothing was merged. The canonical review order
 is [docs/review-chain.md](review-chain.md), also linked from every active PR.
 

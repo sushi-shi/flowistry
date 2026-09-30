@@ -183,4 +183,10 @@ and Cargo configuration. Bounded watch hints come from the existing snapshot;
 new discovery guards and retained workspace identity protect asynchronous
 delivery. See [input invalidation](editor-input-invalidation.md) for live save
 tests, fallback behavior and the remaining plan gates.
+[#58](https://github.com/sushi-shi/flowistry/pull/58) follows #57 with the
+compiler incremental-state experiment and completed cache-refresh corpus evidence.
+All 510 fresh-oracle comparisons pass, but every tested state-retention variant
+uses more instructions; no production compiler change is retained. Review the
+[decision and reproduction patch](rustc-incremental-experiment.md). This is the
+current tip of the unified chain.
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

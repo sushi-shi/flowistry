@@ -214,10 +214,11 @@ validation harness until a slot is authoritatively free.
 
 ## Latest stack and cache-refresh milestone
 
-The newest published PR is #57 (`fix/editor-input-invalidation`, `0d0108a96`);
-its final paired-package CI passed. Continuation work is based directly on that
-commit in `/tmp/flowistry-rustc-incremental`, branch
-`experiment/rustc-incremental`. No earlier PR is the base of new work.
+The newest published PR is [#58](https://github.com/sushi-shi/flowistry/pull/58),
+branch `experiment/rustc-incremental` in `/tmp/flowistry-rustc-incremental`.
+It targets #57 (`fix/editor-input-invalidation`, `0d0108a96`) directly; #57's
+final paired-package CI passed. #58 preserves the experiment and reports, with
+production Rust and editor sources identical to #57. New work starts above #58.
 
 The coordinator cache-refresh run has completed with exact locked coverage:
 24 crates × 60 positions × two modes, 2,880 equal successful protocol responses,
