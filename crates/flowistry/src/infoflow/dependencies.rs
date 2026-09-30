@@ -206,7 +206,7 @@ fn compute_dependencies_inner<'tcx>(
               if target_deps
                 .all_forward
                 .iter()
-                .any(|fwd| reads.is_superset(fwd))
+                .any(|fwd| reads.contains_all(fwd))
               {
                 outputs.insert(location);
               }
@@ -387,7 +387,7 @@ pub fn compute_focus_spans<'tcx>(
           !target
             .all_forward
             .iter()
-            .any(|source| deps.is_superset(source))
+            .any(|source| deps.contains_all(source))
         })
         .map(|(span, _)| *span)
         .collect::<Vec<_>>();
