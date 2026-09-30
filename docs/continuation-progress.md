@@ -6,7 +6,7 @@ complete merely because tooling or a subset of its tests passes.
 | Step | State | Evidence / next gate |
 |---|---|---|
 | 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Frozen #17 and integrated builds; 26 validation regressions pass. Complete corpus comparison and independent engine/eager corpus running; full cache-mode/file-focus gates pending. Real cross-launch checkpoint reuse and equal file-focus snapshot replay proved on a small case. |
-| 2. Performance baseline | In progress | Measurement tooling and 40 total harness regressions pass; real interleaved perf probe works. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
+| 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Pending | Port only the relevant experiment after the baseline gates. |
 | 4. Seed rows | Pending | Preserve context-sensitive traversal cutoff. |
 | 5. HIR hashing | Pending | Profile and retain only proven improvements. |

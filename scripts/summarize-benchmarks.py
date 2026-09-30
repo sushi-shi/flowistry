@@ -53,7 +53,8 @@ def summarize(report):
                            'cycles': distribution([s['counters']['cycles'] for s in samples
                                                    if s.get('counters') and 'cycles' in s['counters']]),
                            'wire_bytes': distribution([s['wire_bytes'] for s in samples if 'wire_bytes' in s]),
-                           'cache_samples': [s.get('cache') for s in samples]}
+                           'cache_samples': [s.get('cache') for s in samples],
+                           'cargo_replay_observed': [s.get('cargo_replay_observed') for s in samples]}
                 for field in ('phases', 'stats'):
                     keys = sorted({key for sample in samples for key in (sample.get(field) or {})})
                     metrics[field] = {key: distribution([s[field][key] for s in samples

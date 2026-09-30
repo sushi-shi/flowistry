@@ -35,6 +35,31 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(smoke.parse_counters('error;unrelated;diagnostic\n12345;;instructions:u;20;100.00;;\n67890;;cycles:u;20;100.00;;'),
                          {'instructions': 12345, 'cycles': 67890})
 
+    def test_backend_replay_and_semantic_cache_are_independent(self):
+        args = SimpleNamespace(cache_dir=Path('/cache'), base_cache='off',
+                               compare_cache='warm', cargo_replay='on')
+        base, compare = {'FLOWISTRY_NO_REPLAY': '1'}, {}
+        smoke.configure_cache_environment(base, 'base', args)
+        smoke.configure_cache_environment(compare, 'compare', args)
+        self.assertNotEqual(base['XDG_CACHE_HOME'], compare['XDG_CACHE_HOME'])
+        self.assertEqual(base['FLOWISTRY_CACHE'], 'off')
+        self.assertEqual(compare['FLOWISTRY_CACHE'], 'on')
+        self.assertNotIn('FLOWISTRY_NO_REPLAY', base)
+
+    def test_warmup_runs_before_interleaved_samples(self):
+        args = self.args()
+        args.warmup = 1
+        order = []
+        def run(dest, env, *unused):
+            order.append(env['backend'])
+            return {'status': 'ok', 'seconds': .1, 'output': {'digest': 'same', 'places': 1}}
+        with patch.object(smoke, 'focus_repeated', side_effect=run):
+            results = smoke.focus_interleaved([('base', {'backend': 'A'}), ('compare', {'backend': 'B'})],
+                                              '.', 'lib.rs', 1, 2, 'SigOnly', args, None)
+        self.assertEqual(order, ['A', 'B', 'A', 'B', 'B', 'A', 'A', 'B'])
+        self.assertEqual(len(results['base']['samples']), 3)
+        self.assertEqual(results['base']['warmup_status'], 'ok')
+
     def test_missing_or_unavailable_counters_fail_explicitly(self):
         for stderr in ['', '<not counted>;;instructions:u;0;0;;\n12;;cycles:u;1;100;;', '123;;instructions:u;1;100;;']:
             with self.assertRaises(ValueError):

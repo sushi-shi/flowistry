@@ -642,6 +642,8 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
                     memory_limit=None, keep_output=True, command="focus", perf=None):
     if phases:
         env = dict(env, RUST_LOG=PHASE_LOG)
+    if perf:
+        env = dict(env, RUST_LOG=env.get("RUST_LOG", "") + ",flowistry_ide::replay=info")
     # rustc_plugin clears cargo's cached metadata for library targets only; for a binary,
     # cargo would consider the target fresh and never run the plugin again.
     if touch is not None:
@@ -691,7 +693,8 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
         return {"status": "ok", "seconds": seconds, "max_rss_mb": max_rss_mb, "output": output,
                 "phases": timings, "stats": stats, "places": places,
                 "cache": response.get("cache", output.get("cache")), "counters": counters,
-                "wire_bytes": len(tail[-1].strip().encode())}
+                "wire_bytes": len(tail[-1].strip().encode()),
+                "cargo_replay_observed": "replay: running the driver directly" in stderr}
     err = response.get("Err", response)
     message = err.get("error") or err.get("type") or json.dumps(err)
     status = "benign" if any(b in message for b in BENIGN_ERRORS) else "error"
@@ -765,8 +768,10 @@ def focus_interleaved(envs, dest, file_arg, line, col, mode, args, touch):
     samples = {name: [] for name, _ in envs}
     warmups = {}
     for name, env in envs:
-        if getattr(args, f"{name}_cache", "inherit") == "warm":
-            warmups[name] = focus_repeated(dest, env, file_arg, line, col, mode, single, touch)
+        count = max(getattr(args, "warmup", 0), int(getattr(args, f"{name}_cache", "inherit") == "warm"))
+        if count:
+            warmups[name] = summarize_repeats([
+                focus_repeated(dest, env, file_arg, line, col, mode, single, touch) for _ in range(count)])
     for repetition in range(args.repeat):
         order = envs if repetition % 2 == 0 else list(reversed(envs))
         for name, env in order:
@@ -777,6 +782,22 @@ def focus_interleaved(envs, dest, file_arg, line, col, mode, args, touch):
         if warmup["status"] != "ok":
             results[name]["warmup_message"] = warmup.get("message")
     return results
+
+
+def configure_cache_environment(env, name, args):
+    if getattr(args, "cache_dir", None):
+        env["FLOWISTRY_CACHE_DIR"] = str(args.cache_dir / name)
+        # Cargo replay keys records by source directory. Isolate the backends so
+        # interleaving does not replace the other backend's compiler command.
+        env["XDG_CACHE_HOME"] = str(args.cache_dir / name / "xdg")
+    cache_mode = getattr(args, f"{name}_cache", "inherit")
+    if cache_mode != "inherit":
+        env["FLOWISTRY_CACHE"] = "on" if cache_mode == "warm" else cache_mode
+    replay = getattr(args, "cargo_replay", "inherit")
+    if replay == "off":
+        env["FLOWISTRY_NO_REPLAY"] = "1"
+    elif replay == "on":
+        env.pop("FLOWISTRY_NO_REPLAY", None)
 
 
 def canonical(output):
@@ -1216,11 +1237,7 @@ def run_positions(report, entry_dir, dest, args, backends):
         source_identity = tree_digest(target_root)
         report["source_sha256"] = source_identity
     for name, env in envs:
-        if getattr(args, "cache_dir", None):
-            env["FLOWISTRY_CACHE_DIR"] = str(args.cache_dir / name)
-        cache_mode = getattr(args, f"{name}_cache", "inherit")
-        if cache_mode != "inherit":
-            env["FLOWISTRY_CACHE"] = "on" if cache_mode == "warm" else cache_mode
+        configure_cache_environment(env, name, args)
     started = time.monotonic()
     for idx, (rel, line, col, modes) in enumerate(runs):
         for mode in modes:
@@ -1247,8 +1264,13 @@ def run_positions(report, entry_dir, dest, args, backends):
                     result = interleaved[name]
                 else:
                     warmup = None
-                    if getattr(args, f"{name}_cache", "inherit") == "warm":
-                        warmup = focus_repeated(dest, env, file_arg, line, col, mode, args, report.get("touch"))
+                    count = max(getattr(args, "warmup", 0), int(getattr(args, f"{name}_cache", "inherit") == "warm"))
+                    if count:
+                        single = argparse.Namespace(**vars(args))
+                        single.repeat = 1
+                        warmup = summarize_repeats([
+                            focus_repeated(dest, env, file_arg, line, col, mode, single, report.get("touch"))
+                            for _ in range(count)])
                     result = focus_repeated(dest, env, file_arg, line, col, mode, args, report.get("touch"))
                     if warmup is not None:
                         result["warmup_status"] = warmup["status"]
@@ -1510,6 +1532,10 @@ def main():
     parser.add_argument("--json", type=Path, metavar="FILE", help="write every run record to FILE")
     parser.add_argument("--perf", type=Path, metavar="PERF",
                         help="collect user-space instruction/cycle counters with this perf executable")
+    parser.add_argument("--cargo-replay", choices=("inherit", "off", "on"), default="inherit",
+                        help="control Cargo command replay independently of semantic result caching")
+    parser.add_argument("--warmup", type=int, default=0,
+                        help="unmeasured requests before each backend/position (default: 0)")
     parser.add_argument("--cache-dir", type=Path, help="isolated cache root, required for explicit cache reuse checks")
     parser.add_argument("--command", choices=("focus", "file-focus"), default="focus",
                         help="protocol to compare at each locked position")
@@ -1523,6 +1549,10 @@ def main():
     args = parser.parse_args()
 
     args.modes = [m.strip() for m in args.modes.split(",") if m.strip()]
+    if args.warmup < 0:
+        parser.error("--warmup must be non-negative")
+    if args.cargo_replay == "on" and not args.cache_dir:
+        parser.error("--cargo-replay on requires --cache-dir to isolate backend replay records")
     if args.selected_positions:
         if not args.crates or len(args.crates) != 1 or args.update_corpus or args.budgets:
             parser.error("--position requires one locked --crate and no corpus update or budgets")
@@ -1643,6 +1673,7 @@ def main():
                             "cpu_count": os.cpu_count(), "kernel": os.uname().release,
                             "machine": os.uname().machine, "ambient_cache": os.environ.get("FLOWISTRY_CACHE"),
                             "sample_order": "alternating A/B, B/A" if len(backends) == 2 else "single backend",
+                            "cargo_replay": args.cargo_replay, "warmup": args.warmup,
                             "perf": str(args.perf) if args.perf else None,
                             "perf_sha256": sha256_file(args.perf) if args.perf else None},
             "cache_modes": {"base": args.base_cache, "compare": args.compare_cache},

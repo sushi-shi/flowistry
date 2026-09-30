@@ -111,4 +111,7 @@ and background/project analysis plus incremental save handling.
 
 The chain now continues after #40 with [#41](https://github.com/sushi-shi/flowistry/pull/41),
 resumable corpus validation and exact coverage auditing (draft while full gates run).
+Then [#42](https://github.com/sushi-shi/flowistry/pull/42) adds interleaved performance
+samples, isolated replay/warmup controls and distribution reports (draft until
+the baseline measurements and budgets are complete).
 Track all thirteen remaining milestones in [continuation-progress.md](continuation-progress.md).

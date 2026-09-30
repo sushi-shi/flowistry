@@ -13,9 +13,15 @@ returned equal output and valid instruction/cycle counters. The raw report is
 `perf-interleaved-summary.json` in the same directory. These were functional probes
 on a loaded host, not performance gains. In particular, the instruction counts
 include both roughly 231M and 606M samples from the same binary: warm Cargo command
-replay must be controlled before interpreting a ratio. The later wire-size and
-phase-distribution additions are covered by harness regressions and will be
-exercised by the actual baseline runs.
+replay must be controlled before interpreting a ratio.
+
+The cause was a shared replay store, keyed by source directory, whose record was
+replaced whenever the A/B compiler environment changed. A second real probe used
+per-backend replay stores and one warmup (`--cargo-replay on --cache-dir ...
+--warmup 1 --phases`). All eight samples reported direct compiler replay and
+231.72–231.78M instructions, equal semantic output, wire size and phase/counter
+data. This verifies the measurement isolation; it still makes no latency claim.
+Its compact durable report is [measurements/replay-isolation-proof.json](measurements/replay-isolation-proof.json).
 
 The inherited master-versus-measure report finished successfully: 704 successful
 pairs, zero output differences and 16 paired no-body results. It used older branch
@@ -23,7 +29,7 @@ tips and overlapped other work, so it is historical evidence only. The full repo
 and load log remain under the Claude scratchpad's `engine/results/` as
 `timing-master-measure.{json,txt,load,log}`.
 
-Harness validation: 40 Python regression tests pass, including repeated-output
+Harness validation: 42 Python regression tests pass, including repeated-output
 stability, alternating order, unavailable/partial counters, missing repetitions,
 tail latency/peak memory preservation, checkpoint rejection and missing phases.
 See [smoke-tests.md](smoke-tests.md) for reproducible commands and interpretation.
