@@ -12,7 +12,9 @@ use rustc_utils::{
 
 use super::{FlowDomain, FlowResults, mutation::ModularMutationVisitor};
 use crate::{
-  extensions::ContextMode, infoflow::mutation::Mutation, mir::placeinfo::PlaceInfo,
+  extensions::ContextMode,
+  infoflow::mutation::Mutation,
+  mir::{bitset::IndexSetExt, placeinfo::PlaceInfo},
 };
 
 /// Which way to look for dependencies
@@ -153,7 +155,7 @@ fn compute_dependencies_inner<'tcx>(
         if target_deps
           .all_forward
           .iter()
-          .any(|fwd| fwd.len() == 1 && fwd.contains(location))
+          .any(|fwd| fwd.count() == 1 && fwd.contains(location))
         {
           outputs.insert(location);
         }
@@ -171,7 +173,7 @@ fn compute_dependencies_inner<'tcx>(
           if target_deps
             .all_forward
             .iter()
-            .any(|fwd| deps.is_superset(fwd))
+            .any(|fwd| deps.contains_all(fwd))
           {
             outputs.insert(location);
           }
@@ -204,7 +206,7 @@ fn compute_dependencies_inner<'tcx>(
               if target_deps
                 .all_forward
                 .iter()
-                .any(|fwd| reads.is_superset(fwd))
+                .any(|fwd| reads.contains_all(fwd))
               {
                 outputs.insert(location);
               }
@@ -385,7 +387,7 @@ pub fn compute_focus_spans<'tcx>(
           !target
             .all_forward
             .iter()
-            .any(|source| deps.is_superset(source))
+            .any(|source| deps.contains_all(source))
         })
         .map(|(span, _)| *span)
         .collect::<Vec<_>>();
