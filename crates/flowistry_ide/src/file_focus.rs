@@ -201,8 +201,7 @@ impl rustc_driver::Callbacks for Callbacks {
       })
     })());
     crate::fast_cache::record_inputs(tcx, identities);
-    if tcx.dcx().has_errors().is_none() && !crate::plugin::experiment_stop() {
-      crate::plugin::experiment_finalize(tcx);
+    if tcx.dcx().has_errors().is_none() {
       if crate::plugin::postprocess(self.output.take().unwrap()).is_ok() {
         use std::io::Write;
         std::io::stdout().flush().unwrap();
