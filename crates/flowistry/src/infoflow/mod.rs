@@ -388,7 +388,8 @@ fn run_flow<'a, 'tcx>(
     // The block engine stores far fewer states, but it computes the same states as the
     // location engine only if the effect of every location is idempotent on its own
     // output (see `engine`).
-    let unstable = analysis.unstable_locations();
+    let stats = log::log_enabled!(target: "flowistry::stats", log::Level::Info);
+    let unstable = analysis.unstable_locations(if stats { usize::MAX } else { 1 });
     analysis.counters.unstable_locations.set(unstable);
     if unstable == 0 {
       engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
