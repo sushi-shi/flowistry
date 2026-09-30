@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, iter};
+use std::{cell::RefCell, iter};
 
 use either::Either;
 use indexical::ToIndex;
@@ -341,10 +341,19 @@ pub fn compute_dependency_spans<'tcx>(
   direction: Direction,
   spanner: &Spanner,
 ) -> Vec<Vec<Span>> {
-  let body = results.analysis.body;
-
   let all_deps = compute_dependencies(results, targets, direction);
   debug!("all_deps={all_deps:?}");
+
+  dependency_spans(results, all_deps, spanner)
+}
+
+/// Decode and sort dependency spans once for all targets of either focus path.
+fn dependency_spans<'tcx>(
+  results: &FlowResults<'_, 'tcx>,
+  all_deps: Vec<LocationOrArgSet>,
+  spanner: &Spanner,
+) -> Vec<Vec<Span>> {
+  let body = results.analysis.body;
 
   // The targets' dependencies share most locations. Convert each location once, and
   // sort the spans of all of them once: the spans of a target are then entries of
@@ -548,16 +557,7 @@ pub fn compute_focus_spans<'tcx>(
       Some((LocationOrArg::Location(location), inputs))
     })
     .collect::<Vec<_>>();
-  let mut span_cache = HashMap::new();
-  for deps in forward.iter().chain(&backward) {
-    for location in deps.iter() {
-      span_cache.entry(*location).or_insert_with(|| {
-        spanner.location_to_spans(*location, body, EnclosingHirSpans::OuterOnly)
-      });
-    }
-  }
-
-  forward
+  let (dependencies, excluded): (Vec<_>, Vec<_>) = forward
     .into_iter()
     .zip(backward)
     .zip(target_deps)
@@ -577,14 +577,14 @@ pub fn compute_focus_spans<'tcx>(
         .map(|(span, _)| *span)
         .collect::<Vec<_>>();
       backward.union(&forward);
-      let spans = backward
-        .iter()
-        .flat_map(|location| span_cache[location].iter().copied())
-        .collect::<Vec<_>>();
-      merge_spans(spans)
-        .into_iter()
-        .flat_map(|span| span.subtract(excluded.clone()))
-        .collect()
+      (backward, excluded)
+    })
+    .unzip();
+  dependency_spans(results, dependencies, spanner)
+    .into_iter()
+    .zip(excluded)
+    .map(|(spans, excluded)| {
+      spans.into_iter().flat_map(|span| span.subtract(excluded.clone())).collect()
     })
     .collect()
 }
