@@ -1,6 +1,13 @@
 #![feature(rustc_private)]
 
-use flowistry::{infoflow::Direction, test_utils};
+extern crate rustc_span;
+
+use flowistry::{
+  infoflow::{self, Direction},
+  test_utils,
+};
+use rustc_span::Span;
+use rustc_utils::SpanExt;
 use test_log::test;
 
 fn slice(dir: &str, direction: Direction) {
@@ -36,6 +43,27 @@ fn test_backward_slice() {
 #[test]
 fn test_forward_slice() {
   slice("forward_slice", Direction::Forward);
+}
+
+/// The IDE's focus slice: both directions, with independent call inputs trimmed.
+#[test]
+fn test_focus_spans() {
+  test_utils::run_tests("focus_spans", |path, expected| {
+    test_utils::test_command_output(path, expected, |results, spanner, target| {
+      let target = spanner
+        .span_to_places(target)
+        .iter()
+        .flat_map(|mir_span| {
+          mir_span
+            .locations
+            .iter()
+            .map(|location| (mir_span.place, *location))
+        })
+        .collect::<Vec<_>>();
+      let spans = infoflow::compute_focus_spans(&results, vec![target], &spanner);
+      Span::merge_overlaps(spans.into_iter().flatten().collect())
+    });
+  });
 }
 
 #[test]
