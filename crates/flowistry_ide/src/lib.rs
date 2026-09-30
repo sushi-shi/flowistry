@@ -34,6 +34,7 @@ mod positions;
 mod replay;
 mod result_store;
 mod spans;
+mod summary_cache;
 
 pub use plugin::{FlowistryPlugin, replay_request};
 pub use replay::{prepare as prepare_replay, try_replay};

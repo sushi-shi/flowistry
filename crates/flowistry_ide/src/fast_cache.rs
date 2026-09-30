@@ -890,7 +890,7 @@ fn cached_run() -> Option<ExitCode> {
     println!("{value}");
     return Some(ExitCode::SUCCESS);
   }
-  if mode != "refresh" {
+  if mode != "refresh" && !crate::summary_cache::verify_summaries() {
     if let Some(entry) = &previous {
       for response in &entry.responses {
         if response.supports(position) {

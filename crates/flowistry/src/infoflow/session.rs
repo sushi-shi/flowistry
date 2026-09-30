@@ -35,6 +35,8 @@ pub struct SummaryStats {
   pub persistent_hits: usize,
   /// Persistent lookups absent or rejected by structural validation.
   pub persistent_misses: usize,
+  /// Persistent payloads independently recomputed and compared in validation mode.
+  pub persistent_verifications: usize,
   /// How many call sites were analyzed with the modular approximation, by reason.
   pub fallbacks: BTreeMap<FallbackReason, usize>,
   /// Total time spent computing summaries (nested computations counted once).
@@ -47,6 +49,10 @@ pub struct SummaryStats {
 /// never a sufficient key. The session rebuilds call resolution and SCCs before
 /// consulting this interface; no saved compiler identity is trusted.
 pub trait SummaryStore<'tcx> {
+  /// Recompute every restored logical summary and assert equality for validation.
+  fn verify(&self) -> bool {
+    false
+  }
   /// Return a payload only after validating its key and integrity.
   fn load(
     &self,
@@ -244,14 +250,19 @@ impl<'tcx> AnalysisSession<'tcx> {
       self.explore(callee);
       CalleeAbi::of_body(self.tcx, callee.to_def_id(), &self.body(callee).body)
     });
+    let mut restored = None;
     if let (Some(store), Some(abi)) = (&self.store, abi) {
       if let Some(summary) = store.load(self, callee).and_then(|wire| wire.restore(abi)) {
         self.stats.borrow_mut().persistent_hits += 1;
-        self.summaries.borrow_mut().insert(callee, summary.clone());
         log::info!(target: "flowistry::audit", "audit summary-hit {}", self.tcx.def_path_str(callee));
-        return summary;
+        if !store.verify() {
+          self.summaries.borrow_mut().insert(callee, summary.clone());
+          return summary;
+        }
+        restored = Some(summary);
+      } else {
+        self.stats.borrow_mut().persistent_misses += 1;
       }
-      self.stats.borrow_mut().persistent_misses += 1;
     }
     // Recursive calls are not summarized (see `same_component`), so a summary never
     // depends on itself.
@@ -261,9 +272,20 @@ impl<'tcx> AnalysisSession<'tcx> {
     );
     let start = std::time::Instant::now();
     let nested_before = self.stats.borrow().construction_time;
+    log::info!(target: "flowistry::audit", "audit summary-compute {}", self.tcx.def_path_str(callee));
     let summary = summary::compute(self, callee).map(Rc::new);
     let elapsed = start.elapsed();
     self.active.borrow_mut().remove(&callee);
+    if let Some(restored) = restored {
+      assert_eq!(
+        restored,
+        summary,
+        "persisted summary differs for {}",
+        self.tcx.def_path_str(callee)
+      );
+      self.stats.borrow_mut().persistent_verifications += 1;
+      log::info!(target: "flowistry::audit", "audit summary-verified {}", self.tcx.def_path_str(callee));
+    }
     log::debug!(
       "Summary of {}: {:?} in {elapsed:?}",
       self.tcx.def_path_str(callee),

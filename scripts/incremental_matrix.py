@@ -110,6 +110,9 @@ def observation(completed, seconds):
               'solved_bodies': re.findall(r'audit solve (focus|shared|summary) (.+)', stderr),
               'cache_hits': re.findall(r'Focus cache hit: (.+)', stderr),
               'cache_misses': re.findall(r'Focus cache miss: (.+)', stderr),
+              'summary_hits': re.findall(r'audit summary-hit (.+)', stderr),
+              'summary_verified': re.findall(r'audit summary-verified (.+)', stderr),
+              'summary_computations': re.findall(r'audit summary-compute (.+)', stderr),
               'response': value, 'stderr': stderr}
     if publication is not None:
         result['publication'] = publication

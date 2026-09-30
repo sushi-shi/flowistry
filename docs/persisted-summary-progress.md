@@ -1,9 +1,8 @@
 # Persisted summary implementation
 
 Continuation step 8 is in progress. The portable core format and session storage
-interface are implemented; the IDE disk adapter, shared invalidation keys and
-persisted forward/reverse graph are still pending. No production caller enables
-the new interface yet, so current CLI requests do not reuse summaries from disk.
+interface are connected to an IDE disk adapter. Focus and file-focus now use the
+adapter; cross-process edit and full-corpus acceptance gates remain pending.
 
 ## Portable boundary
 
@@ -38,16 +37,37 @@ components. Restored summaries still pass through the existing per-call SCC
 fallback policy. `direct_dependencies` exposes current local edges so the IDE
 can translate them to stable body identities before persistence.
 
-The adapter is responsible for backend/compiler identity, mode/configuration,
-declaration context, semantic dependency fingerprints, integrity and disk limits.
-Deserialization or a matching body name alone is not validation. This contract
-must be implemented using the existing focus-cache fingerprints and shared store.
+The adapter keys entries by backend/compiler identity, mode/configuration,
+declaration context and the current resolved semantic dependency closure. The
+body fingerprint code is shared with the focus cache: stable MIR with erased
+regions, original region identities and borrow facts, and expanded HIR bodies.
+Focus adds its source-relocation token fingerprint. Deserialization or a matching
+body name alone is not validation. A checksum covers the key and full payload.
 Ordinary `AnalysisSession::new` does not consult storage or do the additional
 lookup preparation.
 
 Counters distinguish persistent hits/misses, in-session hits and computations.
 An invalid payload is a miss; fresh computation replaces it. Successful summaries
 and fallback reasons both pass through the same boundary.
+
+`summaries-v1` and `dependencies-v1` participate in the same publication lock,
+atomic writes and combined disk budget as focus/results. Compiler queries and
+solving occur outside the lock. Cache-off disables persistence; refresh recomputes
+summaries. Content-addressed compiler-validated data can survive cancellation,
+but it is never advertised as a current result publication.
+
+Dependency snapshots contain stable body identities, own semantic fingerprints,
+resolved direct local calls and reverse edges, under the same context/mode key.
+Each immutable snapshot covers one Recurse root's reachable local closure,
+including cycles. SigOnly snapshots contain only their root and do not depend
+on ordinary callee bodies. Missing, evicted or unvisited project bodies cannot be
+assumed current. Future save planning must rebuild current edges and compare
+fingerprints; these observations are not a global current-project graph.
+
+`FLOWISTRY_VERIFY_SUMMARIES=1` bypasses completed focus/snapshot response hits and
+independently recomputes every loaded summary, asserting complete logical equality.
+Audit counters separately report computations, persistent hits and verifications.
+This mode is for correctness checks, not performance measurement.
 
 ## Validation and remaining work
 
@@ -69,8 +89,9 @@ smoke tests also pass with `engine-diff,shadow-eager`, including the final chang
 that avoids lookup preparation when no store is configured; see
 `/tmp/flowistry-summary-core-reference-tests.log`.
 
-Next: connect the IDE adapter and checksum/budget enforcement, share semantic
-fingerprint logic, persist current dependency/reverse edges, and verify real
-cross-process reuse after a caller edit. Callee edits must invalidate affected
-Recurse callers; SigOnly must retain ordinary callee-body independence. Finish
-the edit matrix and Recurse corpus before declaring step 8 complete.
+The connected adapter passes the workspace all-targets suite, including shared
+budget checks across all four namespaces and reverse-edge integrity tests.
+The cross-process harness is `scripts/test-summary-cache.py`; its results are
+still pending. Callee edits must invalidate affected Recurse callers; SigOnly
+must retain ordinary callee-body independence. Finish the edit matrix and
+Recurse corpus before declaring step 8 complete.
