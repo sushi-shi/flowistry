@@ -720,7 +720,9 @@ impl Response {
       self
         .bodies
         .iter()
-        .filter(|(a, z, _)| *a <= pos && pos < *z)
+        // rustc's containment of a zero-width cursor span includes its end.
+        // Match fresh file-focus selection, including nested closure boundaries.
+        .filter(|(a, z, _)| *a <= pos && pos <= *z)
         .max_by_key(|(a, z, _)| (*a, std::cmp::Reverse(*z)))
         .is_some_and(|(_, _, analyzed)| *analyzed)
     } else {
