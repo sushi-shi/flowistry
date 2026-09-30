@@ -1,6 +1,7 @@
 # Neovim workspace background analysis
 
-This feature extends the unified chain after coordinator #54. The plugin can run
+Draft [#55](https://github.com/sushi-shi/flowistry/pull/55) extends the unified chain
+after coordinator #54. The plugin can run
 one bounded project queue per canonical Cargo workspace while keeping foreground
 requests ahead of background warming. Enable it with `:Flow project` or
 `project = { enabled = true }`. It remains opt-in until the large-project and

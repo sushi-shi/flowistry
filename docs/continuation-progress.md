@@ -27,7 +27,7 @@ share one package source, lock file, CI suite and PR chain. See
 | 7. Shared result index | Implemented in [#48](https://github.com/sushi-shi/flowistry/pull/48); final integration gates pending | Existing caches now share a publication lock and disk budget. Compiler-derived body index, revision/generation envelopes, cancellation, source-hash checks and interrupted-write recovery pass 16 new cases, plus all 84 edit cases. See [versioned-result-index.md](versioned-result-index.md). |
 | 8. Persisted summaries | Implemented in [#49](https://github.com/sushi-shi/flowistry/pull/49); full corpus gates pending | Portable schema, shared disk adapter/fingerprints and dependency/reverse snapshots pass 18 summary cases, all 84 edit cases, all 16 publication cases, workspace tests and 52 harness regressions at `9da7aba9f`. Full Recurse gate passed: 1,440 equal outputs and 18,008 structurally verified summary hits. Quiet measurements and final-tip gates remain. See [persisted-summary-progress.md](persisted-summary-progress.md). |
 | 9. Project command | Worker foundation in [#51](https://github.com/sushi-shi/flowistry/pull/51); coordinator pending | Explicit package/target selection, portable compiler inventories and body workers pass 137 process cases at `4b4915382`, plus IDE tests and 54 Python regressions. The coordinator now implements streaming, priorities, cancellation and bounded workers above #53; focused validation and large-project acceptance are recorded separately. See [project-analysis-progress.md](project-analysis-progress.md). |
-| 10. Neovim background work | Implemented above #54; acceptance pending | Candidate `24ed53ecb` passes all five package checks, 323 frontend assertions, 14 backend worker scenarios and real-worker editor tests in both modes, including actual packaged cancellation. Global worker and editor-retention bounds are enforced; large-project/performance and final gates remain. See [background notes](neovim-background.md). |
+| 10. Neovim background work | Implemented in [#55](https://github.com/sushi-shi/flowistry/pull/55); acceptance pending | Candidate `24ed53ecb` passes all five package checks, 323 frontend assertions, 14 backend worker scenarios and real-worker editor tests in both modes, including actual packaged cancellation. Global worker and editor-retention bounds are enforced; large-project/performance and final gates remain. See [background notes](neovim-background.md). |
 | 11. Incremental saves | Pending | Dependency-aware recomputation and rapid-save handling. |
 | 12. Layout reuse | Pending | Proven-safe cases only, compiler fallback otherwise. |
 | 13. Final release gates | Pending | Full corpus, edits, packaged editor and before/after evidence. |
@@ -188,3 +188,26 @@ start a third heavy harness or write to either prepared corpus while they run.
 Summary verification mode is disabled for these ordinary cache gates. Retained
 harness snapshots are `coordinator-cache-harness.py` and
 `coordinator-cache-checkpoint.py` under the validation root.
+
+## Background editor continuation above #54
+
+`/tmp/flowistry-background`, branch `feat/neovim-background`, is now draft #55
+based directly on `feat/project-coordinator`. The runtime candidate is frozen in
+`neovim-background-v2/` at `24ed53ecb`. The standalone source clone
+`/tmp/flowistry-background-package` validated all five root Nix checks and the
+actual launcher at that same revision; roots are
+`/tmp/flowistry-background-validation-v2{,-1,-2,-3,-4,-5}`. Later commits add the
+packaged cancellation fixture, evidence and review links, with runtime files
+verified byte-identical to the candidate. Exact hashes and outcomes are in
+[the background report](measurements/neovim-background.json).
+
+#54's GitHub paired-package CI passed. #55 remains draft while its acceptance gates
+continue. The editor's background mode is opt-in; its one global background slot
+is retained through process cleanup and pending decompression. Frontend retention
+is bounded by decoded JSON bytes, not presented as a hard Lua RSS guarantee.
+The current saves conservatively restart project inventories. Continue step 11
+with dependency-aware current-function → saved-file → affected-caller scheduling,
+then step 12's proven-safe layout reuse and all remaining measurement/release gates.
+The two coordinator cache corpus jobs remain live in their existing prepared roots;
+do not replace their frozen executables, mutate those roots, or start a third heavy
+validation harness until a slot is authoritatively free.
