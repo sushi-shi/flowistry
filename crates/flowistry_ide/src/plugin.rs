@@ -154,6 +154,37 @@ pub(crate) fn selected_package() -> Option<String> {
     .package
 }
 
+pub(crate) fn cache_command_index(args: &[String]) -> Option<usize> {
+  // Validate the full CLI first. A package, feature or target name may itself
+  // be "file-focus"; it must not be mistaken for the subcommand.
+  let parsed = FlowistryPluginArgs::try_parse_from(args).ok()?;
+  if !matches!(
+    parsed.command,
+    FlowistryCommand::FileFocus { .. }
+      | FlowistryCommand::BodyFocus { .. }
+      | FlowistryCommand::ResultIndex { .. }
+      | FlowistryCommand::CancelResults { .. }
+  ) {
+    return None;
+  }
+  let mut index = 1; // argv[0] is Cargo's "flowistry" subcommand name.
+  while let Some(argument) = args.get(index) {
+    if !argument.starts_with('-') {
+      return Some(index);
+    }
+    index += if argument.contains('=')
+      || matches!(
+        argument.as_str(),
+        "--all-features" | "--no-default-features"
+      ) {
+      1
+    } else {
+      2
+    };
+  }
+  None
+}
+
 pub struct FlowistryPlugin;
 impl RustcPlugin for FlowistryPlugin {
   type Args = FlowistryPluginArgs;

@@ -838,12 +838,7 @@ fn index(entry: &Entry, ticket: &Ticket) -> Value {
 
 fn cached_run() -> Option<ExitCode> {
   let mut args = env::args().skip(1).collect::<Vec<_>>();
-  let command_index = args.iter().position(|a| {
-    matches!(
-      a.as_str(),
-      "file-focus" | "body-focus" | "result-index" | "cancel-results"
-    )
-  })?;
+  let command_index = crate::plugin::cache_command_index(&args)?;
   let operation = args[command_index].clone();
   let identity = (operation == "body-focus")
     .then(|| args.get(command_index + 2).cloned())

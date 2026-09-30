@@ -21,6 +21,9 @@ name="custom_library"
 [[bin]]
 name="custom-binary"
 path="src/main.rs"
+[[bin]]
+name="file-focus"
+path="src/extra.rs"
 [features]
 alternate=[]
 broken=[]
@@ -36,6 +39,7 @@ pub fn selected(input: i32) -> i32 {
 #[cfg(feature="broken")] pub fn broken() -> i32 { "type error" }
 ''',
     'project/src/main.rs': 'mod shared;\nfn main() { println!("{}", shared::helper(3)); }\n',
+    'project/src/extra.rs': 'mod shared;\nfn main() { println!("{}", shared::helper(4)); }\n',
     'project/src/shared.rs': 'pub fn helper(input: i32) -> i32 { input * 2 }\n',
     'outside.rs': 'pub fn external(input: i32) -> i32 { input + 4 }\n',
 }
@@ -73,8 +77,8 @@ def main():
         print(case + ': ' + ('PASS' if record['passed'] else 'FAIL ' + record['error']), flush=True)
 
     for mode in ('SigOnly', 'Recurse'):
-        for kind, name, source in [('lib', 'custom_library', 'lib.rs'), ('bin', 'custom-binary', 'main.rs')]:
-            case = mode + '-' + kind
+        for kind, name, source in [('lib', 'custom_library', 'lib.rs'), ('bin', 'custom-binary', 'main.rs'), ('bin', 'file-focus', 'extra.rs')]:
+            case = mode + '-' + kind + '-' + name
 
             def workers():
                 inventory_result, inventory = run(case, mode, kind, name, 'project-bodies', matrix.project / 'src' / source)
