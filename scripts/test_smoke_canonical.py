@@ -6,6 +6,8 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location(
     "smoke", Path(__file__).with_name("smoke-real-crates.py"))
@@ -148,6 +150,33 @@ class FileFocusCanonicalTests(unittest.TestCase):
         second = self.numeric_files(7)
         second['bodies'][0]['focus']['Ok']['place_info'][0]['maybe_slice'][0]['end'] = [2, 0]
         self.assertNotEqual(digest(first)['Ok'], digest(second)['Ok'])
+
+    def test_filename_table_resolves_foreign_files_and_aliases(self):
+        first = self.numeric_files(0)
+        first['files'] = {'0': 'test.rs', '1': '/rustc/core/macros.rs'}
+        first['bodies'][0]['focus']['Ok']['containers'][0]['filename'] = 1
+        second = self.numeric_files(7)
+        second['files'] = {'7': 'test.rs', '9': '/rustc/core/macros.rs', '11': 'test.rs', '12': 'unused.rs'}
+        second['bodies'][0]['focus']['Ok']['containers'][0]['filename'] = 9
+        second['bodies'][1]['range']['filename'] = 11
+        self.assertEqual(digest(first)['Ok'], digest(second)['Ok'])
+        second['files']['9'] = '/rustc/other/macros.rs'
+        self.assertNotEqual(digest(first)['Ok'], digest(second)['Ok'])
+        del second['files']['9']
+        with self.assertRaisesRegex(ValueError, 'missing'):
+            digest(second)
+
+    def test_decoder_rejection_is_a_protocol_failure_not_a_compiler_crash(self):
+        output = self.numeric_files(0)
+        output['bodies'][1]['range']['filename'] = 1
+        wire = base64.b64encode(gzip.compress(json.dumps({'Ok': output}).encode())).decode()
+        completed = SimpleNamespace(returncode=0, stdout=wire, stderr='', max_rss_kb=1024)
+        with patch.object(smoke, 'run', return_value=completed):
+            result = smoke.flowistry_focus('.', {}, 'lib.rs', 0, 0, 'SigOnly', 30,
+                                          keep_output=False, command='file-focus')
+        self.assertEqual(result['status'], 'error')
+        self.assertTrue(result['protocol_error'])
+        self.assertIn('foreign', result['message'])
 
 if __name__ == "__main__":
     unittest.main()

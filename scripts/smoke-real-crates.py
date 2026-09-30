@@ -661,15 +661,21 @@ def flowistry_focus(crate_dir, env, rel_file, line, col, mode, timeout, touch=No
     seconds = round(time.monotonic() - start, 2)
     max_rss_mb = round(res.max_rss_kb / 1024)
     response = None
+    decode_error = None
     tail = res.stdout.strip().splitlines()
     if tail:
         try:
             response = decode_response(tail[-1].strip(), keep_output)
-        except Exception:
+        except Exception as error:
+            decode_error = str(error)
             response = None
     stderr = res.stderr
     if memory_limit and response is None and (SIGKILL_MARKER.search(stderr) or res.returncode in (-9, 137)):
         return {"status": "oom", "message": f"killed at the memory limit of {memory_limit}",
+                "seconds": seconds, "max_rss_mb": max_rss_mb, "returncode": res.returncode,
+                "stderr_tail": stderr[-4000:]}
+    if response is None and decode_error is not None and res.returncode == 0 and not CRASH_MARKER.search(stderr):
+        return {"status": "error", "protocol_error": True, "message": "response validation failed: " + decode_error,
                 "seconds": seconds, "max_rss_mb": max_rss_mb, "returncode": res.returncode,
                 "stderr_tail": stderr[-4000:]}
     if CRASH_MARKER.search(stderr) or response is None:
@@ -821,6 +827,27 @@ def file_focus_source_ids(output):
     Reject other numeric IDs rather than guessing their cross-process identity.
     String filenames are already portable and must remain significant.
     """
+    files = output.get("files")
+    if files is not None:
+        if not isinstance(files, dict) or any(not isinstance(path, str) for path in files.values()):
+            raise ValueError("invalid file-focus filename table")
+
+        def resolve_table(value):
+            if isinstance(value, dict):
+                result = {}
+                for key, child in value.items():
+                    if key == "filename" and type(child) is int:
+                        if child < 0 or str(child) not in files:
+                            raise ValueError("missing file-focus filename-table entry")
+                        result[key] = files[str(child)]
+                    else:
+                        result[key] = resolve_table(child)
+                return result
+            if isinstance(value, list):
+                return [resolve_table(child) for child in value]
+            return value
+
+        return resolve_table({key: value for key, value in output.items() if key != "files"})
     bodies = output["bodies"]
     if not bodies:
         return output
@@ -1733,6 +1760,8 @@ def main():
     bad |= any(rec[n]["status"] in FAILURES for r in reports for rec in r["records"]
               for n, _ in backends)
     bad |= any(rec[n].get("measurement_error", False)
+               for r in reports for rec in r["records"] for n, _ in backends)
+    bad |= any(rec[n].get("protocol_error", False)
                for r in reports for rec in r["records"] for n, _ in backends)
     bad |= any(rec[n].get("warmup_status", "ok") not in ("ok", "benign")
                for r in reports for rec in r["records"] for n, _ in backends)
