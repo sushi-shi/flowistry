@@ -93,6 +93,26 @@ what is mutably reachable from the dropped value, e.g. a guard writing through
 its `&mut` field. Drops of standard-library types (e.g. an `Rc` clone) have no
 effect besides reading the value.
 
+## Interior mutability
+
+In both modes, a call that receives a shared reference to state that is not
+`Freeze` (a `Cell`, `RefCell`, `Mutex`, atomic, or anything containing one) may
+write the innermost such places behind it, e.g. `Cell::set(&self.c, x)` writes
+`self.c`; `Freeze` sibling fields stay independent. The same holds for operands
+of opaque parameters of summarized callees and for destructors. A write through
+an alias behind a shared reference (e.g. through a `RefCell` guard obtained from
+`&self`) keeps its written value when the alias is not `Freeze`.
+
+Calls known to only read such state are exempt: `Cell::get`, `RefCell::borrow*`,
+`Mutex::lock`, `RwLock` guards, atomic `load`, `Rc`/`Arc` counts, unwrapping the
+results of these, and the `Deref`, `AsRef`, `Borrow`, `Clone`, comparison, hashing
+and formatting traits. The exemption is decided on the implementation the call
+resolves to: a user's `impl Clone` that increments a `Cell` is a write, and a
+standard implementation that calls those of its type parameters (e.g.
+`Option<T>: Clone`) is only exempt when all the types of the call are defined in
+the standard library. `Freeze` checks run on region-erased types (`ErasedTy`), as
+incremental compilation requires.
+
 The analysis keeps Flowistry's alias-model assumptions; it is not a soundness
 guarantee for arbitrary unsafe code. A test checks that `Recurse` sees every
 write that `SigOnly` sees on a matrix of programs

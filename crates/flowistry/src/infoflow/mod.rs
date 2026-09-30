@@ -28,6 +28,7 @@ mod analysis;
 mod callsite;
 mod dependencies;
 mod effects;
+mod interior;
 pub mod mutation;
 mod recursive;
 mod session;

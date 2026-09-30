@@ -23,6 +23,7 @@ use rustc_utils::{OperandExt, PlaceExt};
 use super::{
   analysis::FlowAnalysis,
   callsite::{FallbackReason, cmp_places_structurally},
+  interior::interior_mutable_places,
   mutation::{ModularMutationVisitor, Mutation, MutationKind},
 };
 use crate::{
@@ -219,6 +220,9 @@ impl<'tcx> FlowAnalysis<'_, 'tcx> {
     reachable.sort_by(|p1, p2| {
       cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
     });
+    // A destructor may also mutate the interior-mutable state it has shared access
+    // to.
+    reachable.extend(interior_mutable_places(&self.place_info, place));
     let mutations = reachable
       .into_iter()
       .map(|mutated| Mutation {
