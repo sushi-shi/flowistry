@@ -494,17 +494,32 @@ def crash_signature(stderr):
 
 
 OK_PREFIX = '{"Ok":{"place_info":['
+RANGE_LIST_FIELDS = ("ranges", "slice", "direct_influence", "maybe_slice")
 
 
-def canonical_entry(entry):
+def canonical_entry(entry, table=None):
     """The canonical JSON of one `place_info` entry (see `canonical`)."""
     def key(x):
         return json.dumps(x, sort_keys=True)
 
     entry = dict(entry)
-    for field in ["ranges", "slice", "direct_influence"]:
+    def resolve(index):
+        # Reject malformed references rather than accepting Python's negative indices.
+        if type(index) is not int or not 0 <= index < len(table):
+            raise ValueError(f"invalid range-table index: {index!r}")
+        return table[index]
+
+    if table is not None and "range" in entry:
+        entry["range"] = resolve(entry["range"])
+    for field in RANGE_LIST_FIELDS:
         if field in entry:
-            entry[field] = sorted(entry[field], key=key)
+            ranges = entry[field]
+            if table is not None:
+                ranges = [resolve(index) for index in ranges]
+            # The editor treats highlight ranges as sets. Duplicate spans and
+            # their iteration order do not change the displayed analysis.
+            unique = {key(r): r for r in ranges}
+            entry[field] = [unique[value] for value in sorted(unique)]
     return key(entry)
 
 
@@ -547,10 +562,12 @@ def decode_response(encoded, keep_output):
             return response
         tail = dict(response["Ok"])
         entries = tail.pop("place_info", [])
-        return output_digest([entry_digest(entry) for entry in entries], tail)
+        table = tail.pop("ranges", None)
+        return output_digest([entry_digest(entry, table) for entry in entries], tail)
 
     decoder = json.JSONDecoder()
     digests = []
+    indexed_entries = []
     pos = len(OK_PREFIX)
     while True:
         while pos < len(buffer) and buffer[pos] in " \t\r\n,":
@@ -572,17 +589,27 @@ def decode_response(encoded, keep_output):
             buffer = buffer[pos:] + more()
             pos = 0
             continue
-        digests.append(entry_digest(entry))
+        if type(entry.get("range")) is int:
+            # A reordered object can put its table after place_info. Retain only
+            # these compact index lists until the table is available.
+            indexed_entries.append(entry)
+        else:
+            digests.append(entry_digest(entry))
         pos = end
     rest = buffer[pos + 1:]
     while not finished:
         rest += more()
     # `rest` is the end of the output object, e.g. `,"containers":[...]}}`.
-    return output_digest(digests, json.loads("{" + rest.lstrip().lstrip(",").rstrip()[:-1]))
+    tail = json.loads("{" + rest.lstrip().lstrip(",").rstrip()[:-1])
+    table = tail.pop("ranges", None)
+    if indexed_entries and table is None:
+        raise ValueError("indexed focus output has no range table")
+    digests.extend(entry_digest(entry, table) for entry in indexed_entries)
+    return output_digest(digests, tail)
 
 
-def entry_digest(entry):
-    return hashlib.sha256(canonical_entry(entry).encode()).hexdigest()
+def entry_digest(entry, table=None):
+    return hashlib.sha256(canonical_entry(entry, table).encode()).hexdigest()
 
 
 def output_digest(entry_digests, tail):
@@ -689,14 +716,9 @@ def canonical(output):
 
     if not isinstance(output, dict) or "digest" in output:
         return output
-    places = []
-    for p in output.get("place_info", []):
-        p = dict(p)
-        for field in ["ranges", "slice", "direct_influence"]:
-            if field in p:
-                p[field] = sorted(p[field], key=key)
-        places.append(p)
     out = dict(output)
+    table = out.pop("ranges", None)
+    places = [json.loads(canonical_entry(p, table)) for p in output.get("place_info", [])]
     out["place_info"] = sorted(places, key=key)
     if "containers" in out:
         out["containers"] = sorted(out["containers"], key=key)

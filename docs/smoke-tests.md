@@ -123,14 +123,19 @@ python3 scripts/smoke-real-crates.py target/smoke-master/debug --compare target/
 ```
 
 `place_info` is emitted in hash-map order, so outputs are canonicalised before
-comparison: `ranges`, `slice` and `direct_influence` are sorted within each
-entry, and entries are sorted by their full JSON content. With that, a build
-compared against itself is stable.
+comparison: `ranges`, `slice`, `direct_influence` and `maybe_slice` are treated as
+sets within each entry, and entries are sorted by their full JSON content. The
+range-table protocol is resolved to source ranges before comparing, so table
+insertion order and repeated highlights cannot create false differences. Changes
+to actual ranges, the primary `range`, or the number of places remain visible.
 
 Unless `--keep-outputs` is given, outputs are not kept: each is decompressed and
 parsed one `place_info` entry at a time and reduced to a SHA-256 digest of its
 canonical form, and the digests are compared. Outputs can be hundreds of MB of JSON,
 which as parsed Python objects took the harness to over 16 GB.
+Range-table outputs retain their compact indices and expand one place at a time.
+Run the comparison regression tests with
+`python3 -m unittest discover -s scripts -p 'test_smoke_*.py'`.
 
 ## What it does
 
