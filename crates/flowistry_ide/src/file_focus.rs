@@ -59,11 +59,11 @@ impl rustc_driver::Callbacks for Callbacks {
         .map_err(|_| FlowistryError::FileNotFound)?;
       let candidates = find_bodies(tcx);
       let selected = if let Some(position) = self.position {
-        let target = CharRange {
+        let target = crate::positions::Chars(CharRange {
           start: position,
           end: position,
           filename,
-        }
+        })
         .to_span(tcx)
         .map_err(|error| FlowistryError::AnalysisError {
           error: error.to_string(),
@@ -83,7 +83,7 @@ impl rustc_driver::Callbacks for Callbacks {
         if source_map.lookup_source_file(span.lo()).name != file.name {
           continue;
         }
-        let Ok(range) = CharRange::from_span(span, source_map) else {
+        let Ok(range) = crate::positions::char_range(span, source_map) else {
           continue;
         };
         bodies.push(BodyOutput {
@@ -101,6 +101,13 @@ impl rustc_driver::Callbacks for Callbacks {
       }
       Ok(FileOutput { bodies })
     })());
+    if tcx.dcx().has_errors().is_none() {
+      if crate::plugin::postprocess(self.output.take().unwrap()).is_ok() {
+        use std::io::Write;
+        std::io::stdout().flush().unwrap();
+        std::process::exit(0);
+      }
+    }
     rustc_driver::Compilation::Stop
   }
 }
