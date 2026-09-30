@@ -11,6 +11,8 @@ local configured = false
 local uv = vim.uv or vim.loop
 local progress_timer
 local background
+local inputs = require("flowistry.inputs").new()
+local input_epoch = 0
 local defaults = {
   auto_enable = true,
   toolchain = "nightly-2026-05-01",
@@ -90,8 +92,15 @@ local function invalidate(state, preserve)
 end
 
 local function disk_source(name)
-  local ok, lines = pcall(vim.fn.readfile, name, "b")
-  return ok and lines or false
+  local file = uv.fs_open(name, "r", 438)
+  if not file then return false end
+  local stat = uv.fs_fstat(file)
+  -- Undo restoration is optional. Large/binary inputs must not create an
+  -- unbounded second copy of every editor buffer merely to avoid revalidation.
+  local text = stat and stat.type == "file" and stat.size <= 1024 * 1024
+    and uv.fs_read(file, stat.size, 0) or false
+  uv.fs_close(file)
+  return text or false
 end
 
 local function restore_unchanged(state)
@@ -128,8 +137,7 @@ local function dirty(root)
     if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].modified then
       local name = vim.fs.normalize(vim.api.nvim_buf_get_name(buf))
       name = uv.fs_realpath(name) or name
-      local relevant = is_rust(buf) or name:match("Cargo%.toml$") or name:match("Cargo%.lock$")
-      if relevant and inside_root(name, root) then return true end
+      if vim.bo[buf].buftype == "" and inputs:matches(root, name) then return true end
     end
   end
   return false
@@ -148,11 +156,17 @@ local function callback(state, handler, phase)
   local epoch = state.epoch
   local tick = vim.api.nvim_buf_get_changedtick(state.buf)
   local name = vim.api.nvim_buf_get_name(state.buf)
+  local observed_inputs = input_epoch
   state.busy, state.status = true, "loading"
   state.phase, state.started = phase or "Preparing compiler", uv.hrtime()
   vim.cmd("redrawstatus")
   return function(err, value)
     if states[state.buf] ~= state or state.epoch ~= epoch or not vim.api.nvim_buf_is_valid(state.buf) then return end
+    if observed_inputs ~= input_epoch then
+      invalidate(state, true)
+      vim.schedule(function() if states[state.buf] == state then update(state) end end)
+      return
+    end
     if vim.api.nvim_buf_get_changedtick(state.buf) ~= tick or vim.api.nvim_buf_get_name(state.buf) ~= name then
       invalidate(state, true)
       state.status = "waiting for save"
@@ -162,6 +176,12 @@ local function callback(state, handler, phase)
     progress.close(state)
     state.last_ms = (uv.hrtime() - state.started) / 1e6
     if err then fail(state, err); return end
+    if value._input_watch ~= nil then
+      inputs:observe(state.context and state.context.root or state.root, value._input_watch, value._input_scope)
+      if dirty(state.context and state.context.root or state.root) then
+        invalidate(state, true); state.status = "waiting for save"; return
+      end
+    end
     local ok, reason = pcall(handler, value)
     if not ok then fail(state, "Invalid analysis response: " .. tostring(reason)); return end
     if type(value) == "table" and value.cache then state.cache_stats = value.cache end
@@ -222,6 +242,10 @@ local function new_background()
   return require("flowistry.background").new(config, {
     valid = function(state) return states[state.buf] == state and vim.api.nvim_buf_is_valid(state.buf) end,
     dirty = dirty,
+    inputs = function(root, value, target, filename)
+      inputs:observe(root, value, require("flowistry.inputs").scope(filename, target))
+    end,
+    revision = function() return input_epoch end,
     progress = function() vim.cmd("redrawstatus") end,
     result = function(state, value, event)
       -- A compiler result describes saved bytes. A changed disk file that has
@@ -414,6 +438,7 @@ function M.setup(opts)
   if background then background:close() end
   for _, state in pairs(all_states()) do stop(state); clear_pin(state); render.clear(state.buf) end
   states, suspended, disabled = {}, {}, {}
+  inputs, input_epoch = require("flowistry.inputs").new(), 0
   local packaged_ok, packaged = pcall(require, "flowistry.packaged")
   config = vim.tbl_deep_extend("force", vim.deepcopy(defaults), packaged_ok and packaged or {}, opts or {})
   assert(type(config.debounce_ms) == "number" and config.debounce_ms >= 0, "debounce_ms must be nonnegative")
@@ -436,7 +461,7 @@ function M.setup(opts)
       observed_ticks[buf] = vim.api.nvim_buf_get_changedtick(buf)
       observed_names[buf] = vim.api.nvim_buf_get_name(buf)
       local name = observed_names[buf]
-      if is_rust(buf) or name:match("Cargo%.toml$") or name:match("Cargo%.lock$") then
+      if name ~= "" and vim.bo[buf].buftype == "" then
         saved_sources[name] = disk_source(name)
       end
     end
@@ -461,7 +486,7 @@ function M.setup(opts)
       -- Reading a file for the first time does not change the compiler's disk
       -- inputs. Reloads of known buffers still invalidate stale analysis.
       if args.event == "BufReadPost" and previous_tick == nil then
-        if is_rust(args.buf) or name:match("Cargo%.toml$") or name:match("Cargo%.lock$") then
+        if name ~= "" and vim.bo[args.buf].buftype == "" then
           saved_sources[name] = disk_source(name)
         end
         return
@@ -470,15 +495,23 @@ function M.setup(opts)
       -- happened since its read/write or the last observed change.
       if args.event:match("^TextChanged") and (previous_tick == tick
         or (previous_tick == nil and not vim.bo[args.buf].modified)) then return end
-      -- Another Rust file or a manifest can change this function's analysis.
-      if not is_rust(args.buf) and not name:match("Cargo%.toml$") and not name:match("Cargo%.lock$") then return end
+      if name == "" or vim.bo[args.buf].buftype ~= "" then return end
+      -- Any on-disk input can matter (includes, build scripts, Cargo config,
+      -- path dependencies). Pending discovery also rejects intervening edits.
+      input_epoch = input_epoch + 1
+      local invalidated = {}
       for _, state in pairs(all_states()) do
         local root = state.context and state.context.root or state.root
-        if state.buf == args.buf or inside_root(name, root)
-          or (args.event == "BufFilePost" and previous_name and inside_root(previous_name, root)) then
+        if state.buf == args.buf or inputs:matches(root, name)
+          or (args.event == "BufFilePost" and previous_name and inputs:matches(root, previous_name)) then
           invalidate(state, args.event ~= "BufReadPost" and args.event ~= "BufFilePost")
-          background:invalidate(root, args.event == "BufWritePost" and name or nil)
-          if name:match("Cargo%.toml$") or name:match("Cargo%.lock$") then
+          if not invalidated[root or false] then
+            background:invalidate(root, args.event == "BufWritePost" and name or nil)
+            invalidated[root or false] = true
+          end
+          if name:match("Cargo%.toml$") or name:match("Cargo%.lock$")
+            or name:match("/%.cargo/config%.toml$") or name:match("/%.cargo/config$")
+            or name:match("/rust%-toolchain$") or name:match("/rust%-toolchain%.toml$") then
             state.context = nil
             background:rediscover(root)
           end
@@ -501,6 +534,22 @@ function M.setup(opts)
       vim.schedule(function()
         if states[current()] then schedule(states[current()]) end
       end)
+    end,
+  })
+  vim.api.nvim_create_autocmd("FocusGained", {
+    group = group,
+    callback = function()
+      input_epoch = input_epoch + 1
+      local roots = {}
+      for _, state in pairs(all_states()) do
+        local root = state.context and state.context.root or state.root
+        invalidate(state, true)
+        -- Changes outside Neovim have no complete editor event history.
+        state.retained = nil
+        state.context = nil
+        if root and not roots[root] then background:rediscover(root); roots[root] = true end
+      end
+      if states[current()] then schedule(states[current()]) end
     end,
   })
   vim.api.nvim_create_autocmd("InsertEnter", {
@@ -662,6 +711,11 @@ function M.cache_status(buf)
   return state and state.cache_stats and vim.deepcopy(state.cache_stats) or nil
 end
 
+function M.input_status(buf)
+  local state = states[buf or current()]
+  return state and inputs:status(state.context and state.context.root or state.root) or nil
+end
+
 function M.status(buf)
   local state = states[buf or current()]
   return state and state.status or "off"
@@ -703,6 +757,8 @@ function M.log()
   local message = state and state.error or "No Flowistry error for this buffer."
   local project = M.project_status()
   if project and project.error then message = message .. "\nProject analysis:\n" .. project.error end
+  local watched = M.input_status()
+  if watched then message = message .. "\nInput invalidation:\n" .. vim.inspect(watched) end
   vim.cmd("botright new")
   local buf = current()
   vim.bo[buf].buftype, vim.bo[buf].bufhidden, vim.bo[buf].swapfile = "nofile", "wipe", false

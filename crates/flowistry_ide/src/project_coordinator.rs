@@ -556,6 +556,7 @@ mod linux {
           event["status"] = publication["status"].clone();
           event["revision"] = publication["revision"].clone();
           event["generation"] = publication["generation"].clone();
+          event["inputs"] = publication["inputs"].clone();
           if matches!(publication["status"].as_str(), Some("current" | "uncached")) {
             let encoded = publication["output"]
               .as_str()

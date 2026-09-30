@@ -178,6 +178,7 @@ function M.new(config, hooks)
       changed(w); return
     end
     local epoch, ticks = w.epoch, {}
+    local input_revision = hooks.revision and hooks.revision()
     local args = { "--package", target.package_id or target.package, "--target-kind", target.target_kind, "--target-name", target.target_name }
     if config.project.features then vim.list_extend(args, { "--features", config.project.features }) end
     if config.project.all_features then args[#args + 1] = "--all-features" end
@@ -205,6 +206,9 @@ function M.new(config, hooks)
       if w.epoch ~= epoch or self.closed then return end
       if event.event == "inventory" then w.total = event.total end
       if event.event == "body" then
+        if hooks.revision and hooks.revision() ~= input_revision then self:invalidate(w.root); return end
+        if hooks.inputs then hooks.inputs(w.root, event.inputs, target, event.body.range and event.body.range.filename or w.root) end
+        if hooks.dirty(w.root) then self:invalidate(w.root); return end
         w.completed = w.completed + 1
         if event.status ~= "current" and event.status ~= "uncached" then
           w.failed = (w.failed or 0) + 1

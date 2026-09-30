@@ -51,6 +51,7 @@ else
     local value = vim.system({ vim.v.progpath, "--headless", "-u", "NONE", "-l", fixture, "file-focus", filename, tostring(row), "0" }, {}):wait()
     assert(value.code == 0, value.stderr)
     emit({ event = "body", body = body, current = true, status = "current", output = value.stdout,
+      inputs = { schema = 1, roots = { root }, files = {} },
       revision = "fixture-revision", generation = "fixture-generation" })
   end
   emit({ event = "finished", status = "complete", completed = 2, total = 2 })

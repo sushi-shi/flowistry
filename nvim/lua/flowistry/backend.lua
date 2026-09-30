@@ -155,13 +155,31 @@ end
 function M.request(context, args, config, callback)
   local op = operation()
   local argv, env = invocation(context, args, config)
+  local watched = config.batch and args[1] == "file-focus"
+  if watched then env.FLOWISTRY_RESULT_PROTOCOL = "1" end
   op:run(argv, { cwd = context.root, env = env, text = true, timeout = config.timeout_ms }, function(result)
     if result.code ~= 0 then callback(table.concat(argv, " ") .. "\n" .. failure(result)); return end
-    local encoded = (result.stdout or ""):gsub("%s", "")
+    local encoded = result.stdout or ""
+    local inputs = false
+    if watched and encoded:match("^%s*{") then
+      local ok, publication = pcall(vim.json.decode, encoded)
+      if not ok or publication.schema ~= 1
+        or (publication.status ~= "current" and publication.status ~= "uncached")
+        or type(publication.output) ~= "string" then callback("Invalid or superseded analysis publication"); return end
+      encoded = publication.output
+      inputs = publication.inputs
+    end
+    encoded = encoded:gsub("%s", "")
     if encoded == "" and vim.trim(result.stderr or "") ~= "" then
       callback("Flowistry produced no analysis:\n" .. vim.trim(result.stderr)); return
     end
-    decode(op, encoded, config, callback)
+    decode(op, encoded, config, function(err, value, bytes)
+      if value and watched then
+        value._input_watch = inputs or false
+        value._input_scope = require("flowistry.inputs").scope(args[2], config.selection)
+      end
+      callback(err, value, bytes)
+    end)
   end)
   return op
 end
