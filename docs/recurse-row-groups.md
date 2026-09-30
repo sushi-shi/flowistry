@@ -2,7 +2,7 @@
 
 This ports only experiment commit `ab7857370` onto the integrated review chain,
 after the validation and measurement work. It is preparation for continuation
-step 3; the full corpus and measured acceptance gates remain open.
+step 3; reference and measured acceptance gates remain open.
 
 A callee returning a large aggregate can write thousands of destination leaves
 with the same dependency set. A per-body group layout lets each dataflow state
@@ -35,11 +35,19 @@ All 107 core unit/integration tests pass with `engine-diff,shadow-eager` after t
 integration fixes. The initial port also passed all-targets benchmark smoke tests.
 The normal release executables at `3199b4095` are archived with build provenance
 under `target/continuation-validation/row-groups/`, built in `target/review-cache`.
-This frozen candidate can be compared after the active baseline gates release a
-heavy-run slot; no extra corpus target directory was created.
+The full normal-release Recurse comparison against `2630ee356` has completed:
+all 24 locked entries and 1,440 selections, with 1,416 equal successful pairs
+and 24 matching benign selections. There are no output differences, missing
+positions, duplicate records or skipped entries. The exact manifest and report
+checksum are in [measurements/row-groups-corpus.json](measurements/row-groups-corpus.json).
+Detailed evidence is `target/continuation-validation/row-groups-corpus.{json,log}`.
+No extra corpus target directory was created.
 
-Before accepting the optimization: finish baseline gates, compare to the frozen
-integrated binary over the full Recurse corpus, run the enhanced reference build,
+Loaded-run aggregate wall time was 1,646.84 → 1,405.56 seconds, but the geometric
+mean ratio was 0.994; peak RSS was 3,116 → 3,123 MiB. These observations do not
+establish a reproducible performance gain or satisfy the retention gate.
+
+Before accepting the optimization: finish baseline gates, run the enhanced reference build,
 and measure typical and stress instructions/RSS/stored rows. The historical
 20.3M-to-1.17M row result is not yet reproduced on this integrated branch. Reuse
 the shared Cargo target directory and archive only the relevant executables.

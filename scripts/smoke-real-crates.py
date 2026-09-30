@@ -800,6 +800,42 @@ def configure_cache_environment(env, name, args):
         env.pop("FLOWISTRY_NO_REPLAY", None)
 
 
+def file_focus_source_ids(output):
+    """Resolve the legacy per-response ID of the requested file.
+
+    File-focus lists bodies of one requested file. FilenameIndex is an interner
+    slot, not a path: compiler/cache paths can intern that file in different
+    orders. Only that anchored ID is identifiable without a filename table.
+    Reject other numeric IDs rather than guessing their cross-process identity.
+    String filenames are already portable and must remain significant.
+    """
+    bodies = output["bodies"]
+    if not bodies:
+        return output
+    source_id = bodies[0]["range"]["filename"]
+    if type(source_id) is not int:
+        return output
+    if source_id < 0:
+        raise ValueError("invalid file-focus source ID")
+
+    def resolve(value):
+        if isinstance(value, dict):
+            result = {}
+            for key, child in value.items():
+                if key == "filename" and type(child) is int:
+                    if child != source_id:
+                        raise ValueError("unresolved foreign file-focus filename ID")
+                    result[key] = {"requested_file": True}
+                else:
+                    result[key] = resolve(child)
+            return result
+        if isinstance(value, list):
+            return [resolve(child) for child in value]
+        return value
+
+    return resolve(output)
+
+
 def canonical(output):
     """Order-insensitive form of a focus output, for comparing two backends."""
     def key(x):
@@ -809,6 +845,7 @@ def canonical(output):
         return output
     out = dict(output)
     if "bodies" in out:
+        out = file_focus_source_ids(out)
         out.pop("cache", None)
         bodies = []
         for body in out["bodies"]:
