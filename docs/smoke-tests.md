@@ -19,9 +19,14 @@ Without `--crate`, the script runs the corpus in `scripts/smoke-corpus/`:
   regex-syntax, anyhow, bitflags, memchr), each pinned to an exact version and the
   sha256 of its `.crate` archive, with the optional dependencies pruned to build
   offline and the resulting `Cargo.lock`.
-- **Applications from git** (just, tokei, alacritty, niri, helix, bevy), each pinned to
-  a commit, analysing one package (`package`, e.g. `crates/bevy_ecs`). Their own
-  `Cargo.lock` pins dependencies; bevy has none, so one is stored in the corpus.
+- **Applications from git**, each pinned to a commit and analysing one package
+  (`package`): just, tokei, alacritty, niri, helix (`helix-term`), bevy (`crates/bevy_ecs`),
+  brains (`open/stratum-proxy`) and bosminer (`open/bosminer`, the Braiins OS miner), local_lru, cargo-inspect, biodiff, objdiff (`objdiff-cli`),
+  boxxy and sudo-rs. Their own `Cargo.lock` pins dependencies; for repositories without one
+  (bevy) a generated lock is stored in the corpus. Optional fields: `root` (the cargo
+  workspace's subdirectory, e.g. brains), `submodules` (check out git submodules, e.g. biodiff's
+  bundled WFA2), and `env` (build environment, e.g. `CFLAGS=-std=gnu17` for old C code that
+  gcc 15 rejects under C23, or `RUSTFLAGS=--cap-lints=warn` for old crates that deny warnings).
 - For every entry, the sampled positions (`positions.tsv`), so a change to the sampler
   does not change what is measured.
 
@@ -60,7 +65,7 @@ Useful options (see `--help` for all of them):
 
 | option | meaning |
 | --- | --- |
-| `--crate SPEC` | crate to test, repeatable: `NAME` (newest version in the registry), `NAME@VERSION`, or a path to a crate directory. Defaults to the locked corpus. |
+| `--crate SPEC` | crate to test, repeatable: a corpus entry name, or `NAME` (newest version in the registry), `NAME@VERSION`, or a path to a crate directory. Defaults to the locked corpus. |
 | `--positions N` | positions sampled per crate (default 60) |
 | `--seed S` | sampling seed (default 0); the same seed always picks the same positions |
 | `--modes M1,M2` | context modes (default `SigOnly,Recurse`) |
