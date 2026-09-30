@@ -9,7 +9,7 @@ local function key(target) return table.concat({ target.package_id or target.pac
 -- One queue per canonical Cargo workspace. Foreground requests own a slot before
 -- cancellation starts, so a resumed background job cannot overtake them.
 function M.new(config, hooks)
-  local self = { workspaces = {}, closed = false, retained = {}, retained_bytes = 0 }
+  local self = { workspaces = {}, closed = false, retained = {}, retained_bytes = 0, running = 0 }
   local schedule, dispatch, pump
 
   local function workspace(context)
@@ -31,12 +31,21 @@ function M.new(config, hooks)
     if w.timer then w.timer:stop(); if not w.timer:is_closing() then w.timer:close() end; w.timer = nil end
   end
 
+  local function release_slot(w)
+    if w.slot_reserved and not w.operation and not w.decode and not w.delivery then
+      w.slot_reserved = false
+      self.running = self.running - 1
+      for _, waiting in pairs(self.workspaces) do schedule(waiting) end
+    end
+  end
+
   local function stop(w)
     stop_timer(w)
     w.epoch = w.epoch + 1
     if w.decode then w.decode:cancel(); w.decode = nil end
     w.delivery = nil
     if w.operation then w.operation:cancel() end
+    release_slot(w)
   end
 
   local function forget(state)
@@ -133,7 +142,8 @@ function M.new(config, hooks)
       end
     end
     local function next_delivery()
-      if w.decode or not w.delivery then return end
+      if w.decode then return end
+      if not w.delivery then release_slot(w); return end
       local item = w.delivery
       w.delivery = nil
       local decoder
@@ -160,6 +170,7 @@ function M.new(config, hooks)
   dispatch = function(w)
     if self.closed or not config.project.enabled or next(w.foreground) or w.operation
       or not next(w.states) or hooks.dirty(w.root) or w.done or w.needs_metadata then return end
+    if self.running >= (config.project.max_workspaces or 1) then w.status = "queued"; changed(w); return end
     order(w)
     local target = w.targets[w.next_target]
     if not target then w.done, w.status = true, (w.failed or 0) > 0 and "partial" or "complete"; changed(w); return end
@@ -183,6 +194,8 @@ function M.new(config, hooks)
       end
     end
     w.status, w.completed, w.total, w.target = "running", 0, nil, target
+    self.running = self.running + 1
+    w.slot_reserved = true
     changed(w)
     w.operation = backend.stream(w.context, args, config, function(event)
       if w.epoch ~= epoch or self.closed then return end
@@ -207,6 +220,7 @@ function M.new(config, hooks)
       changed(w)
     end, function(err, result)
       w.operation = nil
+      release_slot(w)
       if w.epoch == epoch and err then
         w.error, w.status, w.next_target = err, "error", w.next_target + 1
         w.failed = (w.failed or 0) + 1
@@ -214,7 +228,7 @@ function M.new(config, hooks)
       if result.cancelled then w.status = "paused" end
       changed(w)
       pump(w)
-      schedule(w)
+      for _, waiting in pairs(self.workspaces) do schedule(waiting) end
     end)
   end
 

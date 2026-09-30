@@ -21,7 +21,9 @@ its slot before canceling background work and waits for coordinator exit before
 launching. Duplicate foreground requests with identical arguments, environment,
 mode and cache policy share an operation; one canceled subscriber does not cancel
 another. Idle warming resumes through the existing validated backend store.
-Different workspaces have independent queues. A global `:Flow stop` disables all
+Different workspaces have independent queues, with one active background workspace
+globally by default (`project.max_workspaces`). Canceled workers retain their slot
+until cleanup completes. A global `:Flow stop` disables all
 buffers and automatic enabling; `:Flow start` restores it. Per-buffer off remains
 available.
 

@@ -31,7 +31,7 @@ local defaults = {
   parameter_types = true, -- Focusing an argument's type selects its binding.
   progress = false, -- Session launcher enables analysis progress popups.
   project = { enabled = false, idle_ms = 300, memory_mib = 6144, timeout_seconds = 600,
-    max_body_bytes = 8 * 1024 * 1024, max_results_bytes = 16 * 1024 * 1024 },
+    max_workspaces = 1, max_body_bytes = 8 * 1024 * 1024, max_results_bytes = 16 * 1024 * 1024 },
 }
 local config = vim.deepcopy(defaults)
 local update
@@ -424,7 +424,7 @@ function M.setup(opts)
   assert(not config.command or (vim.islist(config.command) and #config.command > 0), "command must be an argv list")
   assert(type(config.project) == "table" and type(config.project.enabled) == "boolean", "project.enabled must be a boolean")
   assert(not config.project.enabled or config.cache, "project background analysis requires cache=true")
-  for _, name in ipairs({ "idle_ms", "memory_mib", "timeout_seconds", "max_body_bytes", "max_results_bytes" }) do
+  for _, name in ipairs({ "idle_ms", "memory_mib", "timeout_seconds", "max_workspaces", "max_body_bytes", "max_results_bytes" }) do
     assert(type(config.project[name]) == "number" and config.project[name] > 0, "project." .. name .. " must be positive")
   end
   background = new_background()

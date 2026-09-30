@@ -195,6 +195,7 @@ project = {
   -- targets may also be a function(workspace_root) returning such a list.
   features = "optional-feature", -- applies to foreground and background together
   idle_ms = 300,
+  max_workspaces = 1,            -- active background workspaces globally
   memory_mib = 6144,             -- per compiler/Cargo worker scope
   timeout_seconds = 600,        -- per worker; an oversized body cannot stop the queue
   max_body_bytes = 8 * 1024 * 1024,

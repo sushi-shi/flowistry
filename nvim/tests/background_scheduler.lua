@@ -30,7 +30,7 @@ backend.decode = function(output, config, callback)
   decoded[#decoded + 1] = op
   return op
 end
-local config = { project = { enabled = true, idle_ms = 10, memory_mib = 384, timeout_seconds = 5, max_results_bytes = 15 } }
+local config = { project = { enabled = true, idle_ms = 10, memory_mib = 384, timeout_seconds = 5, max_results_bytes = 15, max_workspaces = 2 } }
 local m = manager_module.new(config, {
   valid = function(state) return valid[state.buf] == state end,
   dirty = function(path) return dirty[path] end,
@@ -142,6 +142,27 @@ local ok, err = xpcall(function()
   check(vim.tbl_contains(streams[8].args, "replacement"), "scheduler uses the new target identity")
   another:close()
   streams[8].done(nil, { code = 130, cancelled = true })
+
+  config.project.max_workspaces = 1
+  local bounded = manager_module.new(config, {
+    valid = function(state) return valid[state.buf] == state end,
+    dirty = function() return false end, result = function() end,
+  })
+  bounded:attach(a)
+  await(function() return #streams == 9 end, "one global background slot starts")
+  bounded:attach(b)
+  vim.wait(50, function() return false end, 5)
+  check(#streams == 9 and bounded:status(path_b).status == "queued", "additional workspace stays within the global worker budget")
+  streams[9].event(body(a, "decoding"))
+  streams[9].event({ event = "finished", status = "complete" })
+  streams[9].done(nil, { code = 0, cancelled = false })
+  vim.wait(50, function() return false end, 5)
+  check(#streams == 9, "pending decode retains the global workspace slot")
+  decoded[#decoded].callback(nil, {}, 10)
+  await(function() return #streams == 10 end, "completed workspace releases its slot to the next workspace")
+  check(streams[10].context.root == path_b, "waiting workspace makes progress")
+  bounded:close()
+  streams[10].done(nil, { code = 130, cancelled = true })
 end, debug.traceback)
 m:close()
 if not ok then io.stderr:write(err .. "\n"); vim.cmd("cquit 1") end
