@@ -44,12 +44,13 @@ review sequence; its branch and original discussion are retained. Closed #1/#4/#
 
 ## Neovim migration and historical editor reviews
 
-The Neovim plugin now lives under `nvim/` in this repository. The migration PR
-follows backend #52 and imports the complete editor history through `e2394b5`.
+The Neovim plugin now lives under `nvim/` in this repository.
+[Migration PR #53](https://github.com/sushi-shi/flowistry/pull/53) follows backend
+#52 and imports the complete editor history through `e2394b5`.
 All subsequent backend/editor changes use this one PR chain and root flake.
 See [the migration guide](neovim-monorepo.md).
 
-The old editor PRs remain useful historical reviews of the imported work:
+The old editor PRs are closed as superseded and remain useful historical reviews:
 
 1. [nvim#1](https://github.com/sushi-shi/flowistry.nvim/pull/1): packaging and Nix integration.
 2. [nvim#2](https://github.com/sushi-shi/flowistry.nvim/pull/2): persistent-cache UI and lifecycle.

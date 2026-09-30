@@ -30,9 +30,11 @@ Neovim demo already declares its own Cargo workspace and remains independent.
 
 ## Review and validation
 
-The migration follows backend #52. Its initial subtree commit is the exact editor
+[Migration PR #53](https://github.com/sushi-shi/flowistry/pull/53) follows backend #52.
+Its initial subtree commit is the exact editor
 import; the next commit consolidates packaging, tests, installation docs and CI.
-Original editor PRs become historical reviews superseded by this migration. No
+Standalone editor PRs #1–#5 are closed as superseded by this migration; their
+branches and commits remain available. No
 PR has been merged. Future editor/backend changes belong in the same PR chain.
 
 The root CI workflow runs all Nix checks on pull requests, including stacked PRs.
@@ -61,6 +63,13 @@ Outputs are rooted at `/tmp/flowistry-monorepo-validation{,-1,...,-5}`; the last
 is the launcher. The build log is `/tmp/flowistry-monorepo-build.log`. A standalone
 clone of the same commit at `/tmp/flowistry-monorepo-package` avoided a Nix local
 worktree object-cache failure without copying any target directories.
+
+The local Stalker `tools/flowistry` launcher now selects the validated monorepo
+commit with one `FLOWISTRY_FLAKE` override for both components. Its previous
+untracked contents are preserved at `/tmp/flowistry-stalker-launcher-before-monorepo`.
+The demo startup script also uses the packaged launcher. The demo editor had
+already closed when the hot-update was attempted, so its next launch loads the
+paired package; no live buffer was changed during this migration.
 The full optimization/background/incremental plan remains unfinished. Preserve
 the coordinator WIP in `/tmp/flowistry-project-coordinator` and continue it from
 the migration tip when resumed.
