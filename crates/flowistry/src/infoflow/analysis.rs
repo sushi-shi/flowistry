@@ -349,11 +349,20 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
   /// wrote or that nothing but the first write touched. The run is then applied as one
   /// write to a row group ([`RowMatrix::assign_group`]), with the same result.
   ///
-  /// Must run before the fixpoint iteration, after the effects of the calls were
-  /// computed (see [`unstable_locations`](Self::unstable_locations)).
+  /// Must run before the fixpoint iteration. Populate call effects explicitly:
+  /// the bounded instability check may stop before visiting the remaining calls.
   pub(crate) fn build_row_groups(&mut self) {
     if !self.recurse() {
       return;
+    }
+    for (block, data) in traversal::reverse_postorder(self.body) {
+      let terminator = data.terminator();
+      if matches!(terminator.kind, TerminatorKind::Call { .. }) {
+        self.effects_at(terminator, Location {
+          block,
+          statement_index: data.statements.len(),
+        });
+      }
     }
     let mut groups = RowGroups::none();
     let mut group_runs = HashMap::default();
@@ -653,7 +662,11 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
         } else {
           &[]
         };
-        self.written_alias_keys(mt.mutated).iter().chain(cleared).copied()
+        self
+          .written_alias_keys(mt.mutated)
+          .iter()
+          .chain(cleared)
+          .copied()
           .chain(self.possibly_shared_rows(mt))
       })
       .collect::<HashSet<_>>();

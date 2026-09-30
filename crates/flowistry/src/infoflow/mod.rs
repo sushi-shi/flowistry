@@ -16,7 +16,8 @@ pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
   callsite::{FallbackReason, UnsupportedOp},
   dependencies::{
-    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans, merge_spans,
+    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans,
+    merge_spans,
   },
   domain::{LazyMatrix, RowGroups, SeedRows},
   session::{AnalysisSession, SummaryStats},
@@ -214,6 +215,41 @@ fn check_engines<'tcx>(
   body_with_facts: &BodyWithBorrowckFacts<'tcx>,
   results: &FlowResults<'_, 'tcx>,
 ) {
+  // An unstable body uses the location engine in production. Comparing it only
+  // to the block engine can legitimately disagree, hiding a grouping regression.
+  // First compare grouped location states to an independent ungrouped execution
+  // of that same engine. Drop those states before the existing cross-engine check.
+  if !results.engine_stats().by_block && !results.analysis.row_groups.is_empty() {
+    let tcx = session.tcx();
+    let reference = AnalysisSession::new(tcx, session.mode());
+    let body = &body_with_facts.body;
+    let def_id = results.analysis.def_id;
+    let place_info =
+      PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, reference.mode());
+    let location_domain = place_info.location_domain().clone();
+    let shared_handles = results
+      .analysis
+      .shared_handles
+      .as_ref()
+      .and_then(|_| SharedHandles::build(&place_info));
+    let mut analysis =
+      FlowAnalysis::with_session(tcx, def_id, body, place_info, reference);
+    analysis.shared_handles = shared_handles;
+    let ungrouped =
+      engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis);
+    results.for_each_state(|location, state| {
+      assert!(
+        *state == *ungrouped.state_at(location),
+        "row-group-diff: states disagree at {location:?} in {}",
+        tcx.def_path_debug_str(def_id)
+      );
+    });
+    assert_eq!(
+      *results.analysis.call_reads.borrow(),
+      *ungrouped.analysis.call_reads.borrow(),
+      "row-group-diff: terminator reads disagree"
+    );
+  }
   let tcx = session.tcx();
   let def_id = results.analysis.def_id;
   // Reference execution must not add cache hits or fallback counts to the
@@ -403,7 +439,7 @@ fn run_flow<'a, 'tcx>(
     let stats = log::log_enabled!(target: "flowistry::stats", log::Level::Info);
     let unstable = analysis.unstable_locations(if stats { usize::MAX } else { 1 });
     analysis.counters.unstable_locations.set(unstable);
-    // After `unstable_locations`, which computes the effects of every call.
+    // Prepare groups even when the instability check stopped at its first hit.
     analysis.build_row_groups();
     if unstable == 0 {
       engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
@@ -600,7 +636,7 @@ fn f(n: u32, m: u32) -> u32 {
       let body = &body_with_facts.body;
       let analysis =
         FlowAnalysis::with_session(tcx, place_info.def_id, body, place_info, session);
-      analysis.unstable_locations();
+      analysis.unstable_locations(1);
       let ungrouped =
         engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis);
       assert_eq!(ungrouped.stats().row_groups, 0);

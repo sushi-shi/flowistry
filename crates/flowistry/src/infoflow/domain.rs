@@ -706,10 +706,16 @@ where
 {
   fn eq(&self, other: &Self) -> bool {
     let same = |row: &R| self.row_set(row) == other.row_set(row);
-    let groups = &self.groups;
-    let grouped = (self.grouped.keys())
-      .chain(other.grouped.keys())
-      .flat_map(|id| groups.group(*id).members());
+    let grouped = self
+      .grouped
+      .keys()
+      .flat_map(|id| self.groups.group(*id).members())
+      .chain(
+        other
+          .grouped
+          .keys()
+          .flat_map(|id| other.groups.group(*id).members()),
+      );
     let explicit = (self.plain.keys())
       .chain(other.plain.keys())
       .chain(self.seeded_rows.keys())
@@ -915,6 +921,27 @@ mod test {
 
   type Eager = IndexMatrix<u32, Col>;
   type Lazy = LazyMatrix<u32, Col>;
+
+  #[test]
+  fn equality_is_independent_of_group_layout() {
+    let domain = Rc::new(IndexedDomain::from_iter((0 .. 2).map(Col)));
+    let seeds = Rc::new(SeedRows::none(&domain));
+    let mut groups = RowGroups::none();
+    let id = groups.add(vec![1, 2]).unwrap();
+    let mut grouped = Lazy::with_groups(&seeds, &Rc::new(groups));
+    let mut plain = Lazy::with_groups(&seeds, &Rc::new(RowGroups::none()));
+    let mut value = IndexSet::new(&domain);
+    value.insert(ColIdx::from_usize(0));
+    grouped.assign_group(id, &value);
+    for row in [1, 2] {
+      plain.union_into_row(row, &value);
+    }
+    assert!(grouped == plain);
+    assert!(plain == grouped);
+    plain.clear_row(&2);
+    assert!(grouped != plain);
+    assert!(plain != grouped);
+  }
 
   fn eager_value(eager: &Eager, row: u32) -> Vec<ColIdx> {
     eager.row_set(&row).indices().collect()
