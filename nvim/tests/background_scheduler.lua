@@ -78,8 +78,16 @@ local ok, err = xpcall(function()
   vim.wait(50, function() return false end, 5)
   check(#streams == 3, "dirty workspace does not restart")
   dirty[path_a] = nil
-  m:invalidate(path_a)
+  m:invalidate(path_a, path_a .. "/src/other.rs")
+  m:invalidate(path_a, path_a .. "/src/main.rs")
+  m:invalidate(path_a, path_a .. "/src/other.rs")
   await(function() return #streams == 4 end, "save starts a new generation")
+  local saved = {}
+  for i, arg in ipairs(streams[4].args) do
+    if arg == "--saved-file" then saved[#saved + 1] = streams[4].args[i + 1] end
+  end
+  check(vim.deep_equal(saved, { path_a .. "/src/other.rs", path_a .. "/src/main.rs" }),
+    "rapid saves coalesce with the latest file first and no duplicates")
   streams[4].event(body(a, "two"))
   decoded[2].callback(nil, { fresh = true }, 10)
   check(#deliveries == 1 and deliveries[1][2].fresh, "current generation is delivered")

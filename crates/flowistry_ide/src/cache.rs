@@ -60,7 +60,7 @@ fn engine() -> Option<&'static str> {
 /// Hash the declaration environment, including expanded types, constants,
 /// attributes, imported crates and compiler configuration. Ordinary function
 /// implementations are hashed separately via the resolved dependency closure.
-fn context(tcx: TyCtxt<'_>) -> String {
+pub(crate) fn context(tcx: TyCtxt<'_>) -> String {
   tcx.with_stable_hashing_context(|mut hcx| {
     fingerprint(|h| {
       hcx.while_hashing_spans(false, |hcx| {
@@ -185,24 +185,44 @@ pub(crate) fn semantic_body(tcx: TyCtxt<'_>, def: LocalDefId) -> String {
   })
 }
 
+/// One root and cache policy for results, summaries and scheduling observations.
+pub(crate) fn store_root() -> Option<PathBuf> {
+  if std::env::var("FLOWISTRY_CACHE").as_deref() == Ok("off") || engine().is_none() {
+    None
+  } else {
+    std::env::var_os("FLOWISTRY_CACHE_DIR")
+      .map(PathBuf::from)
+      .or_else(|| {
+        std::env::var_os("XDG_CACHE_HOME")
+          .map(PathBuf::from)
+          .or_else(|| {
+            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache"))
+          })
+          .map(|root| root.join("flowistry"))
+      })
+  }
+}
+
+/// Expansion-only scheduling hint. This is deliberately not a semantic key:
+/// accepting a result still requires the complete MIR/input validation path.
+pub(crate) fn expanded_body(tcx: TyCtxt<'_>, def: LocalDefId) -> String {
+  tcx.with_stable_hashing_context(|mut hcx| {
+    fingerprint(|h| {
+      hcx.while_hashing_spans(false, |hcx| {
+        def.hash_stable(hcx, h);
+        let owner = tcx.local_def_id_to_hir_id(def).owner;
+        for body in tcx.hir_owner_nodes(owner).bodies.values() {
+          body.hash_stable(hcx, h);
+        }
+      })
+    })
+  })
+}
+
 impl<'tcx> FocusCache<'tcx> {
   pub fn new(tcx: TyCtxt<'tcx>) -> Self {
     let mode = std::env::var("FLOWISTRY_CACHE").unwrap_or_default();
-    let directory = if mode == "off" || engine().is_none() {
-      None
-    } else {
-      std::env::var_os("FLOWISTRY_CACHE_DIR")
-        .map(PathBuf::from)
-        .or_else(|| {
-          std::env::var_os("XDG_CACHE_HOME")
-            .map(PathBuf::from)
-            .or_else(|| {
-              std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache"))
-            })
-            .map(|root| root.join("flowistry"))
-        })
-        .map(|root| root.join("focus-v1"))
-    };
+    let directory = store_root().map(|root| root.join("focus-v1"));
     let context = if directory.is_some() {
       context(tcx)
     } else {

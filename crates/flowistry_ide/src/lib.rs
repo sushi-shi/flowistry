@@ -37,6 +37,7 @@ mod project_coordinator;
 mod project_process;
 mod replay;
 mod result_store;
+mod save_plan;
 mod spans;
 mod summary_cache;
 

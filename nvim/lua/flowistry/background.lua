@@ -17,7 +17,7 @@ function M.new(config, hooks)
     local w = self.workspaces[root]
     if not w then
       w = { root = root, context = context, states = {}, epoch = 0, targets = {}, next_target = 1,
-        foreground = {}, requests = {}, pending = {}, status = "idle", done = false }
+        foreground = {}, requests = {}, pending = {}, saved_files = {}, status = "idle", done = false }
       self.workspaces[root] = w
     end
     return w
@@ -173,7 +173,10 @@ function M.new(config, hooks)
     if self.running >= (config.project.max_workspaces or 1) then w.status = "queued"; changed(w); return end
     order(w)
     local target = w.targets[w.next_target]
-    if not target then w.done, w.status = true, (w.failed or 0) > 0 and "partial" or "complete"; changed(w); return end
+    if not target then
+      w.done, w.status, w.saved_files = true, (w.failed or 0) > 0 and "partial" or "complete", {}
+      changed(w); return
+    end
     local epoch, ticks = w.epoch, {}
     local args = { "--package", target.package_id or target.package, "--target-kind", target.target_kind, "--target-name", target.target_name }
     if config.project.features then vim.list_extend(args, { "--features", config.project.features }) end
@@ -187,6 +190,7 @@ function M.new(config, hooks)
       vim.list_extend(args, { "--cursor-file", vim.api.nvim_buf_get_name(state.buf),
         "--cursor-line", tostring(pos[1]), "--cursor-column", tostring(pos[2]) })
     end
+    for _, file in ipairs(w.saved_files) do vim.list_extend(args, { "--saved-file", file }) end
     for buf, item in pairs(w.states) do
       if hooks.valid(item) then
         ticks[buf] = vim.api.nvim_buf_get_changedtick(buf)
@@ -305,10 +309,19 @@ function M.new(config, hooks)
     return op
   end
 
-  function self:invalidate(root)
+  function self:invalidate(root, saved_file)
     if not root then return end
     local w = self.workspaces[canonical(root)]
     if w then
+      if saved_file then
+        local file = canonical(saved_file)
+        for i = #w.saved_files, 1, -1 do
+          if w.saved_files[i] == file then table.remove(w.saved_files, i) end
+        end
+        table.insert(w.saved_files, 1, file)
+        -- Only an ordering hint: all bodies are validated even after eviction.
+        while #w.saved_files > 64 do table.remove(w.saved_files) end
+      end
       stop(w); w.next_target, w.done, w.status = 1, false, "waiting for save"
       w.failed, w.error = 0, nil
       for _, state in pairs(w.states) do forget(state) end

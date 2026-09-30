@@ -177,6 +177,16 @@ impl<'tcx> SemanticCache<'tcx> {
       callers,
     };
     let key = digest(&graph).expect("dependency graph serializes");
+    let observation = self.root.as_ref().map(|_| {
+      crate::save_plan::Observation::new(
+        self.context.clone(),
+        graph.mode.clone(),
+        graph.root.clone(),
+        crate::cache::expanded_body(self.tcx, root),
+        graph.nodes[&graph.root].callees.clone(),
+        key.clone(),
+      )
+    });
     // All compiler queries above complete before acquiring the publication lock.
     if let Some(root) = &self.root {
       let result = (|| -> std::io::Result<()> {
@@ -192,6 +202,9 @@ impl<'tcx> SemanticCache<'tcx> {
             &serde_json::to_vec(&graph)?,
             None,
           )?;
+        }
+        if let Some(observation) = &observation {
+          observation.write(&store)?;
         }
         Ok(())
       })();
