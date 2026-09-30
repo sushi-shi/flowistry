@@ -4,6 +4,7 @@ use std::{cell::Cell, ops::ControlFlow, rc::Rc};
 
 use indexical::ToIndex;
 use rustc_borrowck::consumers::BodyWithBorrowckFacts;
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_hir::def_id::DefId;
 use rustc_middle::{
   mir::*,
@@ -285,11 +286,21 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
   /// that are queried once (e.g. when seeding the rows of the arguments).
   pub(crate) fn compute_conflicts(&self, place: Place<'tcx>) -> PlaceSet<'tcx> {
     let children = self.children(place);
-    let parents = place
+    children
+      .into_iter()
+      .chain(self.conflict_parents(place))
+      .collect()
+  }
+
+  fn conflict_parents(
+    &self,
+    place: Place<'tcx>,
+  ) -> impl Iterator<Item = Place<'tcx>> + '_ {
+    place
       .projection
       .iter()
       .enumerate()
-      .map(|(i, elem)| {
+      .map(move |(i, elem)| {
         let place = PlaceRef {
           local: place.local,
           projection: &place.projection[.. i],
@@ -300,8 +311,67 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
         place.ty(self.body.local_decls(), self.tcx).ty.is_box()
           || !matches!(elem, PlaceElem::Deref)
       })
-      .map(|(place_ref, _)| Place::from_ref(place_ref, self.tcx));
-    children.into_iter().chain(parents).collect()
+      .map(|(place_ref, _)| Place::from_ref(place_ref, self.tcx))
+  }
+
+  /// Construct argument seeds using independently rooted child traversals.
+  ///
+  /// Every template starts with an empty type stack, exactly like `children`.
+  /// Templates are keyed by the full, unnormalized type within this body/DefId;
+  /// they are never extracted from a parent's context-dependent traversal.
+  pub(crate) fn seed_rows(&'a self) -> FxHashSet<(NormPlace<'tcx>, LocationOrArgIndex)> {
+    block_timer!("seed rows");
+    // Bound temporary template storage; a miss beyond the cap still computes the
+    // same children. Projection slices refer to rustc's existing interned places.
+    const MAX_TEMPLATE_PATHS: usize = 65_536;
+    let mut templates = FxHashMap::<Ty<'tcx>, Rc<[&'tcx [PlaceElem<'tcx>]]>>::default();
+    let mut retained_paths = 0;
+    let mut rows = FxHashSet::default();
+    for (arg, location) in self.all_args() {
+      let ty = arg.ty(self.body.local_decls(), self.tcx).ty;
+      let paths = match templates.get(&ty) {
+        Some(paths) => Rc::clone(paths),
+        None => {
+          let paths = self
+            .children(arg)
+            .into_iter()
+            .map(|child| {
+              debug_assert_eq!(child.local, arg.local);
+              debug_assert!(child.projection.starts_with(arg.projection));
+              &child.projection[arg.projection.len() ..]
+            })
+            .collect::<Rc<[_]>>();
+          if paths.len() <= MAX_TEMPLATE_PATHS - retained_paths {
+            retained_paths += paths.len();
+            templates.insert(ty, Rc::clone(&paths));
+          }
+          paths
+        }
+      };
+      for path in paths.iter() {
+        rows.insert((self.normalize(arg.project_deeper(path, self.tcx)), location));
+      }
+      for parent in self.conflict_parents(arg) {
+        rows.insert((self.normalize(parent), location));
+      }
+    }
+    #[cfg(feature = "shadow-eager")]
+    {
+      let reference = self
+        .all_args()
+        .flat_map(|(arg, location)| {
+          self
+            .compute_conflicts(arg)
+            .into_iter()
+            .map(move |place| (self.normalize(place), location))
+        })
+        .collect::<FxHashSet<_>>();
+      assert_eq!(
+        rows, reference,
+        "seed rows differ from independently enumerated conflicts"
+      );
+    }
+    rows
   }
 
   /// Returns all [direct](PlaceExt::is_direct) places that are reachable from `place`
@@ -480,6 +550,41 @@ mod test {
       let place_info = PlaceInfo::build(tcx, def_id.to_def_id(), body_with_facts);
 
       f(tcx, body, place_info)
+    });
+  }
+
+  #[test]
+  fn seed_templates_preserve_independent_type_stack_cutoffs() {
+    let input = r#"
+struct Node { value: u32, next: Option<Box<Node>> }
+enum Payload<'a> { Array([u32; 3]), Borrowed(&'a mut Node), Nested((&'a u8, u16)) }
+fn f(a: Node, b: Node, x: &mut Payload<'_>, y: &&Node) -> u32 {
+  a.value + b.value + y.value
+}
+"#;
+    placeinfo_harness(input, |tcx, body, place_info| {
+      let reference = place_info
+        .all_args()
+        .flat_map(|(arg, location)| {
+          let place_info = &place_info;
+          place_info
+            .compute_conflicts(arg)
+            .into_iter()
+            .map(move |place| (place_info.normalize(place), location))
+        })
+        .collect::<FxHashSet<_>>();
+      assert_eq!(place_info.seed_rows(), reference);
+
+      // This fixture must exercise the exact trap that makes parent-derived
+      // subtree reuse invalid: restarting at a child can visit deeper places.
+      let root = Place::from_local(body.args_iter().next().unwrap(), tcx);
+      let outer = place_info.children(root);
+      assert!(outer.iter().any(|child| {
+        place_info
+          .children(*child)
+          .iter()
+          .any(|nested| !outer.contains(nested))
+      }));
     });
   }
 

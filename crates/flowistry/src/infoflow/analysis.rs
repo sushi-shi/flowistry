@@ -218,16 +218,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     debug!("Control dependencies: {control_dependencies:?}");
     // Every place that conflicts with a place reachable from an argument starts out
     // depending on the argument.
-    let seeds = SeedRows::new(
-      place_info.location_domain(),
-      place_info.all_args().flat_map(|(arg, loc)| {
-        let place_info = &place_info;
-        place_info
-          .compute_conflicts(arg)
-          .into_iter()
-          .map(move |place| (place_info.normalize(place), loc))
-      }),
-    );
+    let seeds = SeedRows::new(place_info.location_domain(), place_info.seed_rows());
     FlowAnalysis {
       tcx,
       def_id,
