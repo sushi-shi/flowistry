@@ -102,6 +102,22 @@ fn places_refer_to_a_table_of_distinct_ranges() {
       used.insert(index);
     }
   }
+  for index in output["Ok"]["comments"]
+    .as_array()
+    .into_iter()
+    .flatten()
+    .chain(
+      output["Ok"]["parameter_aliases"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|alias| [&alias["range"], &alias["target"]]),
+    )
+  {
+    let index = index.as_u64().unwrap();
+    assert!((index as usize) < table.len());
+    used.insert(index);
+  }
   assert_eq!(used.len(), table.len(), "the table has unused ranges");
 }
 

@@ -40,6 +40,12 @@ def expanded(value):
                 places.append(item)
             value = {k: v for k, v in value.items() if k != "ranges"}
             value["place_info"] = places
+            if "comments" in value:
+                value["comments"] = [table[index] for index in value["comments"]]
+            if "parameter_aliases" in value:
+                value["parameter_aliases"] = [
+                    {field: table[alias[field]] for field in ("range", "target")}
+                    for alias in value["parameter_aliases"]]
         return {k: expanded(v) for k, v in value.items()}
     if isinstance(value, list):
         return [expanded(v) for v in value]

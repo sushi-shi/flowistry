@@ -576,7 +576,7 @@ def decode_response(encoded, keep_output):
         tail = dict(response["Ok"])
         entries = tail.pop("place_info", [])
         table = tail.pop("ranges", None)
-        return output_digest([entry_digest(entry, table) for entry in entries], tail)
+        return output_digest([entry_digest(entry, table) for entry in entries], tail, table)
 
     decoder = json.JSONDecoder()
     digests = []
@@ -618,17 +618,39 @@ def decode_response(encoded, keep_output):
     if indexed_entries and table is None:
         raise ValueError("indexed focus output has no range table")
     digests.extend(entry_digest(entry, table) for entry in indexed_entries)
-    return output_digest(digests, tail)
+    return output_digest(digests, tail, table)
 
 
 def entry_digest(entry, table=None):
     return hashlib.sha256(canonical_entry(entry, table).encode()).hexdigest()
 
 
-def output_digest(entry_digests, tail):
+def canonical_metadata(tail, table):
+    tail = dict(tail)
+    def resolve(index):
+        if table is None:
+            if not isinstance(index, dict):
+                raise ValueError("source-selection metadata has no range table")
+            return index
+        if type(index) is not int or not 0 <= index < len(table):
+            raise ValueError(f"invalid metadata range-table index: {index!r}")
+        return table[index]
+    def ordered(items):
+        unique = {json.dumps(item, sort_keys=True): item for item in items}
+        return [unique[key] for key in sorted(unique)]
+    if "comments" in tail:
+        tail["comments"] = ordered(resolve(index) for index in tail["comments"])
+    if "parameter_aliases" in tail:
+        tail["parameter_aliases"] = ordered(
+            {**alias, "range": resolve(alias["range"]), "target": resolve(alias["target"])}
+            for alias in tail["parameter_aliases"])
+    return tail
+
+
+def output_digest(entry_digests, tail, table=None):
     """The digest of an output from the digests of its `place_info` entries and its other
     fields (`tail`)."""
-    tail = dict(tail)
+    tail = canonical_metadata(tail, table)
     if "containers" in tail:
         tail["containers"] = sorted(tail["containers"], key=lambda x: json.dumps(x, sort_keys=True))
     digest = hashlib.sha256()
@@ -896,6 +918,7 @@ def canonical(output):
         out["bodies"] = sorted(bodies, key=key)
         return out
     table = out.pop("ranges", None)
+    out = canonical_metadata(out, table)
     places = [json.loads(canonical_entry(p, table)) for p in output.get("place_info", [])]
     out["place_info"] = sorted(places, key=key)
     if "containers" in out:

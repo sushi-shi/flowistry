@@ -78,6 +78,21 @@ class CanonicalOutputTests(unittest.TestCase):
         self.assertEqual(digest({"place_info": [], "containers": []}),
                          digest({"ranges": [], "place_info": [], "containers": []}))
 
+    def test_source_selection_metadata_resolves_indices(self):
+        inline = dict(self.output, comments=[self.a], parameter_aliases=[{"range": self.b, "target": self.a}])
+        for table, a, b in [([self.a, self.b], 0, 1), ([self.b, self.a], 1, 0)]:
+            entry = {"range": a, "ranges": [a], "slice": [a, b], "direct_influence": [b], "maybe_slice": [a]}
+            indexed = {"place_info": [entry], "ranges": table, "containers": self.output["containers"],
+                       "comments": [a], "parameter_aliases": [{"range": b, "target": a}]}
+            self.assertEqual(smoke.canonical(inline), smoke.canonical(indexed))
+            for pretty in [False, True]:
+                self.assertEqual(digest(inline), digest(indexed, pretty))
+            indexed["parameter_aliases"][0]["target"] = b
+            self.assertNotEqual(digest(inline), digest(indexed))
+            indexed["comments"] = [-1]
+            with self.assertRaises(ValueError):
+                digest(indexed)
+
 
 
 class FileFocusCanonicalTests(unittest.TestCase):
