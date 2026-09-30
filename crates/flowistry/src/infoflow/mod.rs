@@ -16,9 +16,10 @@ pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
   callsite::{FallbackReason, UnsupportedOp},
   dependencies::{
-    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans, merge_spans,
+    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans,
+    merge_spans,
   },
-  domain::{LazyMatrix, SeedRows},
+  domain::{LazyMatrix, RowGroups, SeedRows},
   session::{AnalysisSession, SummaryStats},
 };
 use crate::{
@@ -115,6 +116,12 @@ pub struct FlowStats {
   pub mutations: usize,
   /// Rows seeded from the arguments at the start of the body (see [`SeedRows`]).
   pub seed_rows: usize,
+  /// Groups of rows that calls write with one value (see [`RowGroups`]).
+  pub row_groups: usize,
+  /// Rows in those groups.
+  pub grouped_rows: usize,
+  /// How often a state stored the value of a group member by member again, so far.
+  pub group_expansions: usize,
   /// How often the place queries were made and computed.
   pub place_caches: PlaceCacheStats,
 }
@@ -132,6 +139,9 @@ impl FlowStats {
       ("transfers", self.transfers),
       ("mutations", self.mutations),
       ("seed_rows", self.seed_rows),
+      ("row_groups", self.row_groups),
+      ("grouped_rows", self.grouped_rows),
+      ("group_expansions", self.group_expansions),
     ];
     counters.extend(self.place_caches.counters());
     counters
@@ -169,6 +179,9 @@ impl<'tcx> FlowResults<'_, 'tcx> {
       transfers: counters.transfers.get(),
       mutations: counters.mutations.get(),
       seed_rows: self.analysis.seeds.len(),
+      row_groups: self.analysis.row_groups.len(),
+      grouped_rows: self.analysis.row_groups.members_len(),
+      group_expansions: self.analysis.row_groups.expansions(),
       place_caches: self.analysis.place_info.cache_stats(),
     }
   }
@@ -202,6 +215,41 @@ fn check_engines<'tcx>(
   body_with_facts: &BodyWithBorrowckFacts<'tcx>,
   results: &FlowResults<'_, 'tcx>,
 ) {
+  // An unstable body uses the location engine in production. Comparing it only
+  // to the block engine can legitimately disagree, hiding a grouping regression.
+  // First compare grouped location states to an independent ungrouped execution
+  // of that same engine. Drop those states before the existing cross-engine check.
+  if !results.engine_stats().by_block && !results.analysis.row_groups.is_empty() {
+    let tcx = session.tcx();
+    let reference = AnalysisSession::new(tcx, session.mode());
+    let body = &body_with_facts.body;
+    let def_id = results.analysis.def_id;
+    let place_info =
+      PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, reference.mode());
+    let location_domain = place_info.location_domain().clone();
+    let shared_handles = results
+      .analysis
+      .shared_handles
+      .as_ref()
+      .and_then(|_| SharedHandles::build(&place_info));
+    let mut analysis =
+      FlowAnalysis::with_session(tcx, def_id, body, place_info, reference);
+    analysis.shared_handles = shared_handles;
+    let ungrouped =
+      engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis);
+    results.for_each_state(|location, state| {
+      assert!(
+        *state == *ungrouped.state_at(location),
+        "row-group-diff: states disagree at {location:?} in {}",
+        tcx.def_path_debug_str(def_id)
+      );
+    });
+    assert_eq!(
+      *results.analysis.call_reads.borrow(),
+      *ungrouped.analysis.call_reads.borrow(),
+      "row-group-diff: terminator reads disagree"
+    );
+  }
   let tcx = session.tcx();
   let def_id = results.analysis.def_id;
   // Reference execution must not add cache hits or fallback counts to the
@@ -391,6 +439,8 @@ fn run_flow<'a, 'tcx>(
     let stats = log::log_enabled!(target: "flowistry::stats", log::Level::Info);
     let unstable = analysis.unstable_locations(if stats { usize::MAX } else { 1 });
     analysis.counters.unstable_locations.set(unstable);
+    // Prepare groups even when the instability check stopped at its first hit.
+    analysis.build_row_groups();
     if unstable == 0 {
       engine::iterate_to_fixpoint(tcx, body, location_domain, analysis)
     } else {
@@ -525,5 +575,85 @@ fn g(a: *const u8, b: *const u8) -> usize { 0 }
     assert!(!stats.by_block, "{stats:?}");
     assert!(stats.unstable_locations > 0);
     assert_eq!(stats.block_visits, 0);
+  }
+}
+
+#[cfg(test)]
+mod row_group_test {
+  use super::*;
+  use crate::test_utils;
+
+  /// A callee returning a large enum, called from three sites. Its summary writes
+  /// every leaf of the returned value with the dependencies of the whole value, so each
+  /// call writes the leaves of its destination as one row group (see
+  /// `FlowAnalysis::build_row_groups`).
+  const BIG_ENUM: &str = r#"
+enum Big {
+  A(u8, u16, u32, u64),
+  B(i8, i16, i32, i64),
+  C(bool, char, (u8, u8), (u16, u16)),
+  D { x: u32, y: u32, z: u32 },
+}
+
+fn make(n: u32) -> Result<u32, Big> {
+  if n > 3 { Err(Big::D { x: n, y: n, z: n }) } else { Ok(n) }
+}
+
+fn f(n: u32, m: u32) -> u32 {
+  let mut total = 0;
+  for i in 0 .. n {
+    let a = make(i);
+    let b = make(m);
+    if let Err(Big::D { x, .. }) = a { total += x; }
+    if let Ok(k) = b { total += k; }
+  }
+  let c = make(total);
+  if let Err(Big::A(p, ..)) = c { total += p as u32; }
+  total
+}
+"#;
+
+  /// The states computed with row groups equal those computed row by row, with far
+  /// fewer stored rows, and the three calls write three groups.
+  #[test]
+  fn test_row_groups_are_exact() {
+    test_utils::compile_crate(BIG_ENUM, &[], |tcx| {
+      let (def_id, body_with_facts) = test_utils::body_named(tcx, "f");
+      let body_id = tcx.hir_body_owned_by(def_id).id();
+      let mode = EvalMode {
+        context_mode: ContextMode::Recurse,
+        ..EvalMode::default()
+      };
+      let session = AnalysisSession::new(tcx, mode);
+      let grouped = compute_flow_with_session(&session, body_id, body_with_facts);
+      let stats = grouped.stats();
+      assert_eq!(stats.row_groups, 3, "{stats:?}");
+      assert!(stats.grouped_rows >= 3 * 16, "{stats:?}");
+
+      // The same analysis, without row groups.
+      let place_info = build_place_info(&session, body_id, body_with_facts);
+      let location_domain = place_info.location_domain().clone();
+      let body = &body_with_facts.body;
+      let analysis =
+        FlowAnalysis::with_session(tcx, place_info.def_id, body, place_info, session);
+      analysis.unstable_locations(1);
+      let ungrouped =
+        engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis);
+      assert_eq!(ungrouped.stats().row_groups, 0);
+
+      grouped.for_each_state(|location, state| {
+        assert!(*state == *ungrouped.state_at(location), "{location:?}");
+      });
+      let (grouped_size, ungrouped_size) = (grouped.size_stats(), ungrouped.size_stats());
+      assert_eq!(grouped_size.rows, ungrouped_size.rows);
+      assert_eq!(grouped_size.row_entries, ungrouped_size.row_entries);
+      // The members are written as groups at every visit of the calls, and never
+      // on their own.
+      assert_eq!(grouped.stats().group_expansions, 0);
+      assert!(
+        grouped_size.explicit_rows * 2 < ungrouped_size.explicit_rows,
+        "{grouped_size:?} {ungrouped_size:?}"
+      );
+    });
   }
 }

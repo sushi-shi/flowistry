@@ -29,9 +29,12 @@ use smallvec::SmallVec;
 
 use super::{
   AnalysisSession,
-  domain::{LazyMatrix, RowMatrix, SeedRows},
+  domain::{GroupId, LazyMatrix, RowGroups, RowMatrix, SeedRows},
   effects::CallEffects,
-  mutation::{ModularMutationVisitor, Mutation, MutationStatus},
+  mutation::{
+    CalleeEffect, ModularMutationVisitor, Mutation, MutationKind, MutationStatus,
+    Precision,
+  },
   shared_handles::SharedHandles,
 };
 use crate::{
@@ -110,6 +113,11 @@ pub struct FlowAnalysis<'a, 'tcx> {
   pub(crate) caches: TransferCaches<'tcx>,
   /// The rows of argument places at the start of the body, shared by every state.
   pub(crate) seeds: Rc<SeedRows<NormPlace<'tcx>, LocationOrArg>>,
+  /// Groups of rows that calls write together, shared by every state (see
+  /// [`FlowAnalysis::build_row_groups`]).
+  pub(crate) row_groups: Rc<RowGroups<NormPlace<'tcx>>>,
+  /// The mutations of each call that are applied as one write to a row group.
+  group_runs: HashMap<Location, GroupRuns<'tcx>>,
 }
 
 /// Counters of the transfer function, see [`FlowStats`](super::FlowStats).
@@ -136,7 +144,39 @@ pub(crate) struct TransferCaches<'tcx> {
   /// The rows of the aliases of a place that a mutation of it writes (see
   /// [`FlowAnalysis::written_aliases`]).
   written_alias_keys: Cache<Place<'tcx>, Box<[NormPlace<'tcx>]>>,
+  /// The rows and groups that a strong update of a place clears (see
+  /// [`FlowAnalysis::clear_plan`]).
+  clear_plans: Cache<Place<'tcx>, ClearPlan<'tcx>>,
 }
+
+/// What a strong update of a place clears: the row groups whose members are all
+/// children of the place, and the other children.
+pub(crate) struct ClearPlan<'tcx> {
+  groups: Box<[GroupId]>,
+  keys: Box<[NormPlace<'tcx>]>,
+}
+
+/// The mutations of a call that are applied as one write to a row group: the
+/// mutations `start .. start + len` of its effects.
+#[derive(Debug)]
+struct GroupRun<'tcx> {
+  start: usize,
+  len: usize,
+  id: GroupId,
+  /// Rows in the provenance of some members that the call does not write. The run
+  /// is applied as one write only if they are empty.
+  unwritten: Box<[NormPlace<'tcx>]>,
+}
+
+/// The group runs of the effects of a call.
+struct GroupRuns<'tcx> {
+  /// The mutations of the call, to check that the runs apply to them.
+  batch: *const Mutation<'tcx>,
+  runs: Vec<GroupRun<'tcx>>,
+}
+
+/// The fewest mutations that form a row group.
+const MIN_GROUP: usize = 8;
 
 /// The distinct normalized places of `places`.
 fn distinct_keys<'tcx>(
@@ -200,6 +240,8 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       shared_handles: None,
       counters: TransferCounters::default(),
       caches: TransferCaches::default(),
+      row_groups: Rc::new(RowGroups::none()),
+      group_runs: HashMap::default(),
       seeds: Rc::new(seeds),
     }
   }
@@ -239,6 +281,227 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     self.caches.children_keys.get(&place, |place| {
       distinct_keys(&self.place_info, self.place_info.children(place))
     })
+  }
+
+  /// What a strong update of `place` clears (cached): its children, with the row
+  /// groups whose members are all children of `place` cleared as groups.
+  fn clear_plan(&self, place: Place<'tcx>) -> &ClearPlan<'tcx> {
+    self.caches.clear_plans.get(&place, |place| {
+      let children = self.children_keys(place);
+      if self.row_groups.is_empty() {
+        return ClearPlan {
+          groups: Box::new([]),
+          keys: children.into(),
+        };
+      }
+      let children_set = children.iter().copied().collect::<HashSet<_>>();
+      let mut groups = children
+        .iter()
+        .filter_map(|key| self.row_groups.group_of(key))
+        .collect::<Vec<_>>();
+      groups.sort();
+      groups.dedup();
+      groups.retain(|id| {
+        (self.row_groups.group(*id).members())
+          .iter()
+          .all(|member| children_set.contains(member))
+      });
+      let keys = children
+        .iter()
+        .copied()
+        .filter(|key| {
+          self
+            .row_groups
+            .group_of(key)
+            .is_none_or(|id| !groups.contains(&id))
+        })
+        .collect();
+      ClearPlan {
+        groups: groups.into(),
+        keys,
+      }
+    })
+  }
+
+  /// The group runs of `mutations`, the mutations at `location` (see
+  /// [`build_row_groups`](Self::build_row_groups)).
+  fn group_runs(
+    &self,
+    location: Location,
+    mutations: &[Mutation<'tcx>],
+  ) -> &[GroupRun<'tcx>] {
+    match self.group_runs.get(&location) {
+      Some(runs) if std::ptr::eq(runs.batch, mutations.as_ptr()) => &runs.runs,
+      _ => &[],
+    }
+  }
+
+  /// Finds the row groups of the calls of the body, and which of their mutations
+  /// write them.
+  ///
+  /// In `Recurse` mode, the effects of a call start with a strong update of its whole
+  /// destination (which clears every row under it), followed by the effects on the
+  /// parts of the returned value. A callee returning a large value often writes
+  /// thousands of its leaves with the same inputs, e.g. every field of every variant of
+  /// an error enum. Such a run of mutations gives every leaf the same value: the
+  /// dependencies of the inputs, of the control dependencies, and of the provenance
+  /// of the leaf, which only reads the destination and places under it that the run
+  /// wrote or that nothing but the first write touched. The run is then applied as one
+  /// write to a row group ([`RowMatrix::assign_group`]), with the same result.
+  ///
+  /// Must run before the fixpoint iteration. Populate call effects explicitly:
+  /// the bounded instability check may stop before visiting the remaining calls.
+  pub(crate) fn build_row_groups(&mut self) {
+    if !self.recurse() {
+      return;
+    }
+    for (block, data) in traversal::reverse_postorder(self.body) {
+      let terminator = data.terminator();
+      if matches!(terminator.kind, TerminatorKind::Call { .. }) {
+        self.effects_at(terminator, Location {
+          block,
+          statement_index: data.statements.len(),
+        });
+      }
+    }
+    let mut groups = RowGroups::none();
+    let mut group_runs = HashMap::default();
+    {
+      let call_effects = self.call_effects.borrow();
+      let mut locations = call_effects.keys().copied().collect::<Vec<_>>();
+      locations.sort();
+      for location in locations {
+        let Either::Right(terminator) = self.body.stmt_at(location) else {
+          continue;
+        };
+        if !matches!(terminator.kind, TerminatorKind::Call { .. }) {
+          continue;
+        }
+        let mutations = &call_effects[&location].mutations;
+        let runs = self.find_group_runs(mutations, &mut groups);
+        if !runs.is_empty() {
+          group_runs.insert(location, GroupRuns {
+            batch: mutations.as_ptr(),
+            runs,
+          });
+        }
+      }
+    }
+    self.row_groups = Rc::new(groups);
+    self.group_runs = group_runs;
+  }
+
+  /// The group runs of the effects of a call (see
+  /// [`build_row_groups`](Self::build_row_groups)), adding their groups to `groups`.
+  fn find_group_runs(
+    &self,
+    mutations: &[Mutation<'tcx>],
+    groups: &mut RowGroups<NormPlace<'tcx>>,
+  ) -> Vec<GroupRun<'tcx>> {
+    let exact_return = MutationKind::CalleeEffect(CalleeEffect::Return(Precision::Exact));
+    let Some(whole) = mutations.first() else {
+      return Vec::new();
+    };
+    if mutations.len() <= MIN_GROUP
+      || whole.kind != exact_return
+      || self.place_info.aliases(whole.mutated).len() != 1
+    {
+      return Vec::new();
+    }
+    let root = self.place_info.normalize(whole.mutated);
+    // The rows that the first write clears.
+    let cleared = self
+      .children_keys(whole.mutated)
+      .iter()
+      .copied()
+      .collect::<HashSet<_>>();
+    // The mutations that write or clear each row, besides the first one.
+    let mut writers = HashMap::<NormPlace<'tcx>, SmallVec<[usize; 2]>>::default();
+    for (i, mt) in mutations.iter().enumerate().skip(1) {
+      let mut written = self
+        .written_alias_keys(mt.mutated)
+        .iter()
+        .copied()
+        .chain(self.possibly_shared_rows(mt))
+        .collect::<SmallVec<[_; 8]>>();
+      if mt.status() == MutationStatus::Definitely
+        && self.place_info.aliases(mt.mutated).len() == 1
+      {
+        written.extend(self.children_keys(mt.mutated).iter().copied());
+      }
+      for key in written {
+        writers.entry(key).or_default().push(i);
+      }
+    }
+    // A leaf of the destination that only its own mutation writes.
+    let is_member = |i: usize| {
+      let mt = &mutations[i];
+      let key = self.place_info.normalize(mt.mutated);
+      mt.kind == exact_return
+        && key != root
+        && cleared.contains(&key)
+        && self.seeds.column(&key).is_none()
+        && self.written_alias_keys(mt.mutated) == [key]
+        && self.children_keys(mt.mutated) == [key]
+        && self.possibly_shared_rows(mt).is_empty()
+        && writers[&key].iter().all(|writer| *writer == i)
+    };
+
+    let mut runs = Vec::new();
+    let mut i = 1;
+    while i < mutations.len() {
+      if !is_member(i) {
+        i += 1;
+        continue;
+      }
+      let mut end = i + 1;
+      while end < mutations.len()
+        && mutations[end].inputs == mutations[i].inputs
+        && is_member(end)
+      {
+        end += 1;
+      }
+      if end - i >= MIN_GROUP {
+        let members = (i .. end)
+          .map(|m| self.place_info.normalize(mutations[m].mutated))
+          .collect::<Vec<_>>();
+        let member_set = members.iter().copied().collect::<HashSet<_>>();
+        // The provenance of every member reads the destination (written only by the
+        // first write), members of the run, rows that only the first write cleared,
+        // and other rows under the destination that the call does not write (e.g. the
+        // variant `(_1 as Err)` of a field `((_1 as Err).0)`), whose rows are empty in
+        // practice. If they are, the provenance is the same for every member.
+        let mut unwritten = HashSet::default();
+        let same_provenance = (i .. end).all(|m| {
+          self.influence_keys(mutations[m].mutated).iter().all(|key| {
+            if (*key == root && !writers.contains_key(key))
+              || member_set.contains(key)
+              || (cleared.contains(key) && !writers.contains_key(key))
+            {
+              true
+            } else if key.local() == root.local()
+              && key.projection().starts_with(root.projection())
+              && !writers.contains_key(key)
+            {
+              unwritten.insert(*key);
+              true
+            } else {
+              false
+            }
+          })
+        });
+        if same_provenance && let Some(id) = groups.add(members) {
+          runs.push(GroupRun {
+            start: i,
+            len: end - i,
+            id,
+            unwritten: unwritten.into_iter().collect(),
+          });
+        }
+      }
+      i = end;
+    }
+    runs
   }
 
   /// The distinct rows of the aliases of `place` that a mutation of `place` writes
@@ -399,7 +662,11 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
         } else {
           &[]
         };
-        self.written_alias_keys(mt.mutated).iter().chain(cleared).copied()
+        self
+          .written_alias_keys(mt.mutated)
+          .iter()
+          .chain(cleared)
+          .copied()
           .chain(self.possibly_shared_rows(mt))
       })
       .collect::<HashSet<_>>();
@@ -607,11 +874,31 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       .mutations
       .set(counters.mutations.get() + mutations.len());
 
+    // The mutations are applied in steps: one mutation, or a run of mutations that
+    // write a row group with one value (see `build_row_groups`), whose inputs are
+    // those of its first mutation.
+    let runs = self.group_runs(location, mutations);
+    let mut steps = Vec::with_capacity(mutations.len());
+    let mut next_run = runs.iter().peekable();
+    let mut i = 0;
+    while i < mutations.len() {
+      match next_run.next_if(|run| run.start == i) {
+        Some(run) => {
+          steps.push((i, Some(run)));
+          i += run.len;
+        }
+        None => {
+          steps.push((i, None));
+          i += 1;
+        }
+      }
+    }
+
     // Initialize dependencies to include current location of mutation.
     let mut all_deps = {
       let mut deps = IndexSet::new(state.col_domain());
       seed(location, &mut deps);
-      vec![deps; mutations.len()]
+      vec![deps; steps.len()]
     };
 
     // Add every influence on `input` to `deps`.
@@ -622,8 +909,8 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     };
 
     // Register every explicitly provided input as an input.
-    for (mt, deps) in mutations.iter().zip(&mut all_deps) {
-      for input in &mt.inputs {
+    for ((i, _), deps) in steps.iter().zip(&mut all_deps) {
+      for input in &mutations[*i].inputs {
         add_deps(state, *input, deps);
       }
     }
@@ -647,29 +934,67 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       }
     }
 
-    for (mt, deps) in mutations.iter().zip(&mut all_deps) {
-      // Clear sub-places of mutated place (if sound to do so)
-      if mt.status() == MutationStatus::Definitely
-        && self.place_info.aliases(mt.mutated).len() == 1
+    for ((i, run), deps) in steps.iter().zip(&mut all_deps) {
+      let Some(run) = run else {
+        self.apply_mutation(state, &mutations[*i], deps, &add_deps);
+        continue;
+      };
+      // Every member of the group is a leaf that only its own mutation writes: the
+      // mutation would clear it, and read the same provenance as every other member
+      // if the rows that the call does not write are empty.
+      if run
+        .unwritten
+        .iter()
+        .all(|key| state.row_set(key).inner().is_empty())
       {
-        for key in self.children_keys(mt.mutated) {
-          state.clear_row(key);
+        add_deps(state, mutations[*i].mutated, deps);
+        debug!("    group {:?} with deps {deps:?}", run.id);
+        state.assign_group(self.row_groups.group(run.id), deps);
+      } else {
+        for mt in &mutations[*i .. *i + run.len] {
+          self.apply_mutation(state, mt, &mut deps.clone(), &add_deps);
         }
       }
+    }
+  }
 
-      // Add deps of mutated to include provenance of mutated pointers
-      add_deps(state, mt.mutated, deps);
-
-      debug!("    with deps {deps:?}");
-      for key in self.written_alias_keys(mt.mutated) {
-        state.union_into_row(*key, deps);
+  /// Applies one mutation of [`transfer`](Self::transfer), whose dependencies without
+  /// its provenance are `deps`.
+  fn apply_mutation<C, M>(
+    &self,
+    state: &mut M,
+    mt: &Mutation<'tcx>,
+    deps: &mut IndexSet<C>,
+    add_deps: &impl Fn(&M, Place<'tcx>, &mut IndexSet<C>),
+  ) where
+    C: IndexedValue + std::fmt::Debug + 'static,
+    M: RowMatrix<NormPlace<'tcx>, C>,
+  {
+    // Clear sub-places of mutated place (if sound to do so)
+    if mt.status() == MutationStatus::Definitely
+      && self.place_info.aliases(mt.mutated).len() == 1
+    {
+      let plan = self.clear_plan(mt.mutated);
+      for id in &plan.groups {
+        state.clear_group(self.row_groups.group(*id));
       }
-
-      // Pessimistic analysis only: other handles to the same interior-mutable
-      // state may point to the object that was just written.
-      for row in self.possibly_shared_rows(mt) {
-        state.union_into_row(row, deps);
+      for key in &plan.keys {
+        state.clear_row(key);
       }
+    }
+
+    // Add deps of mutated to include provenance of mutated pointers
+    add_deps(state, mt.mutated, deps);
+
+    debug!("    with deps {deps:?}");
+    for key in self.written_alias_keys(mt.mutated) {
+      state.union_into_row(*key, deps);
+    }
+
+    // Pessimistic analysis only: other handles to the same interior-mutable
+    // state may point to the object that was just written.
+    for row in self.possibly_shared_rows(mt) {
+      state.union_into_row(row, deps);
     }
   }
 
@@ -705,7 +1030,7 @@ impl<'a, 'tcx> Analysis<'tcx> for FlowAnalysis<'a, 'tcx> {
   const NAME: &'static str = "FlowAnalysis";
 
   fn bottom_value(&self, _body: &Body<'tcx>) -> Self::Domain {
-    FlowDomain::new(&self.seeds)
+    FlowDomain::with_groups(&self.seeds, &self.row_groups)
   }
 
   fn initialize_start_block(&self, _body: &Body<'tcx>, state: &mut Self::Domain) {
