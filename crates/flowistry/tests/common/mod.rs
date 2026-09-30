@@ -44,9 +44,7 @@ pub fn slice_with_args(
         })
         .collect();
       let spans = match direction {
-        Direction::Both => {
-          infoflow::compute_focus_spans(&results, targets, &spanner, &[])
-        }
+        Direction::Both => infoflow::compute_focus_spans(&results, targets, &spanner),
         _ => infoflow::compute_dependency_spans(&results, targets, direction, &spanner),
       };
       let mut snippets = spans
