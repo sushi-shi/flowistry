@@ -6,10 +6,10 @@ use flowistry::{
   infoflow::{self, AnalysisSession},
 };
 use itertools::Itertools;
-use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::Span;
+use rustc_span::{BytePos, Span, SpanData};
 use rustc_utils::{
   SpanExt, block_timer,
   mir::{borrowck_facts::get_body_with_borrowck_facts, location_or_arg::LocationOrArg},
@@ -137,7 +137,8 @@ pub(crate) fn focus_with_session<'tcx>(
   // so convert each once instead of once per place.
   let mut table = RangeTable::default();
   let mut range_cache: FxHashMap<Span, Vec<u32>> = FxHashMap::default();
-  let mut location_spans: FxHashMap<LocationOrArg, Vec<Span>> = FxHashMap::default();
+  let mut location_spans: FxHashMap<LocationOrArg, Vec<(SpanData, Span)>> =
+    FxHashMap::default();
   let mut to_ranges = |table: &mut RangeTable, spans: &[Span]| -> Vec<u32> {
     let mut ranges = Vec::new();
     for span in spans {
@@ -158,26 +159,49 @@ pub(crate) fn focus_with_session<'tcx>(
   {
     log::debug!("Slice for {mir_span:?} is {slice:#?}");
 
+    // The slice's spans by start, with the largest end so far: a span is in the slice
+    // if and only if a slice span starting at or before it ends at or after it.
+    let mut starts = slice
+      .iter()
+      .map(|span| {
+        let data = span.data_untracked();
+        (data.lo, data.hi)
+      })
+      .collect::<Vec<_>>();
+    starts.sort_unstable();
+    let ends = starts
+      .iter()
+      .scan(BytePos(0), |end, (_, hi)| {
+        *end = (*end).max(*hi);
+        Some(*end)
+      })
+      .collect::<Vec<_>>();
+    let in_slice = |data: &SpanData| {
+      let before = starts.partition_point(|(lo, _)| *lo <= data.lo);
+      before > 0 && ends[before - 1] >= data.hi
+    };
+
     // `targets` has an entry per location of each place, and the rows of places
     // overlap: visit each influencing location once, and report each span once.
-    let slice_data = slice.iter().map(|span| span.data()).collect::<Vec<_>>();
+    let mut seen = FxHashSet::default();
     let mut direct_influence = Vec::new();
     for location in direct
       .lookup(targets.iter().map(|(target, _)| *target))
       .iter()
     {
       let spans = location_spans.entry(*location).or_insert_with(|| {
-        spanner.location_to_spans(*location, body, EnclosingHirSpans::None)
+        spanner
+          .location_to_spans(*location, body, EnclosingHirSpans::None)
+          .into_iter()
+          .map(|span| (span.data_untracked(), span))
+          .collect()
       });
-      direct_influence.extend(spans.iter().filter(|span| {
-        let span = span.data();
-        slice_data
-          .iter()
-          .any(|slice_span| slice_span.contains(span))
-      }));
+      for (data, span) in spans.iter() {
+        if in_slice(data) && seen.insert(*span) {
+          direct_influence.push(*span);
+        }
+      }
     }
-    direct_influence.sort_unstable();
-    direct_influence.dedup();
 
     let maybe_slice = maybe_relevant
       .as_ref()
