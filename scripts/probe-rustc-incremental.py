@@ -69,20 +69,27 @@ def main():
     args = parser.parse_args()
     if args.repeat < 1:
         parser.error('--repeat must be positive')
-    files, provenance = FILES, None
+    files, provenance, symlinks = FILES, None, {}
     package, target = 'matrix_fixture', 'matrix_fixture'
     if args.project_source:
         if not args.source:
             parser.error('--project-source requires --source')
+        if not (args.project_source / 'Cargo.toml').is_file():
+            parser.error('--project-source must contain Cargo.toml')
+        source_root = args.project_source.resolve()
         files = {}
         for directory, dirs, names in os.walk(args.project_source):
             dirs[:] = [name for name in dirs if name not in ('target', '.git')]
-            if any((Path(directory) / name).is_symlink() for name in dirs):
-                parser.error('real probe requires a source tree without directory symlinks')
-            for name in names:
+            links = [name for name in dirs if (Path(directory) / name).is_symlink()]
+            dirs[:] = [name for name in dirs if name not in links]
+            for name in names + links:
                 path = Path(directory) / name
                 if path.is_symlink():
-                    parser.error('real probe requires a source tree without symlinks')
+                    link = os.readlink(path)
+                    if Path(link).is_absolute() or not path.resolve().is_relative_to(source_root):
+                        parser.error(f'probe source symlink escapes the copied tree: {path}')
+                    symlinks[str(path.relative_to(args.project_source))] = link
+                    continue
                 if name == '.flowistry-launch.lock':
                     continue
                 files['project/' + str(path.relative_to(args.project_source))] = path.read_bytes()
@@ -90,9 +97,14 @@ def main():
         package = manifest['package']['name']
         target = manifest.get('lib', {}).get('name', package.replace('-', '_'))
         provenance = {'source':str(args.project_source.resolve()), 'package':package,
-                      'files_sha256':{name:hashlib.sha256(value).hexdigest() for name,value in files.items()}}
+                      'files_sha256':{name:hashlib.sha256(value).hexdigest() for name,value in files.items()},
+                      'symlinks':symlinks}
     kinds = args.kind or (['lib'] if args.project_source else ['lib', 'bin'])
     matrix = Matrix(args.backend_dir, args.work_dir, files=files)
+    for name, link in symlinks.items():
+        destination = matrix.project / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.symlink_to(link)
     report = {'schema': 1, 'experiment_build': build_metadata(args.backend_dir),
               'reference_build': build_metadata(args.reference_dir),
               'harness_sha256': file_digest(Path(__file__)), 'records': [],
