@@ -4,7 +4,7 @@ use flowistry::{
 };
 use indexical::bitset::rustc::IndexMatrix;
 use rustc_middle::mir::{Mutability, Place};
-use rustc_utils::mir::location_or_arg::LocationOrArg;
+use rustc_utils::mir::location_or_arg::{LocationOrArg, index::LocationOrArgSet};
 
 pub struct DirectInfluence<'a, 'tcx> {
   place_info: &'a PlaceInfo<'a, 'tcx>,
@@ -48,18 +48,17 @@ impl<'a, 'tcx> DirectInfluence<'a, 'tcx> {
     }
   }
 
-  pub fn lookup(&self, target: Place<'tcx>) -> Vec<LocationOrArg> {
-    let aliases = self.place_info.reachable_values(target, Mutability::Not);
-    aliases
-      .iter()
-      .flat_map(|target_alias| {
-        self
-          .influence
-          .row_set(target_alias)
-          .iter()
-          .copied()
-          .collect::<Vec<_>>()
-      })
-      .collect::<Vec<_>>()
+  /// The locations that directly influence any of `targets`, each once.
+  pub fn lookup(
+    &self,
+    targets: impl IntoIterator<Item = Place<'tcx>>,
+  ) -> LocationOrArgSet {
+    let mut locations = LocationOrArgSet::new(self.place_info.location_domain());
+    for target in targets {
+      for alias in self.place_info.reachable_values(target, Mutability::Not) {
+        locations.union(self.influence.row_set(alias));
+      }
+    }
+    locations
   }
 }

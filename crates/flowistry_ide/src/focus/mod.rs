@@ -6,6 +6,7 @@ use flowistry::{
   infoflow::{self, AnalysisSession},
 };
 use itertools::Itertools;
+use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
@@ -116,8 +117,8 @@ pub(crate) fn focus_with_session<'tcx>(
   let slices_timer = Instant::now();
   // The same spans (and direct-influence locations) recur across the places of a body,
   // so convert each once instead of once per place.
-  let mut range_cache: HashMap<Span, Vec<CharRange>> = HashMap::new();
-  let mut location_spans: HashMap<LocationOrArg, Vec<Span>> = HashMap::new();
+  let mut range_cache: FxHashMap<Span, Vec<CharRange>> = FxHashMap::default();
+  let mut location_spans: FxHashMap<LocationOrArg, Vec<Span>> = FxHashMap::default();
   let mut to_ranges = |spans: &[Span]| -> Vec<CharRange> {
     let mut ranges = Vec::new();
     for span in spans {
@@ -137,20 +138,26 @@ pub(crate) fn focus_with_session<'tcx>(
   {
     log::debug!("Slice for {mir_span:?} is {slice:#?}");
 
+    // `targets` has an entry per location of each place, and the rows of places
+    // overlap: visit each influencing location once, and report each span once.
+    let slice_data = slice.iter().map(|span| span.data()).collect::<Vec<_>>();
     let mut direct_influence = Vec::new();
-    for location in targets
+    for location in direct
+      .lookup(targets.iter().map(|(target, _)| *target))
       .iter()
-      .flat_map(|(target, _)| direct.lookup(*target))
     {
-      let spans = location_spans.entry(location).or_insert_with(|| {
-        spanner.location_to_spans(location, body, EnclosingHirSpans::None)
+      let spans = location_spans.entry(*location).or_insert_with(|| {
+        spanner.location_to_spans(*location, body, EnclosingHirSpans::None)
       });
-      direct_influence.extend(
-        spans
+      direct_influence.extend(spans.iter().filter(|span| {
+        let span = span.data();
+        slice_data
           .iter()
-          .filter(|span| slice.iter().any(|slice_span| slice_span.contains(**span))),
-      );
+          .any(|slice_span| slice_span.contains(span))
+      }));
     }
+    direct_influence.sort_unstable();
+    direct_influence.dedup();
 
     let maybe_slice = maybe_relevant
       .as_ref()
