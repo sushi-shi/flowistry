@@ -18,7 +18,7 @@ share one package source, lock file, CI suite and PR chain. See
 
 | Step | State | Evidence / next gate |
 |---|---|---|
-| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Full #17/integrated coverage: 2,827 equal successful pairs, 48 paired benign selections and five reference-OOM/integrated-success outcomes; see [combined-corpus-results.md](combined-corpus-results.md). Independent reference coverage is complete but five checks remain resource-limited. The legacy file-cache run completed with 2,878 equal successes and two decoder failures; the filename-fixed coordinator candidate now passes all 2,880 cache-off/refresh pairs. Warm-cache and final-tip gates remain. |
+| 1. Combined validation | In progress, [#41](https://github.com/sushi-shi/flowistry/pull/41) | Full #17/integrated coverage: 2,827 equal successful pairs, 48 paired benign selections and five reference-OOM/integrated-success outcomes; see [combined-corpus-results.md](combined-corpus-results.md). Independent reference coverage is complete but five checks remain resource-limited. The legacy file-cache run completed with 2,878 equal successes and two decoder failures; the filename-fixed coordinator candidate now passes all 2,880 cache-off/refresh pairs. The coordinator warm-cache gate also passes all 2,880 pairs. Final-tip gates remain. |
 | 2. Performance baseline | In progress, [#42](https://github.com/sushi-shi/flowistry/pull/42) | Measurement tooling and 42 total harness regressions pass; real interleaved perf and isolated-replay probes work. Actual immediate-base, project and save measurements and budgets remain pending; see [measurement-progress.md](measurement-progress.md). |
 | 3. Recurse row groups | Full Recurse equality passed, [#43](https://github.com/sushi-shi/flowistry/pull/43); acceptance pending | 1,416 equal successful pairs and 24 matching benign selections cover all locked Recurse positions. 107 core tests pass with engine-diff/shadow-eager. Full reference and quiet stress performance gates remain; see [recurse-row-groups.md](recurse-row-groups.md). |
 | 4. Seed rows | Full corpus equality passed, [#44](https://github.com/sushi-shi/flowistry/pull/44); acceptance pending | All 2,880 locked selections agree: 2,832 successful pairs and 48 matching benign selections. 108 core tests pass; enhanced reference and quiet seed-construction/stress measurements remain. See [seed-row-experiment.md](seed-row-experiment.md). |
@@ -29,7 +29,7 @@ share one package source, lock file, CI suite and PR chain. See
 | 9. Project command | Implemented in [#51](https://github.com/sushi-shi/flowistry/pull/51) and [#54](https://github.com/sushi-shi/flowistry/pull/54); acceptance pending | Explicit Cargo targets, portable inventories and body workers feed a streaming coordinator with priorities, cancellation and bounded workers. All 16 coordinator and 14 worker scenarios also pass at the #56 candidate. Large-project and performance gates remain. See [coordinator evidence](project-coordinator.md). |
 | 10. Neovim background work | Implemented in [#55](https://github.com/sushi-shi/flowistry/pull/55); acceptance pending | Candidate `24ed53ecb` passes all five package checks, 323 frontend assertions, 14 backend worker scenarios and real-worker editor tests in both modes, including actual packaged cancellation. Global worker and editor-retention bounds are enforced; large-project/performance and final gates remain. See [background notes](neovim-background.md). |
 | 11. Incremental saves | Implemented increments [#56](https://github.com/sushi-shi/flowistry/pull/56) and [#57](https://github.com/sushi-shi/flowistry/pull/57); acceptance pending | #56 passes eight save scenarios and all 84 existing edit cases with selective solver work. #57 adds compiler-input editor invalidation: 366 frontend assertions, 31 live-editor assertions, 20 IDE tests and 16 publication cases pass. The [compiler-state experiment](rustc-incremental-experiment.md) passes 510 fresh-oracle comparisons but all measured variants use more instructions; none is retained. Quiet save measurements and expanded final edit/concurrency gates remain. See [save scheduling](dependency-save-plan.md) and [input invalidation](editor-input-invalidation.md). |
-| 12. Layout reuse | Pending | Proven-safe cases only, compiler fallback otherwise. |
+| 12. Layout reuse | Implemented candidate above #58; final gates pending | 46 layout/fallback cases, 16 publication cases, 84 edit/concurrency cases, 168 workspace tests and 18 live-editor assertions pass. Eligible edits relocate with zero compiler invocations; source-sensitive cases fall back. See [proof and limits](safe-layout-reuse.md). |
 | 13. Final release gates | Pending | Full corpus, edits, packaged editor and before/after evidence. |
 
 ## Active validation and retained evidence
@@ -238,3 +238,22 @@ Finalized reuse still adds 1.4–5.7% instructions on the two real-project seman
 cache cases. No runtime compiler change is retained; see
 [the experiment](rustc-incremental-experiment.md) and its exact raw provenance.
 Continue with step 12 and the outstanding gates in steps 1–4, 6–11 and 13.
+
+
+## Layout continuation and terminal warm-cache gate
+
+Work continues directly above #58 in `/tmp/flowistry-layout-reuse`, branch
+`feat/safe-layout-reuse`. The runtime candidate is `e25fe7ecb`, frozen as
+`layout-reuse-v2`. See [safe layout reuse](safe-layout-reuse.md) for eligibility,
+explicit conservative fallbacks and the new editor/compiler evidence.
+#58's final paired-package CI passed before this feature began.
+
+The h19 coordinator warm-cache job is now terminal and audited. All 2,880 locked
+responses succeed and agree, with no differences, status changes or failures.
+The comparison reports 2,511 cache hits, 321 misses and 1,998 snapshot responses;
+48 successful selections have no analyzed body. Its exact coverage and manifest
+are in [the warm-cache report](measurements/coordinator-cache-warm-complete.json).
+Both earlier coordinator corpus jobs have ended; their prepared roots are no
+longer reserved. Preserve their raw reports and immutable candidate. This is
+coverage for `2fae9dd12`, not the newer layout tip, and is not quiet performance
+evidence. Earlier statements that either job is running are historical.

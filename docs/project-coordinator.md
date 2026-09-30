@@ -102,6 +102,7 @@ in both modes, with no output differences or status changes. The
 [coverage report](measurements/coordinator-cache-refresh-complete.json) retains
 build/manifest provenance and the raw report checksum. Its 2,832 analyzed misses
 per side exclude 48 successful selections without an analyzed body. The separate
-warm-cache corpus remains running. These runs use 6 GiB per request and two
+[warm-cache corpus](measurements/coordinator-cache-warm-complete.json) also passes
+all 2,880 comparisons, with 1,998 snapshot responses and no output/status changes. These runs use 6 GiB per request and two
 workers; timings collected under host load do not establish performance gates,
 and later stack changes still require final-tip validation.

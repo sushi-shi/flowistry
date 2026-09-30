@@ -238,7 +238,10 @@ pub(super) fn relocate(entry: &mut Entry, current: Snapshot) -> Result<(), &'sta
   }
   let mut sources = BTreeMap::new();
   let mut replacements = BTreeMap::new();
-  let mut size = 0;
+  let mut size: usize = proof.sources.values().map(String::len).sum();
+  if size > MAX_SOURCES {
+    return Err("aggregate source size");
+  }
   for (path, old) in &entry.snapshot {
     let now = current.get(path).ok_or("input membership changed")?;
     if old.as_ref().map(|v| &v.digest) == now.as_ref().map(|v| &v.digest) {
@@ -251,7 +254,7 @@ pub(super) fn relocate(entry: &mut Entry, current: Snapshot) -> Result<(), &'sta
       return Err("source size");
     }
     let after = fs::read_to_string(path).map_err(|_| "unreadable source")?;
-    size += after.len();
+    size = size - before.len() + after.len();
     if size > MAX_SOURCES {
       return Err("aggregate source size");
     }
@@ -342,6 +345,55 @@ mod tests {
     ] {
       assert!(tokens(source).is_err(), "{source}");
     }
+  }
+
+  #[test]
+  fn input_change_after_proof_snapshot_rejects_publication() {
+    let root =
+      env::temp_dir().join(format!("flowistry-layout-race-{}", std::process::id()));
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("source.rs");
+    let config = root.join("input.txt");
+    let before = "fn f() {}\n";
+    fs::write(&source, before).unwrap();
+    fs::write(&config, "before").unwrap();
+    let mut entry = Entry {
+      key: "scope".into(),
+      package: "package".into(),
+      workspace: root.clone(),
+      roots: vec![],
+      excluded: vec![],
+      files: vec![source.clone(), config.clone()],
+      snapshot: BTreeMap::new(),
+      responses: vec![],
+      layout_blocked: None,
+      layout: Some(Proof {
+        sources: [(source.clone(), before.into())].into(),
+      }),
+      provenance: Some(Provenance {
+        compiler: "compiler".into(),
+        crate_name: "crate".into(),
+        crate_types: vec![],
+        target: "target".into(),
+        configuration: "configuration".into(),
+        mode: "SigOnly".into(),
+        bodies: vec![],
+        layout_safe: true,
+      }),
+      published: None,
+      checksum: String::new(),
+    };
+    entry.snapshot = entry.snapshot().unwrap();
+    let original = entry.revision();
+    fs::write(&source, format!("\n{before}")).unwrap();
+    let current = entry.snapshot().unwrap();
+    fs::write(&config, "changed after initial snapshot").unwrap();
+    assert_eq!(
+      relocate(&mut entry, current),
+      Err("inputs changed during relocation")
+    );
+    assert_eq!(entry.revision(), original);
+    fs::remove_dir_all(root).unwrap();
   }
 
   #[test]
