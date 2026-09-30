@@ -5,23 +5,26 @@ The Neovim plugin has since moved into `nvim/`; see
 [the migration guide](neovim-monorepo.md) for the shared package and review chain.
 The latest continuation is [#60](https://github.com/sushi-shi/flowistry/pull/60),
 `test/final-acceptance` in `/tmp/flowistry-acceptance`, based directly on #59.
-It adds a guarded queue for actual predecessor measurements and records the
-final reference build. Its package CI passed at `8872856ed`; correctness and
-performance acceptance are still pending. New work extends this unified tip.
-The runtime remains frozen at `3ddebc5e3` as `layout-reuse-v3`; focused tests and
-all five paired Nix checks pass. Eligible layout saves now relocate without
-compiler startup; source-sensitive cases fall back. #58's compiler-state
-experiment remains rejected on measured instruction regressions.
+The broad implementation/acceptance plan is **paused at the user's request**.
+The measurement queue and both layout-candidate corpus runs were stopped on
+2026-09-30; partial checkpoints remain evidence, not completed acceptance.
+Do not restart these jobs without a new request. Earlier live-process descriptions
+below are historical.
 
-Both coordinator-era full cache corpus runs passed all 2,880 comparisons each.
-Two new full runs now validate the layout candidate using separate engine/h19
-prepared roots; see [current progress](continuation-progress.md) for exact
-artifacts and process observations. Earlier process/worktree descriptions below
-are historical. The remaining work includes final/reference/resource gates,
-quiet performance measurements and actual budgets; the complete plan is active.
-The live measurement queue waits for both corpus reports and then a quiet host.
-Do not start a duplicate or change its pinned scripts/inputs; see
-[the queue policy](acceptance-measurement-queue.md).
+The subsequent stack review reproduced three bugs, now fixed in their owning PRs:
+closure-boundary cache selection (#2), foreground process cancellation (#53), and
+source snapshot retention after buffer unload (#57). Ordinary parent merges carry
+the fixes through #60. The unfinished project-measurement harness is complete in
+#60 and passes a three-body fixture in both modes. See
+[the fix and validation record](review-fixes.md) and
+[project measurement usage](project-measurements.md).
+
+The fixed runtime is archived as `review-fixes-v1`, built from `9ba7f274a` (#59);
+#60 has the same backend and editor sources. Focused validation passes, including
+389 frontend assertions, 36 cache process cases and the original real compiler
+cancellation reproduction. Full corpus/performance/resource acceptance remains
+unestablished. #58's compiler-state experiment remains rejected on measured
+instruction regressions.
 
 Master remains `f8b5582b7` (#18); nothing was merged. The canonical review order
 is [docs/review-chain.md](review-chain.md), also linked from every active PR.

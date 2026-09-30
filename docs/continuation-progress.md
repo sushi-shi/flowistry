@@ -1,7 +1,11 @@
 # Continuation implementation progress
 
-The [full plan](continuation-plan.md) remains the objective. No milestone is
-complete merely because tooling or a subset of its tests passes.
+The [full plan](continuation-plan.md) is **paused at the user's request**. The
+queue and both candidate corpus runs were stopped on 2026-09-30; do not resume
+from the historical live-job descriptions below. No milestone is complete merely
+because tooling or a subset of its tests passes. The subsequent review fixes and
+finished project-measurement harness are recorded in [review-fixes.md](review-fixes.md).
+The table below preserves outstanding acceptance gates, not an active work queue.
 
 The live highlighting report was addressed after #51 in
 [#52](https://github.com/sushi-shi/flowistry/pull/52) and

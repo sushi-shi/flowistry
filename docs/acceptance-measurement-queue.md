@@ -1,5 +1,11 @@
 # Quiet optimization acceptance queue
 
+**Current state (2026-09-30): stopped at the user's request.** The queue and its
+prerequisite corpus runs are not active. Preserve their pinned inputs and partial
+artifacts; do not restart from the operational instructions below without a new
+request. See [the handoff](handoff.md).
+
+
 The queue prepares the still-open row-group/seed retention gates and part of the
 performance baseline, directly above #59. It does not complete those gates until
 its measured results are inspected. It does not replace whole-project, editor

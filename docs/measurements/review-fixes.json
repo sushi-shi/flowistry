@@ -1,0 +1,98 @@
+{
+  "schema": 1,
+  "runtime_build": {
+    "binaries": {
+      "cargo-flowistry": "28617222f2157ad3b1c41541b330babd15cceddfa78c6a3812bdb92a43e0d3a9",
+      "flowistry-driver": "0a751581c96edf840604a639152a3b85a720d45542923085b368d22142aed6fa"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T17:00:24.671680+00:00",
+    "revision": "9ba7f274a83fd5162974c078835911ec94ae06cb",
+    "rustflags": "",
+    "tree": "24a95511702ddbb64c86abd0caf2c18e91fb8f53"
+  },
+  "tests": {
+    "nvim_assertions": 389,
+    "python_tests": 67,
+    "fast_cache_process_cases": 36,
+    "compiler_free_fast_cache_cases": 18
+  },
+  "fixes": {
+    "2": "918917d92afc7faee0d64c933e41577e8a4e13ab",
+    "53": "ff195ac557d1b1fa4cbeab73628dc19a42e65c4c",
+    "57": "e73272889fff3634d430c0e0c95ff9ba01943082"
+  },
+  "broad_acceptance": "paused by user; not established",
+  "project_probes": {
+    "SigOnly": {
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/project-measure-probe-v3/SigOnly/report.json",
+      "sha256": "66cf743de7c433e4529bf2aa45ea0dac3e332d6e776a497babe3842a4cb51243",
+      "status": "passed",
+      "bodies": 3,
+      "fresh_oracles": 3,
+      "resource_observations_complete": false,
+      "resource_acceptance": "not-established: no quiet-host policy or measured budget in this harness",
+      "runs": [
+        {
+          "name": "populate",
+          "missing_memory_observations": 0,
+          "compiler_invocations": 3
+        },
+        {
+          "name": "warm-1",
+          "missing_memory_observations": 3,
+          "compiler_invocations": 0
+        }
+      ]
+    },
+    "Recurse": {
+      "report": "/home/sheep/Projects/flowistry/target/continuation-validation/project-measure-probe-v3/Recurse/report.json",
+      "sha256": "48e89b9ab7a220035f80003739871c92598c31091167c3757d2ef9a16456a9a8",
+      "status": "passed",
+      "bodies": 3,
+      "fresh_oracles": 3,
+      "resource_observations_complete": false,
+      "resource_acceptance": "not-established: no quiet-host policy or measured budget in this harness",
+      "runs": [
+        {
+          "name": "populate",
+          "missing_memory_observations": 1,
+          "compiler_invocations": 3
+        },
+        {
+          "name": "warm-1",
+          "missing_memory_observations": 3,
+          "compiler_invocations": 0
+        }
+      ]
+    }
+  },
+  "real_compiler_cancellation": {
+    "report": "/tmp/flowistry-review-fixes-repros/cancellation/report.json",
+    "sha256": "652152bb9fdb3cc02123d4b2cafbbf115146bf220b43f68e9eee9b32071860d8",
+    "result": {
+      "launcher_pid": 769375,
+      "callback_after_cancel": false,
+      "probe_ok": true,
+      "descendant_alive_after_cancel": false,
+      "wrapper": {
+        "pid": 769415,
+        "start": "98743307"
+      }
+    }
+  }
+}

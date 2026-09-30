@@ -1,9 +1,11 @@
 # Measurement implementation and evidence
 
 The measurement harness is implemented; continuation-plan step 2 is not complete.
-The combined corpus gate is still running. Immediate-base optimization comparisons,
-quiet representative/stress measurements, project/save distributions and measured
-resource budgets remain required.
+The broad acceptance plan and corpus/measurement jobs are paused at the user's
+request. Immediate-base optimization comparisons, quiet representative/stress
+measurements, project/save distributions and measured resource budgets remain
+unestablished. The [project harness](project-measurements.md) is now complete and
+functionally verified on a tiny fixture; this does not establish those gates.
 
 The focused real-executable proof used identical frozen integrated binaries
 (`2630ee356`) on locked `either` position `src/into_either.rs:58:8`, SigOnly, cache
