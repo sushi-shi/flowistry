@@ -114,6 +114,71 @@
       "ref": "main",
       "package": "crates/bevy_ecs",
       "rev": "f29c203ad5c785014a30dcb76844dc17bc05d8fb"
+    },
+    {
+      "name": "brains",
+      "git": "https://github.com/sushi-shi/brains",
+      "ref": "main",
+      "root": "open/stratum-proxy",
+      "package": ".",
+      "rev": "b8decc39a4ebd23b026300677d26432bd0986865"
+    },
+    {
+      "name": "local_lru",
+      "git": "https://github.com/a-agmon/LocalLRU",
+      "ref": "main",
+      "package": ".",
+      "rev": "9c30bafbc686141731d047e601b028da75f6ba8b"
+    },
+    {
+      "name": "cargo-inspect",
+      "git": "https://github.com/mre/cargo-inspect",
+      "ref": "master",
+      "package": ".",
+      "rev": "80cbb580019818ca8026700eecef17ff8e10fc7d",
+      "env": {
+        "CFLAGS": "-std=gnu17"
+      }
+    },
+    {
+      "name": "biodiff",
+      "git": "https://github.com/8051Enthusiast/biodiff",
+      "ref": "main",
+      "package": ".",
+      "submodules": true,
+      "rev": "7df6377aa2d260e7bb754f51f0c2f9bc601fc768"
+    },
+    {
+      "name": "objdiff",
+      "git": "https://github.com/encounter/objdiff",
+      "ref": "main",
+      "package": "objdiff-cli",
+      "rev": "fba10a617154f19b3fc25c8817dc81f81d8489b5"
+    },
+    {
+      "name": "boxxy",
+      "git": "https://github.com/queer/boxxy",
+      "ref": "mistress",
+      "package": ".",
+      "rev": "4bd93773f0de54902f88292c3c170eab731589f9",
+      "env": {
+        "CFLAGS": "-std=gnu17"
+      }
+    },
+    {
+      "name": "sudo-rs",
+      "git": "https://github.com/trifectatechfoundation/sudo-rs",
+      "ref": "main",
+      "package": ".",
+      "rev": "bc73403512aa2cdfeeaaf720960c9b9fc04e3f62"
+    },
+    {
+      "name": "bosminer",
+      "git": "https://github.com/sushi-shi/brains",
+      "ref": "main",
+      "root": "open/bosminer",
+      "package": "bosminer",
+      "rev": "b8decc39a4ebd23b026300677d26432bd0986865"
     }
   ]
 }
