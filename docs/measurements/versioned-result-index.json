@@ -1,0 +1,2098 @@
+{
+  "binaries": {
+    "cargo-flowistry": "9999414b717ce332609f6e75e2623789f1ffc75b5ba8badc4aad590f4d1096d2",
+    "flowistry-driver": "543d3f79399d01cdcda63fc937320436375a8f15fec1d7a8da0cb784d73559bc"
+  },
+  "build": {
+    "binaries": {
+      "cargo-flowistry": "9999414b717ce332609f6e75e2623789f1ffc75b5ba8badc4aad590f4d1096d2",
+      "flowistry-driver": "543d3f79399d01cdcda63fc937320436375a8f15fec1d7a8da0cb784d73559bc"
+    },
+    "cargo": "cargo 1.97.0-nightly (eb9b60f1f 2026-04-24)",
+    "cargo_encoded_rustflags": "",
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "--release",
+      "-p",
+      "flowistry_ide",
+      "-j",
+      "4"
+    ],
+    "compiler": "rustc 1.97.0-nightly (f53b654a8 2026-04-30)\nbinary: rustc\ncommit-hash: f53b654a8882fd5fc036c4ca7a4ff41ce32497a6\ncommit-date: 2026-04-30\nhost: x86_64-unknown-linux-gnu\nrelease: 1.97.0-nightly\nLLVM version: 22.1.4",
+    "features": "",
+    "profile": {},
+    "recorded_at": "2026-09-30T04:35:10.696665+00:00",
+    "revision": "235760027b3945bb54005e39182bdc2eaa0d69ef",
+    "rustflags": "",
+    "tree": "434d2d5ff583b7714a3b456c0fcd3a6b36ba8c58"
+  },
+  "edit_matrix": {
+    "cases": 84,
+    "coverage_complete": true,
+    "harness": {
+      "incremental_matrix.py": "7ba2b1efef68432bbbc9aad28e295b886c5cd3085aa79a072c9f2ec486967f52",
+      "incremental_projects.py": "d791bf5710732cf7cfe0716d2052a5bfeb643c44114f2deb132bb29355f8694b",
+      "incremental_races.py": "a247abfb9b25498cf3e883d16c84fbd9319101148dce88335f37eae53ef90463",
+      "smoke-real-crates.py": "889af7a25db997d87ff86dc54542a2cb57a398373fb2285acaeeeaea2c400276",
+      "test-incremental-matrix.py": "3a03345a47d474bea7a8f583751a0c46c2570070b5d26fce252599dbd0daa826"
+    },
+    "passed": true
+  },
+  "evidence": {
+    "edits": {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/index-edit-matrix-final.json",
+      "sha256": "25c302f426c62bcfb3934890ffbd93be469eb936740a5c7022b74d58c19b0849"
+    },
+    "final_ide": {
+      "path": "/tmp/flowistry-result-index-ide-final.log",
+      "sha256": "277898be66db3af7fd62200d8754dc91f178be64548688e1662148849dac8153"
+    },
+    "focus": {
+      "path": "/tmp/flowistry-index-focus-final.log",
+      "sha256": "f3d2f7653b6fe2fea363166b1fecf527095980d607f88771440aaf5c65050698"
+    },
+    "publication": {
+      "path": "/home/sheep/Projects/flowistry/target/continuation-validation/result-index-final.json",
+      "sha256": "3ce5dc586bca95e7f8c4762cb7816676dc4387048f2864a58c63fc572b92f43e"
+    },
+    "snapshot": {
+      "path": "/tmp/flowistry-index-fast-final.log",
+      "sha256": "dfa47b19776008c32e3fadca3d3e698b12aad138844ec715da75bb72f3099aa8"
+    },
+    "workspace": {
+      "path": "/tmp/flowistry-result-index-workspace.log",
+      "sha256": "344b61de3bc8b87bf1a24901f8aceabeff9a988d5697f31109fa8990afe24cd4"
+    }
+  },
+  "harness": {
+    "incremental_matrix.py": "7ba2b1efef68432bbbc9aad28e295b886c5cd3085aa79a072c9f2ec486967f52",
+    "test-result-index.py": "345cc5b6351c4dc641ad631d06ff89c297e14b2e4357e63d04aae6318ec321f3"
+  },
+  "legacy": {
+    "compile_error_rejection": true,
+    "semantic_cases": 51,
+    "snapshot_cases": 32,
+    "snapshot_hits_without_compiler": 17
+  },
+  "passed": true,
+  "pending": [
+    "full final corpus/cache gates",
+    "project and editor integration",
+    "quiet performance and save-latency measurements"
+  ],
+  "publication_cases": [
+    {
+      "case": "layout",
+      "error": null,
+      "mode": "SigOnly",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "03f78bbcc7d9f671a12bb9776d63e35181bee5acc4330f21b23d6588b010f26d",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "ac47405a8c95dc34e982b096e41a4c49",
+            "revision": "Fingerprint(76852776377040064, 1251256685669073882)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "c7cce109f78ddad7c50ff15bb29ae120",
+            "revision": "Fingerprint(4079029018530470809, 5597557503854579063)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "03f78bbcc7d9f671a12bb9776d63e35181bee5acc4330f21b23d6588b010f26d",
+          "solved_bodies": []
+        },
+        "edited": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "c7cce109f78ddad7c50ff15bb29ae120",
+            "revision": "Fingerprint(4079029018530470809, 5597557503854579063)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "03f78bbcc7d9f671a12bb9776d63e35181bee5acc4330f21b23d6588b010f26d",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "03f78bbcc7d9f671a12bb9776d63e35181bee5acc4330f21b23d6588b010f26d",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "ac47405a8c95dc34e982b096e41a4c49",
+            "revision": "Fingerprint(76852776377040064, 1251256685669073882)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "concurrent-bodies",
+      "error": null,
+      "mode": "SigOnly",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "6ffc76c1cd187b0bd5e11125d67fd4e3",
+            "revision": "Fingerprint(11418908087090007072, 17418964090076410687)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "6ffc76c1cd187b0bd5e11125d67fd4e3",
+            "revision": "Fingerprint(11418908087090007072, 17418964090076410687)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "unrelated": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "6ffc76c1cd187b0bd5e11125d67fd4e3",
+            "revision": "Fingerprint(11418908087090007072, 17418964090076410687)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "388cf46fe531fc34e03024cb9f6e00fd366bf21b98b2db1d55f958e845cfe96a",
+          "solved_bodies": []
+        },
+        "unrelated_fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "388cf46fe531fc34e03024cb9f6e00fd366bf21b98b2db1d55f958e845cfe96a",
+          "solved_bodies": [
+            [
+              "focus",
+              "unrelated"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "6ffc76c1cd187b0bd5e11125d67fd4e3",
+            "revision": "Fingerprint(11418908087090007072, 17418964090076410687)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        },
+        "writer0": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "6ffc76c1cd187b0bd5e11125d67fd4e3",
+            "revision": "Fingerprint(11418908087090007072, 17418964090076410687)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "writer1": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "6ffc76c1cd187b0bd5e11125d67fd4e3",
+            "revision": "Fingerprint(11418908087090007072, 17418964090076410687)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "388cf46fe531fc34e03024cb9f6e00fd366bf21b98b2db1d55f958e845cfe96a",
+          "solved_bodies": [
+            [
+              "focus",
+              "unrelated"
+            ]
+          ]
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "superseded",
+      "error": null,
+      "mode": "SigOnly",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "cc9b6ef97b48aed58f26338553c93e18",
+            "revision": "Fingerprint(3353294538495719595, 14656439190831622884)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "25161e562bd51eb1c4cb4dfd28c9efc8",
+            "revision": "Fingerprint(6636405896889246207, 11259704556159428932)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "obsolete": {
+          "compiler_invocations": 1,
+          "exit_code": 75,
+          "publication": {
+            "generation": "5490bd03b0664382d7d1330a228cf232",
+            "revision": "Fingerprint(12779988694444975608, 4949849339340787120)",
+            "schema": 1,
+            "status": "superseded"
+          },
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "cc9b6ef97b48aed58f26338553c93e18",
+            "revision": "Fingerprint(3353294538495719595, 14656439190831622884)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        },
+        "winner": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "25161e562bd51eb1c4cb4dfd28c9efc8",
+            "revision": "Fingerprint(6636405896889246207, 11259704556159428932)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "canceled",
+      "error": null,
+      "mode": "SigOnly",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "2884dbd516c971b3db6772c9a999ebb7",
+            "revision": "Fingerprint(1597969054161030983, 4328957413933447333)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "ba9b5e69c718a59d759476634b925c6c",
+            "revision": "Fingerprint(8869827202742961517, 6634046106269303454)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "obsolete": {
+          "compiler_invocations": 1,
+          "exit_code": 75,
+          "publication": {
+            "generation": "d3b067536ff3624c84969235fd98f83d",
+            "revision": "Fingerprint(1774544733192437014, 5984161612776781465)",
+            "schema": 1,
+            "status": "superseded"
+          },
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "2884dbd516c971b3db6772c9a999ebb7",
+            "revision": "Fingerprint(1597969054161030983, 4328957413933447333)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "generation-corruption",
+      "error": null,
+      "mode": "SigOnly",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "2b4bc7b2e5bc7702f90eedd251b3d5cd",
+            "revision": "Fingerprint(1494107213135876044, 15929126425245411635)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "1f47fca8f64750655a9deb591459e3c2",
+            "revision": "Fingerprint(4958474788899852023, 13090845055065873078)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "obsolete": {
+          "compiler_invocations": 1,
+          "exit_code": 75,
+          "publication": {
+            "generation": "8387c8cf4cd358287d4f0dcfe852ff45",
+            "revision": "Fingerprint(16514078778060083524, 9594898978535242216)",
+            "schema": 1,
+            "status": "superseded"
+          },
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "2b4bc7b2e5bc7702f90eedd251b3d5cd",
+            "revision": "Fingerprint(1494107213135876044, 15929126425245411635)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "new-external-input",
+      "error": null,
+      "mode": "SigOnly",
+      "observations": {
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "f893e8e3db7f6cb52b1dd052417014cfe1cd8c9f208bd27187dfc8ff0956d6a0",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "old": {
+          "compiler_invocations": 1,
+          "exit_code": 75,
+          "publication": {
+            "generation": "44222d8832a782347b23c964de61e950",
+            "revision": "Fingerprint(15428248122453232370, 14921013147556004222)",
+            "schema": 1,
+            "status": "superseded"
+          },
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "validated": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "88f2a739c7f28cb7e29bfefcb7dd87f7",
+            "revision": "Fingerprint(16693217407772820575, 11335591589899192554)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "f893e8e3db7f6cb52b1dd052417014cfe1cd8c9f208bd27187dfc8ff0956d6a0",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "88f2a739c7f28cb7e29bfefcb7dd87f7",
+            "revision": "Fingerprint(16693217407772820575, 11335591589899192554)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "f893e8e3db7f6cb52b1dd052417014cfe1cd8c9f208bd27187dfc8ff0956d6a0",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "configured-disk-budget",
+      "error": null,
+      "mode": "SigOnly",
+      "observations": {
+        "budget": {
+          "limit": 131072,
+          "maximum_bytes": 121774,
+          "retained_focus_entries": 10
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "e946c9d5a77873a43a2b823dafd42be08bdeb29e3c2ece2572eef703d4b7c196",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "recovered": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "db6797489e0c5e215e8e478b91fb3a78",
+            "revision": "Fingerprint(11316678801429087721, 11475302595189699352)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "e946c9d5a77873a43a2b823dafd42be08bdeb29e3c2ece2572eef703d4b7c196",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "interrupted-publication",
+      "error": null,
+      "mode": "SigOnly",
+      "observations": {
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "killed": {
+          "compiler_invocations": 1,
+          "exit_code": -9,
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "recovered": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "1ed1e838a6abfce36b97b3097122b28f",
+            "revision": "Fingerprint(13483094738563416538, 1024412171390149273)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "763f477dd813885c66c8872e1b5bff0c6f2f836d243ef7df053d6676cef9b5f8",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "layout",
+      "error": null,
+      "mode": "Recurse",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "34d750918523f32994c2022608ceb068399e38c5362a589b7a4fa2d4a0366e70",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "b8e1a94e81d7e7f12bc0f4ba88408b55",
+            "revision": "Fingerprint(6557356831195520054, 14111927751199756331)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "eef350846d426fe8a35acd401834597a",
+            "revision": "Fingerprint(10775736314549184264, 2415917611219554193)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "34d750918523f32994c2022608ceb068399e38c5362a589b7a4fa2d4a0366e70",
+          "solved_bodies": []
+        },
+        "edited": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "eef350846d426fe8a35acd401834597a",
+            "revision": "Fingerprint(10775736314549184264, 2415917611219554193)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "34d750918523f32994c2022608ceb068399e38c5362a589b7a4fa2d4a0366e70",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "34d750918523f32994c2022608ceb068399e38c5362a589b7a4fa2d4a0366e70",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "b8e1a94e81d7e7f12bc0f4ba88408b55",
+            "revision": "Fingerprint(6557356831195520054, 14111927751199756331)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "concurrent-bodies",
+      "error": null,
+      "mode": "Recurse",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "1d56ffc933c8ca027ecc94e72b774b58",
+            "revision": "Fingerprint(12829032981222833971, 5588346751431197146)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "1d56ffc933c8ca027ecc94e72b774b58",
+            "revision": "Fingerprint(12829032981222833971, 5588346751431197146)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "unrelated": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "1d56ffc933c8ca027ecc94e72b774b58",
+            "revision": "Fingerprint(12829032981222833971, 5588346751431197146)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "388cf46fe531fc34e03024cb9f6e00fd366bf21b98b2db1d55f958e845cfe96a",
+          "solved_bodies": []
+        },
+        "unrelated_fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "388cf46fe531fc34e03024cb9f6e00fd366bf21b98b2db1d55f958e845cfe96a",
+          "solved_bodies": [
+            [
+              "focus",
+              "unrelated"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "1d56ffc933c8ca027ecc94e72b774b58",
+            "revision": "Fingerprint(12829032981222833971, 5588346751431197146)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        },
+        "writer0": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "1d56ffc933c8ca027ecc94e72b774b58",
+            "revision": "Fingerprint(12829032981222833971, 5588346751431197146)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "writer1": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "1d56ffc933c8ca027ecc94e72b774b58",
+            "revision": "Fingerprint(12829032981222833971, 5588346751431197146)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "388cf46fe531fc34e03024cb9f6e00fd366bf21b98b2db1d55f958e845cfe96a",
+          "solved_bodies": [
+            [
+              "focus",
+              "unrelated"
+            ]
+          ]
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "superseded",
+      "error": null,
+      "mode": "Recurse",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "fb94e4a9184624309af19ead4732dbd8",
+            "revision": "Fingerprint(838237561940678412, 8752626579204997052)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "64bf61515efe8c50b3129e06733a3c52",
+            "revision": "Fingerprint(3185210746936772584, 3555702142313467656)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "obsolete": {
+          "compiler_invocations": 1,
+          "exit_code": 75,
+          "publication": {
+            "generation": "8eee109b96aaa690e25a2d08634d9fd5",
+            "revision": "Fingerprint(16389041613469491166, 10299044072375634357)",
+            "schema": 1,
+            "status": "superseded"
+          },
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "fb94e4a9184624309af19ead4732dbd8",
+            "revision": "Fingerprint(838237561940678412, 8752626579204997052)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        },
+        "winner": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "64bf61515efe8c50b3129e06733a3c52",
+            "revision": "Fingerprint(3185210746936772584, 3555702142313467656)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "canceled",
+      "error": null,
+      "mode": "Recurse",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "338cb8b43fbb87b2ee85db5001a66e27",
+            "revision": "Fingerprint(12110567241828388368, 16806472034255232128)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "55980a3ed90ceb200bdd7105c426f106",
+            "revision": "Fingerprint(807553168153428636, 1473293997501691074)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "obsolete": {
+          "compiler_invocations": 1,
+          "exit_code": 75,
+          "publication": {
+            "generation": "69b6aba6689b6cb5687bbc808f30bb51",
+            "revision": "Fingerprint(2300042989734266135, 1038565888274386357)",
+            "schema": 1,
+            "status": "superseded"
+          },
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "338cb8b43fbb87b2ee85db5001a66e27",
+            "revision": "Fingerprint(12110567241828388368, 16806472034255232128)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "generation-corruption",
+      "error": null,
+      "mode": "Recurse",
+      "observations": {
+        "cache_off_protocol": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": null,
+            "revision": null,
+            "schema": 1,
+            "status": "uncached"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "cold": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "e58c07011884535668aca31e7bb4e6e9",
+            "revision": "Fingerprint(16377265386965482825, 1401042446333808972)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "current": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "d75161f94f823651796e1de9b4b118c0",
+            "revision": "Fingerprint(12009578464130226102, 12875086045188951922)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "obsolete": {
+          "compiler_invocations": 1,
+          "exit_code": 75,
+          "publication": {
+            "generation": "19ad901a7443cd69c1774d32e4d48aed",
+            "revision": "Fingerprint(11970812481371683270, 17019109580319036458)",
+            "schema": 1,
+            "status": "superseded"
+          },
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "e58c07011884535668aca31e7bb4e6e9",
+            "revision": "Fingerprint(16377265386965482825, 1401042446333808972)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "new-external-input",
+      "error": null,
+      "mode": "Recurse",
+      "observations": {
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "91cd1240ca04fb60caa19e1548472f240af4b17aec06c8b75862563a4cd0361a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "old": {
+          "compiler_invocations": 1,
+          "exit_code": 75,
+          "publication": {
+            "generation": "0bac568cf7cf64e3bccd847768722aa0",
+            "revision": "Fingerprint(14848451928676248072, 2497691853517125052)",
+            "schema": 1,
+            "status": "superseded"
+          },
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "validated": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "215d8106c3d5e905c920803b678e82f1",
+            "revision": "Fingerprint(6919378160359947927, 7970864026465106007)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "91cd1240ca04fb60caa19e1548472f240af4b17aec06c8b75862563a4cd0361a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "warm": {
+          "compiler_invocations": 0,
+          "exit_code": 0,
+          "publication": {
+            "generation": "215d8106c3d5e905c920803b678e82f1",
+            "revision": "Fingerprint(6919378160359947927, 7970864026465106007)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "91cd1240ca04fb60caa19e1548472f240af4b17aec06c8b75862563a4cd0361a",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "configured-disk-budget",
+      "error": null,
+      "mode": "Recurse",
+      "observations": {
+        "budget": {
+          "limit": 131072,
+          "maximum_bytes": 121127,
+          "retained_focus_entries": 10
+        },
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "0a5263ea71afeeb64e82e466b1f105d2bed2c59c05e16ff6c23f8f5618502679",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "recovered": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "97512b127f84d2d5d8069c4c1c8296e8",
+            "revision": "Fingerprint(8800883001119966735, 2160844370986535037)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "0a5263ea71afeeb64e82e466b1f105d2bed2c59c05e16ff6c23f8f5618502679",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    },
+    {
+      "case": "interrupted-publication",
+      "error": null,
+      "mode": "Recurse",
+      "observations": {
+        "fresh": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "killed": {
+          "compiler_invocations": 1,
+          "exit_code": -9,
+          "solved_bodies": [
+            [
+              "focus",
+              "selected"
+            ],
+            [
+              "summary",
+              "configured"
+            ],
+            [
+              "summary",
+              "State::update"
+            ],
+            [
+              "summary",
+              "child::apply"
+            ],
+            [
+              "summary",
+              "<State as Choice>::choice"
+            ],
+            [
+              "summary",
+              "selected::{closure#0}"
+            ],
+            [
+              "shared",
+              "selected"
+            ]
+          ]
+        },
+        "recovered": {
+          "compiler_invocations": 1,
+          "exit_code": 0,
+          "publication": {
+            "generation": "75d0b155e41d08452b2c27611955c5cc",
+            "revision": "Fingerprint(132569713607390474, 9204650978009909852)",
+            "schema": 1,
+            "status": "current"
+          },
+          "semantic_digest": "23061c887d61e72463e3ae99a6424c85f80a4228ec1f587dc53b66dc517ed12a",
+          "solved_bodies": []
+        }
+      },
+      "passed": true
+    }
+  ],
+  "schema": 1
+}

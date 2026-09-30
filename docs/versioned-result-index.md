@@ -63,7 +63,8 @@ can replay. In-flight writers additionally check source stamps: an intervening
 edit followed by an undo must not hide bytes that a compiler could have read.
 Cargo may regenerate its target outputs while validating the watched build
 inputs. Compiler source files are checked against rustc's hash of the original,
-unnormalized bytes, then checked again before publication.
+unnormalized bytes, then checked again before publication. This follows the
+[pinned compiler's source-hash definition](https://github.com/rust-lang/rust/blob/f53b654a8882fd5fc036c4ca7a4ff41ce32497a6/compiler/rustc_span/src/lib.rs#L2118).
 
 New external build/dependency inputs sometimes become visible only after Cargo
 has run. If neither the preflight snapshot nor rustc's source hash attests them,
@@ -95,9 +96,23 @@ publication and can be reused after restart.
 
 ## Validation
 
-The implementation has passed the workspace tests, IDE tests after the final
-private storage changes, the Python oracle regressions, prototype protocol tests
-and legacy snapshot regressions. Final frozen-build reports, the full current
-edit matrix and the expanded disk/interruption cases are pending. Do not treat
-this document as a completed release gate. Full corpus/cache and project/editor
-acceptance requirements remain in [continuation-plan.md](continuation-plan.md).
+Frozen build `235760027` passes all 16 publication/index cases in both modes,
+all 84 current edit/concurrency/real-project cases, 51 semantic-cache cases plus
+compile-error rejection, and 32 snapshot cases (17 hits invoke no compiler).
+The workspace suite passes; all IDE targets were rerun after the final private
+storage changes. All 48 Python oracle regressions pass.
+
+The publication suite covers concurrent bodies, supersession, cancellation,
+generation corruption, relocation, newly discovered external-input races,
+restart after an interrupted publication and eviction under a configured
+128 KiB limit. Maximum measured committed file contents were 121,774 bytes in
+SigOnly and 121,127 in Recurse; each retained ten of twenty semantic entries.
+Filesystem allocation overhead and active temporary writes are separate from
+that content budget. A killed publisher leaves no named input sidecar, and its
+completed semantic result is reused without another solve after restart.
+
+The [committed report](measurements/versioned-result-index.json) pins the build,
+harnesses and detailed local evidence. Runs overlapped corpus work, so their
+timings are not quiet performance claims. Full final corpus/cache gates and
+project/editor acceptance requirements remain in
+[continuation-plan.md](continuation-plan.md).
