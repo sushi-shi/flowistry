@@ -16,7 +16,7 @@ pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
   callsite::{FallbackReason, UnsupportedOp},
   dependencies::{
-    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans,
+    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans, merge_spans,
   },
   domain::{LazyMatrix, SeedRows},
   session::{AnalysisSession, SummaryStats},
