@@ -2,6 +2,7 @@
 //! shared references, in both context modes.
 
 #![feature(rustc_private)]
+extern crate rustc_span;
 
 mod common;
 
