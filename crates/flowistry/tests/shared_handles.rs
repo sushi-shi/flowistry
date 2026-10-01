@@ -4,83 +4,10 @@
 #![feature(rustc_private)]
 extern crate rustc_span;
 
-use flowistry::{
-  extensions::{ContextMode, EvalMode},
-  infoflow::{self, AnalysisSession, Direction},
-  test_utils,
-};
-use rustc_span::Span;
-use rustc_utils::{
-  SpanExt,
-  source_map::{range::ToSpan, spanner::Spanner},
-};
+mod common;
 
-/// The snippets of the exact slice, and of what only the pessimistic analysis adds
-/// (its slice minus the exact one), one per line.
-fn slices(input: &str, mode: ContextMode, direction: Direction) -> (String, String) {
-  let input = input.to_owned();
-  let (clean, _) = test_utils::parse_ranges(&input, [("`(", ")`")]).unwrap();
-  let output = std::sync::Mutex::new(Default::default());
-  test_utils::compile_body_with_range(
-    clean,
-    || test_utils::parse_ranges(&input, [("`(", ")`")]).unwrap().1["`("][0],
-    |tcx, body_id, facts, target| {
-      let mode = EvalMode {
-        context_mode: mode,
-        ..EvalMode::default()
-      };
-      let session = AnalysisSession::new(tcx, mode);
-      let spanner = Spanner::new(tcx, body_id, &facts.body);
-      let targets = spanner
-        .span_to_places(target.to_span(tcx).unwrap())
-        .iter()
-        .map(|span| {
-          span
-            .locations
-            .iter()
-            .map(|location| (span.place, *location))
-            .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-      let results = infoflow::compute_flow_with_session(&session, body_id, facts);
-      let exact = Span::merge_overlaps(
-        infoflow::compute_dependency_spans(
-          &results,
-          targets.clone(),
-          direction,
-          &spanner,
-        )
-        .into_iter()
-        .flatten()
-        .collect(),
-      );
-      let maybe =
-        match infoflow::compute_flow_with_shared_handles(&session, body_id, facts) {
-          Some(results) => Span::merge_overlaps(
-            infoflow::compute_dependency_spans(&results, targets, direction, &spanner)
-              .into_iter()
-              .flatten()
-              .collect(),
-          ),
-          None => Vec::new(),
-        };
-      let only_maybe = maybe
-        .iter()
-        .flat_map(|span| span.subtract(exact.clone()))
-        .collect::<Vec<_>>();
-      let text = |spans: &[Span]| {
-        spans
-          .iter()
-          .map(|span| tcx.sess.source_map().span_to_snippet(*span).unwrap())
-          .filter(|snippet| !snippet.trim().is_empty())
-          .collect::<Vec<_>>()
-          .join("\n")
-      };
-      *output.lock().unwrap() = (text(&exact), text(&only_maybe));
-    },
-  );
-  output.into_inner().unwrap()
-}
+use common::slices;
+use flowistry::{extensions::ContextMode, infoflow::Direction};
 
 fn check(input: &str, exact: &[&str], only_maybe: &[&str], absent: &[&str]) {
   for mode in [ContextMode::SigOnly, ContextMode::Recurse] {
