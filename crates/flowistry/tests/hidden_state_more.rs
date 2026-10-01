@@ -145,12 +145,12 @@ fn main() {
   );
 }
 
-// The `&Cell` a callee derives from an `Rc` field aliases the loan of `w2`, which is
-// not a handle of the group.
+// The `&Cell` a callee derives from an `Rc` field is a view of `w2`, whose handle
+// `w2.c` shares its group with `w1.c`.
 #[test]
-fn known_miss_cell_ref_into_rc_returned_by_callee() {
+fn cell_ref_into_rc_returned_by_callee() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::{cell::Cell, rc::Rc};
 struct W { c: Rc<Cell<i32>> }
@@ -670,12 +670,11 @@ fn main() {
   );
 }
 
-// A miss of the exact tier in safe code: the `&Cell<i32>` view of `&mut x` does not
-// alias `x`.
+// The `&Cell<i32>` view of `&mut x` writes `x`.
 #[test]
-fn known_miss_cell_from_mut() {
+fn cell_from_mut() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::cell::Cell;
 fn main() {

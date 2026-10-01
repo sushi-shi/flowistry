@@ -13,6 +13,7 @@ use rustc_middle::{
   mir::{Mutability, Operand, Place},
   ty::{Instance, InstanceKind, TyCtxt, TyKind, TypingEnv},
 };
+use rustc_utils::PlaceExt;
 
 use super::callsite::cmp_places_structurally;
 use crate::mir::{placeinfo::PlaceInfo, utils::ErasedTy};
@@ -126,6 +127,24 @@ pub(crate) fn interior_mutable_places<'tcx>(
       }
     })
     .collect::<Vec<_>>();
+  // A shared reference to interior-mutable state may view a place of another type
+  // (e.g. `Cell::from_mut(&mut x)` views `x: i32` as a `Cell<i32>`): the whole place
+  // may be written through it.
+  for (_, pointers) in place.interior_pointers(tcx, body, place_info.def_id) {
+    for (pointer, mutability) in pointers {
+      let pointee = tcx.mk_place_deref(pointer);
+      if mutability != Mutability::Not || is_freeze(pointee) {
+        continue;
+      }
+      let pointee_ty = erased_ty(pointee);
+      places.extend(
+        place_info
+          .aliases(pointee)
+          .iter()
+          .filter(|alias| **alias != pointee && erased_ty(**alias) != pointee_ty),
+      );
+    }
+  }
   places.sort_by(|p1, p2| {
     cmp_places_structurally(p1.local, p1.projection, p2.local, p2.projection)
   });
