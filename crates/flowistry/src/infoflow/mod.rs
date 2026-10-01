@@ -11,7 +11,6 @@ use rustc_hir::BodyId;
 use rustc_middle::ty::TyCtxt;
 use rustc_utils::{BodyExt, block_timer};
 
-use self::shared_handles::SharedHandles;
 pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
   callsite::{FallbackReason, UnsupportedOp},
@@ -23,6 +22,7 @@ pub use self::{
   session::{AnalysisSession, SummaryStats, SummaryStore},
   summary_wire::PortableSummary,
 };
+use self::{hidden::HiddenState, shared_handles::SharedHandles};
 use crate::{
   extensions::{ContextMode, EvalMode},
   mir::{
@@ -38,6 +38,7 @@ mod callsite;
 mod dependencies;
 mod domain;
 mod effects;
+mod hidden;
 mod interior;
 pub mod mutation;
 mod recursive;
@@ -229,14 +230,12 @@ fn check_engines<'tcx>(
     let place_info =
       PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, reference.mode());
     let location_domain = place_info.location_domain().clone();
-    let shared_handles = results
-      .analysis
-      .shared_handles
-      .as_ref()
-      .and_then(|_| SharedHandles::build(&place_info));
+    let pessimistic = results.analysis.hidden.is_pessimistic();
     let mut analysis =
       FlowAnalysis::with_session(tcx, def_id, body, place_info, reference);
-    analysis.shared_handles = shared_handles;
+    if pessimistic {
+      make_pessimistic(&mut analysis);
+    }
     let ungrouped =
       engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis);
     results.for_each_state(|location, state| {
@@ -261,14 +260,12 @@ fn check_engines<'tcx>(
   let place_info =
     PlaceInfo::build_with_mode(tcx, def_id, body_with_facts, session.mode());
   let location_domain = place_info.location_domain().clone();
-  let shared_handles = results
-    .analysis
-    .shared_handles
-    .as_ref()
-    .and_then(|_| SharedHandles::build(&place_info));
+  let pessimistic = results.analysis.hidden.is_pessimistic();
   let mut analysis =
     FlowAnalysis::with_session(tcx, def_id, body, place_info, session.clone());
-  analysis.shared_handles = shared_handles;
+  if pessimistic {
+    make_pessimistic(&mut analysis);
+  }
   let by_block = results.engine_stats().by_block;
   let other = if by_block {
     engine::iterate_to_fixpoint_by_location(tcx, body, location_domain, analysis)
@@ -379,9 +376,13 @@ pub fn compute_flow_with_session<'a, 'tcx>(
 /// the same object: a write to the state of one handle possibly writes the state of
 /// the others.
 ///
+/// It also tracks the hidden cells of the pessimistic analysis (see
+/// [`hidden`]): the state shared through the operating system, and the memory
+/// reached through raw pointers.
+///
 /// Dependencies present here but not in the result of
-/// [`compute_flow_with_session`] are possible, not certain. Returns `None` when no
-/// two handles of the body share a state type, as the result would then equal the
+/// [`compute_flow_with_session`] are possible, not certain. Returns `None` when
+/// neither shared handles nor hidden cells would make the result differ from the
 /// exact one.
 pub fn compute_flow_with_shared_handles<'a, 'tcx>(
   session: &Rc<AnalysisSession<'tcx>>,
@@ -389,13 +390,25 @@ pub fn compute_flow_with_shared_handles<'a, 'tcx>(
   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
 ) -> Option<FlowResults<'a, 'tcx>> {
   let place_info = build_place_info(session, body_id, body_with_facts);
-  let shared_handles = SharedHandles::build(&place_info)?;
+  let shared_handles = SharedHandles::build(&place_info);
+  let hidden = HiddenState::build(&place_info, true);
+  if shared_handles.is_none() && !hidden.has_pessimistic_effects(&place_info, session) {
+    return None;
+  }
   Some(run_flow(
     session,
     body_with_facts,
     place_info,
-    Some(shared_handles),
+    Some((shared_handles, hidden)),
   ))
+}
+
+/// Makes `analysis` the pessimistic analysis of
+/// [`compute_flow_with_shared_handles`].
+#[cfg(feature = "engine-diff")]
+fn make_pessimistic(analysis: &mut FlowAnalysis<'_, '_>) {
+  analysis.shared_handles = SharedHandles::build(&analysis.place_info);
+  analysis.hidden = HiddenState::build(&analysis.place_info, true);
 }
 
 fn build_place_info<'a, 'tcx>(
@@ -420,7 +433,7 @@ fn run_flow<'a, 'tcx>(
   session: &Rc<AnalysisSession<'tcx>>,
   body_with_facts: &'a BodyWithBorrowckFacts<'tcx>,
   place_info: PlaceInfo<'a, 'tcx>,
-  shared_handles: Option<SharedHandles<'tcx>>,
+  pessimistic: Option<(Option<SharedHandles<'tcx>>, HiddenState<'tcx>)>,
 ) -> FlowResults<'a, 'tcx> {
   let tcx = session.tcx();
   let mode = session.mode();
@@ -431,12 +444,15 @@ fn run_flow<'a, 'tcx>(
 
   let results = {
     log::info!(target: "flowistry::audit", "audit solve {} {}",
-      if shared_handles.is_some() { "shared" } else { "focus" }, tcx.def_path_str(def_id));
+      if pessimistic.is_some() { "shared" } else { "focus" }, tcx.def_path_str(def_id));
     block_timer!("Flow");
 
     let mut analysis =
       FlowAnalysis::with_session(tcx, def_id, body, place_info, session.clone());
-    analysis.shared_handles = shared_handles;
+    if let Some((shared_handles, hidden)) = pessimistic {
+      analysis.shared_handles = shared_handles;
+      analysis.hidden = hidden;
+    }
     // The block engine stores far fewer states, but it computes the same states as the
     // location engine only if the effect of every location is idempotent on its own
     // output (see `engine`).

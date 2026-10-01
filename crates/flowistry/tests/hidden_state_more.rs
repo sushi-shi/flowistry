@@ -346,9 +346,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_ptr_copy_nonoverlapping_between_locals() {
+fn ptr_copy_nonoverlapping_between_locals() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let input = 73;
@@ -420,9 +420,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_atomic_ptr_to_local_written() {
+fn atomic_ptr_to_local_written() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::sync::atomic::{AtomicPtr, Ordering};
 fn main() {
@@ -493,9 +493,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_static_mut_array_indexed_by_callees() {
+fn static_mut_array_indexed_by_callees() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 static mut A: [i32; 4] = [0; 4];
 fn put(i: usize, v: i32) { unsafe { A[i] = v; } }
@@ -786,9 +786,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_set_current_dir_round_trip() {
+fn set_current_dir_round_trip() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let input = "/tmp";
@@ -1228,9 +1228,9 @@ fn main() {
 
 // The handle is a plain index into a thread-local arena.
 #[test]
-fn known_miss_lib_interner_index_into_thread_local_arena() {
+fn lib_interner_index_into_thread_local_arena() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     &format!(
       "{ARENA}{}",
       r#"
@@ -1309,9 +1309,9 @@ impl List {
 
 // The address of `a` escapes into a raw pointer field.
 #[test]
-fn known_miss_lib_intrusive_list_stack_nodes() {
+fn lib_intrusive_list_stack_nodes() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     &format!(
       "{LIST}{}",
       r#"
@@ -1355,9 +1355,9 @@ fn main() {
 // `*mut Node` is `Freeze`, so a callee given `&List` is assumed not to write through
 // it.
 #[test]
-fn known_miss_lib_intrusive_list_methods_through_shared_ref() {
+fn lib_intrusive_list_methods_through_shared_ref() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     &format!(
       "{LIST}{}",
       r#"
@@ -1399,9 +1399,9 @@ impl RawReceiver { fn recv(&self) -> Option<i32> { unsafe { (*(*self.0).q.get())
 // Both ends hold the `Arc` in a field (see
 // `known_miss_rc_cell_in_struct_field_written_by_callee`).
 #[test]
-fn known_miss_lib_channel_arc_unsafe_cell() {
+fn lib_channel_arc_unsafe_cell() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     &format!(
       "{CHAN}{}",
       r#"
@@ -1420,9 +1420,9 @@ fn main() {
 
 // Both ends hold a raw pointer, which is `Freeze`, as the ends of `std::sync::mpsc` do.
 #[test]
-fn known_miss_lib_channel_raw_pointer_ends() {
+fn lib_channel_raw_pointer_ends() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     &format!(
       "{CHAN}{}",
       r#"

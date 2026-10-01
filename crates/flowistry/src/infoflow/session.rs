@@ -15,6 +15,7 @@ use rustc_middle::{mir::TerminatorKind, ty::TyCtxt};
 
 use super::{
   callsite::{CalleeAbi, FallbackReason},
+  hidden::{self, GlobalEffects},
   recursive::resolve_callee,
   summary::{self, CalleeSummary},
   summary_wire::PortableSummary,
@@ -90,6 +91,10 @@ pub struct AnalysisSession<'tcx> {
   /// The summaries being computed.
   active: RefCell<FxHashSet<LocalDefId>>,
   stats: RefCell<SummaryStats>,
+  /// The global effects of the local functions (see [`GlobalEffects`]).
+  global_effects: RefCell<FxHashMap<LocalDefId, Rc<GlobalEffects>>>,
+  /// The functions whose global effects are being computed.
+  global_active: RefCell<FxHashSet<LocalDefId>>,
   store: Option<Rc<dyn SummaryStore<'tcx> + 'tcx>>,
 }
 
@@ -121,6 +126,8 @@ impl<'tcx> AnalysisSession<'tcx> {
       components: RefCell::default(),
       active: RefCell::default(),
       stats: RefCell::default(),
+      global_effects: RefCell::default(),
+      global_active: RefCell::default(),
       store,
     })
   }
@@ -168,6 +175,25 @@ impl<'tcx> AnalysisSession<'tcx> {
 
   pub(crate) fn body(&self, def_id: LocalDefId) -> &'tcx BodyWithBorrowckFacts<'tcx> {
     get_body_with_borrowck_facts(self.tcx, def_id)
+  }
+
+  /// The statics (and other hidden cells) that the local function `def_id` may access,
+  /// including through its callees (cached). Within a recursive cycle, the effects of
+  /// a function still being computed are taken as empty.
+  pub(crate) fn global_effects(&self, def_id: LocalDefId) -> Rc<GlobalEffects> {
+    if let Some(effects) = self.global_effects.borrow().get(&def_id) {
+      return Rc::clone(effects);
+    }
+    if !self.global_active.borrow_mut().insert(def_id) {
+      return Rc::default();
+    }
+    let effects = Rc::new(hidden::body_global_effects(self, def_id));
+    self.global_active.borrow_mut().remove(&def_id);
+    self
+      .global_effects
+      .borrow_mut()
+      .insert(def_id, Rc::clone(&effects));
+    effects
   }
 
   /// Whether `caller` and `callee` are in the same strongly connected component of

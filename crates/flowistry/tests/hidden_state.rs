@@ -59,9 +59,9 @@ fn check_modes(
 // place of the caller names it, so neither tier reports it.
 
 #[test]
-fn known_miss_static_mut_written_and_read_by_callees() {
+fn static_mut_written_and_read_by_callees() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 static mut G: i32 = 0;
 fn stash(x: i32) { unsafe { G = x; } }
@@ -78,9 +78,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_safe_atomic_static_written_and_read_by_callees() {
+fn safe_atomic_static_written_and_read_by_callees() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::sync::atomic::{AtomicI32, Ordering};
 static G: AtomicI32 = AtomicI32::new(0);
@@ -98,9 +98,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_static_atomic_in_same_function() {
+fn static_atomic_in_same_function() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::sync::atomic::{AtomicI32, Ordering};
 static G: AtomicI32 = AtomicI32::new(0);
@@ -116,9 +116,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_static_mutex_written_and_read_by_callees() {
+fn static_mutex_written_and_read_by_callees() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::sync::Mutex;
 static M: Mutex<i32> = Mutex::new(0);
@@ -154,9 +154,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_static_oncelock_set_and_get_by_callees() {
+fn static_oncelock_set_and_get_by_callees() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::sync::OnceLock;
 static O: OnceLock<i32> = OnceLock::new();
@@ -211,9 +211,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_thread_local_cell() {
+fn thread_local_cell() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::cell::Cell;
 thread_local! { static T: Cell<i32> = Cell::new(0); }
@@ -230,9 +230,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_thread_local_refcell_in_same_function() {
+fn thread_local_refcell_in_same_function() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::cell::RefCell;
 thread_local! { static T: RefCell<i32> = RefCell::new(0); }
@@ -248,9 +248,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_extern_c_hidden_state() {
+fn extern_c_hidden_state() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 unsafe extern "C" { fn ext_store(x: i32); fn ext_load() -> i32; }
 fn main() {
@@ -265,9 +265,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_file_round_trip() {
+fn file_round_trip() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let input = 73;
@@ -281,9 +281,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_env_var_round_trip() {
+fn env_var_round_trip() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let input = 73;
@@ -479,9 +479,9 @@ fn main() {
 // dereferences, never the place it was derived from.
 
 #[test]
-fn known_miss_raw_pointer_stashed_in_struct_field() {
+fn raw_pointer_stashed_in_struct_field() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 struct Holder { p: *mut i32 }
 fn main() {
@@ -498,9 +498,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_raw_pointer_field_written_by_callee_through_shared_ref() {
+fn raw_pointer_field_written_by_callee_through_shared_ref() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 struct Holder { p: *mut i32 }
 fn poke(h: &Holder, v: i32) { unsafe { *h.p = v; } }
@@ -537,9 +537,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_raw_pointer_written_by_callee() {
+fn raw_pointer_written_by_callee() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn put(p: *mut i32, v: i32) { unsafe { *p = v; } }
 fn main() {
@@ -555,9 +555,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_ptr_write_in_same_function() {
+fn ptr_write_in_same_function() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut x = 0;
@@ -573,9 +573,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_ptr_write_in_same_function_forward() {
+fn ptr_write_in_same_function_forward() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut x = 0;
@@ -591,9 +591,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_ptr_read_after_direct_write() {
+fn ptr_read_after_direct_write() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut x = 0;
@@ -609,9 +609,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_pointer_round_tripped_through_integer() {
+fn pointer_round_tripped_through_integer() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut x = 0;
@@ -645,9 +645,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_slice_from_raw_parts_mut() {
+fn slice_from_raw_parts_mut() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut x = 0;
@@ -665,9 +665,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_pointer_arithmetic_to_sibling_field() {
+fn pointer_arithmetic_to_sibling_field() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 #[repr(C)] struct S { a: i32, b: i32 }
 fn main() {

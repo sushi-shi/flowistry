@@ -45,6 +45,13 @@ use crate::extensions::{EvalMode, MutabilityMode};
 pub struct NormPlace<'tcx>(Place<'tcx>);
 
 impl<'tcx> NormPlace<'tcx> {
+  /// The row of state that no place of a body names (see
+  /// [`infoflow::hidden`](crate::infoflow)), keyed by a local past the locals of the
+  /// body. It is not a place of the body: no place query may be made on it.
+  pub(crate) fn hidden(local: Local) -> Self {
+    NormPlace(Place::from(local))
+  }
+
   /// The base local of the place.
   pub fn local(self) -> Local {
     self.0.local

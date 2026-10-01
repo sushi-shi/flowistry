@@ -31,6 +31,7 @@ use super::{
   AnalysisSession,
   domain::{GroupId, LazyMatrix, RowGroups, RowMatrix, SeedRows},
   effects::CallEffects,
+  hidden::{HiddenEffects, HiddenState},
   interior::Handle,
   mutation::{
     CalleeEffect, ModularMutationVisitor, Mutation, MutationKind, MutationStatus,
@@ -108,6 +109,11 @@ pub struct FlowAnalysis<'a, 'tcx> {
   /// [`compute_flow_with_shared_handles`](super::compute_flow_with_shared_handles),
   /// the handles that may share state.
   pub(crate) shared_handles: Option<SharedHandles<'tcx>>,
+
+  /// The hidden cells of the body (see [`hidden`](super::hidden)), with those of the
+  /// pessimistic analysis in
+  /// [`compute_flow_with_shared_handles`](super::compute_flow_with_shared_handles).
+  pub(crate) hidden: HiddenState<'tcx>,
 
   /// Counters of the transfer function.
   pub(crate) counters: TransferCounters,
@@ -220,6 +226,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     // Every place that conflicts with a place reachable from an argument starts out
     // depending on the argument.
     let seeds = SeedRows::new(place_info.location_domain(), place_info.seed_rows());
+    let hidden = HiddenState::build(&place_info, false);
     FlowAnalysis {
       tcx,
       def_id,
@@ -230,6 +237,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       call_effects: RefCell::default(),
       call_reads: RefCell::default(),
       shared_handles: None,
+      hidden,
       counters: TransferCounters::default(),
       caches: TransferCaches::default(),
       row_groups: Rc::new(RowGroups::none()),
@@ -621,6 +629,10 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     mutations: &[Mutation<'tcx>],
     location: Location,
   ) -> bool {
+    // Hidden cells are read and written outside of the rows of the mutations.
+    if !self.hidden_effects(location, mutations).is_empty() {
+      return false;
+    }
     if mutations.len() <= 1 {
       return true;
     }
@@ -906,6 +918,19 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       }
     };
 
+    // The hidden cells written by the instruction depend on everything it reads: they
+    // get dependencies of their own, after those of the steps.
+    let hidden = self.hidden_effects(location, mutations);
+    if !hidden.writes.is_empty() {
+      let mut deps = IndexSet::new(state.col_domain());
+      seed(location, &mut deps);
+      let inputs = mutations.iter().flat_map(|mt| &mt.inputs);
+      for input in inputs.chain(&hidden.operands) {
+        add_deps(state, *input, &mut deps);
+      }
+      all_deps.push(deps);
+    }
+
     // Register every explicitly provided input as an input.
     for ((i, _), deps) in steps.iter().zip(&mut all_deps) {
       for input in &mutations[*i].inputs {
@@ -932,6 +957,14 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       }
     }
 
+    // Every write of the instruction may depend on the hidden cells it reads.
+    for cell in &hidden.reads {
+      let row = state.row_set(cell);
+      for deps in &mut all_deps {
+        deps.union(row);
+      }
+    }
+
     for ((i, run), deps) in steps.iter().zip(&mut all_deps) {
       let Some(run) = run else {
         self.apply_mutation(state, &mutations[*i], deps, &add_deps);
@@ -951,6 +984,18 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       } else {
         for mt in &mutations[*i .. *i + run.len] {
           self.apply_mutation(state, mt, &mut deps.clone(), &add_deps);
+        }
+      }
+    }
+
+    if !hidden.writes.is_empty() {
+      let deps = all_deps.last().unwrap();
+      for cell in &hidden.writes {
+        state.union_into_row(*cell, deps);
+      }
+      if hidden.writes_exposed {
+        for row in self.hidden.exposed_rows() {
+          state.union_into_row(*row, deps);
         }
       }
     }
@@ -1012,6 +1057,18 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
       .iter()
       .flat_map(|alias| handles.possibly_shared(mutation, *alias, &self.place_info))
       .collect()
+  }
+
+  /// The effects on hidden cells of the instruction at `location`, whose mutations
+  /// are `mutations` (see [`HiddenState::effects_at`]).
+  pub(crate) fn hidden_effects(
+    &self,
+    location: Location,
+    mutations: &[Mutation<'tcx>],
+  ) -> Rc<HiddenEffects<'tcx>> {
+    self
+      .hidden
+      .effects_at(&self.place_info, &self.session, location, mutations)
   }
 
   fn recurse(&self) -> bool {
