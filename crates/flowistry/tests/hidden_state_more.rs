@@ -492,10 +492,11 @@ fn main() {
   );
 }
 
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn static_mut_array_indexed_by_callees() {
-  check(
-    Tier::Exact,
+  check_modes(
+    [Tier::Missed, Tier::Exact],
     r#"
 static mut A: [i32; 4] = [0; 4];
 fn put(i: usize, v: i32) { unsafe { A[i] = v; } }
@@ -575,10 +576,11 @@ fn main() {
 }
 
 // Both references returned by `alloc` point into the same static.
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn static_pool_recycles_slot() {
-  check(
-    Tier::Maybe,
+  check_modes(
+    [Tier::Missed, Tier::Maybe],
     r#"
 static mut SLOT: i32 = 0;
 fn alloc() -> &'static mut i32 { unsafe { &mut *(&raw mut SLOT) } }
@@ -1226,10 +1228,11 @@ fn main() {
 }
 
 // The handle is a plain index into a thread-local arena.
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn lib_interner_index_into_thread_local_arena() {
-  check(
-    Tier::Exact,
+  check_modes(
+    [Tier::Missed, Tier::Exact],
     &format!(
       "{ARENA}{}",
       r#"
@@ -1397,10 +1400,11 @@ impl RawReceiver { fn recv(&self) -> Option<i32> { unsafe { (*(*self.0).q.get())
 
 // Both ends hold the `Arc` in a field (see
 // `known_miss_rc_cell_in_struct_field_written_by_callee`).
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn lib_channel_arc_unsafe_cell() {
-  check(
-    Tier::Maybe,
+  check_modes(
+    [Tier::Missed, Tier::Maybe],
     &format!(
       "{CHAN}{}",
       r#"

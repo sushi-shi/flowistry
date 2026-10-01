@@ -58,10 +58,11 @@ fn check_modes(
 // Global state reached without any argument, in one body or across calls: no
 // place of the caller names it, so neither tier reports it.
 
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn static_mut_written_and_read_by_callees() {
-  check(
-    Tier::Exact,
+  check_modes(
+    [Tier::Missed, Tier::Exact],
     r#"
 static mut G: i32 = 0;
 fn stash(x: i32) { unsafe { G = x; } }
@@ -77,10 +78,11 @@ fn main() {
   );
 }
 
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn safe_atomic_static_written_and_read_by_callees() {
-  check(
-    Tier::Exact,
+  check_modes(
+    [Tier::Missed, Tier::Exact],
     r#"
 use std::sync::atomic::{AtomicI32, Ordering};
 static G: AtomicI32 = AtomicI32::new(0);
@@ -115,10 +117,11 @@ fn main() {
   );
 }
 
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn static_mutex_written_and_read_by_callees() {
-  check(
-    Tier::Exact,
+  check_modes(
+    [Tier::Missed, Tier::Exact],
     r#"
 use std::sync::Mutex;
 static M: Mutex<i32> = Mutex::new(0);
@@ -153,10 +156,11 @@ fn main() {
   );
 }
 
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn static_oncelock_set_and_get_by_callees() {
-  check(
-    Tier::Exact,
+  check_modes(
+    [Tier::Missed, Tier::Exact],
     r#"
 use std::sync::OnceLock;
 static O: OnceLock<i32> = OnceLock::new();
@@ -191,10 +195,11 @@ fn main() {
   );
 }
 
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn mutex_guard_from_static_returned_by_callee() {
-  check(
-    Tier::Maybe,
+  check_modes(
+    [Tier::Missed, Tier::Maybe],
     r#"
 use std::sync::{Mutex, MutexGuard};
 static M: Mutex<i32> = Mutex::new(0);
@@ -210,10 +215,11 @@ fn main() {
   );
 }
 
+// SigOnly mode does not scan callee bodies for statics.
 #[test]
 fn thread_local_cell() {
-  check(
-    Tier::Exact,
+  check_modes(
+    [Tier::Missed, Tier::Exact],
     r#"
 use std::cell::Cell;
 thread_local! { static T: Cell<i32> = Cell::new(0); }

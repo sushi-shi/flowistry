@@ -47,9 +47,12 @@ use rustc_span::Spanned;
 use smallvec::SmallVec;
 
 use super::{interior::InteriorMutation, mutation::Mutation, session::AnalysisSession};
-use crate::mir::{
-  placeinfo::{NormPlace, PlaceInfo},
-  utils::ErasedTy,
+use crate::{
+  extensions::ContextMode,
+  mir::{
+    placeinfo::{NormPlace, PlaceInfo},
+    utils::ErasedTy,
+  },
 };
 
 /// State that no place of a body names.
@@ -154,6 +157,10 @@ impl<'tcx> Visitor<'tcx> for BodyScan<'_, 'tcx> {
 
 /// The global effects of a call of `func` with operands `args` from `caller`: those
 /// of the function it resolves to, and of the closures and functions it is given.
+///
+/// Bodies of the source code are scanned in `Recurse` mode only: `SigOnly` mode
+/// analyzes calls from their signatures and borrow-checks no other body, so it only
+/// knows the effects of foreign and standard-library functions.
 fn call_global_effects<'tcx>(
   session: &AnalysisSession<'tcx>,
   caller: DefId,
@@ -162,6 +169,7 @@ fn call_global_effects<'tcx>(
   args: &[Spanned<Operand<'tcx>>],
 ) -> GlobalEffects {
   let tcx = session.tcx();
+  let recurse = session.mode().context_mode == ContextMode::Recurse;
   let mut effects = GlobalEffects::default();
   if let Some((def_id, fn_args)) = func.const_fn_def() {
     if tcx.is_foreign_item(def_id) {
@@ -175,7 +183,9 @@ fn call_global_effects<'tcx>(
         if let InstanceKind::Item(_) = instance.def
           && let Some(local) = local_fn(tcx, resolved)
         {
-          effects.merge(&session.global_effects(local));
+          if recurse {
+            effects.merge(&session.global_effects(local));
+          }
         } else if reaches_world(tcx, resolved, instance) {
           effects.world = true;
         }
@@ -187,7 +197,8 @@ fn call_global_effects<'tcx>(
   for arg in args {
     let ty = arg.node.ty(body.local_decls(), tcx);
     let ty = ty.peel_refs();
-    if let TyKind::Closure(def_id, _) | TyKind::FnDef(def_id, _) = ty.kind()
+    if recurse
+      && let TyKind::Closure(def_id, _) | TyKind::FnDef(def_id, _) = ty.kind()
       && let Some(local) = local_fn(tcx, *def_id)
     {
       effects.merge(&session.global_effects(local));
