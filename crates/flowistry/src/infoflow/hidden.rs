@@ -539,14 +539,20 @@ impl<'tcx> HiddenState<'tcx> {
           .iter()
           .map(|def_id| HiddenCell::Static(*def_id)),
       );
-      if self.pessimistic.is_some() {
+      if let Some(exposure) = &self.pessimistic {
         if global.world {
           reads.insert(HiddenCell::World);
           writes.insert(HiddenCell::World);
         }
-        let raw_operand = args
-          .iter()
-          .any(|arg| reaches_raw_pointer(tcx, arg.node.ty(body.local_decls(), tcx), 0));
+        // An operand holding a raw pointer, or a reference made from one, whose
+        // pointee the callee may access.
+        let raw_operand = args.iter().any(|arg| {
+          reaches_raw_pointer(tcx, arg.node.ty(body.local_decls(), tcx), 0)
+            || arg
+              .node
+              .place()
+              .is_some_and(|place| exposure.raw_derived.contains(&place.local))
+        });
         if global.escaped || raw_operand {
           reads.insert(HiddenCell::Escaped);
           writes.insert(HiddenCell::Escaped);

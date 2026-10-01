@@ -310,9 +310,9 @@ fn main() {
 
 // A reference reborrowed from a raw pointer aliases only raw dereferences.
 #[test]
-fn known_miss_mem_replace_through_raw_pointer() {
+fn mem_replace_through_raw_pointer() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut x = 0;
@@ -328,9 +328,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_mem_swap_through_raw_pointer() {
+fn mem_swap_through_raw_pointer() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut x = 0;
