@@ -192,9 +192,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_mutex_guard_from_static_returned_by_callee() {
+fn mutex_guard_from_static_returned_by_callee() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::sync::{Mutex, MutexGuard};
 static M: Mutex<i32> = Mutex::new(0);

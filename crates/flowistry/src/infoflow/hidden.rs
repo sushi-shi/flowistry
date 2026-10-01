@@ -366,6 +366,8 @@ impl HiddenEffects<'_> {
 pub(crate) struct HiddenState<'tcx> {
   /// The statics of each static handle local.
   statics: FxHashMap<Local, Statics>,
+  /// Whether some static handles are results of calls (pessimistic analysis only).
+  statics_through_calls: bool,
   /// The exposed places and raw-derived locals, in the pessimistic analysis.
   pessimistic: Option<Exposure<'tcx>>,
   /// The cells used so far, each keyed by the local `first_cell + index`.
@@ -395,8 +397,11 @@ impl<'tcx> HiddenState<'tcx> {
     pessimistic: bool,
   ) -> Self {
     let body = place_info.body;
+    let (statics, statics_through_calls) =
+      static_handles(place_info, session, pessimistic);
     HiddenState {
-      statics: static_handles(place_info, session, pessimistic),
+      statics,
+      statics_through_calls,
       pessimistic: pessimistic.then(|| Exposure::build(place_info)),
       cells: RefCell::default(),
       first_cell: body.local_decls.len(),
@@ -576,7 +581,10 @@ impl<'tcx> HiddenState<'tcx> {
     let Some(exposure) = &self.pessimistic else {
       return false;
     };
-    if !exposure.places.is_empty() || !exposure.raw_derived.is_empty() {
+    if self.statics_through_calls
+      || !exposure.places.is_empty()
+      || !exposure.raw_derived.is_empty()
+    {
       return true;
     }
     let tcx = place_info.tcx;
@@ -638,10 +646,11 @@ fn static_handles<'tcx>(
   place_info: &PlaceInfo<'_, 'tcx>,
   session: &AnalysisSession<'tcx>,
   pessimistic: bool,
-) -> FxHashMap<Local, Statics> {
+) -> (FxHashMap<Local, Statics>, bool) {
   let tcx = place_info.tcx;
   let body = place_info.body;
   let mut handles = FxHashMap::<Local, Statics>::default();
+  let mut through_calls = false;
   loop {
     let before = handles.len();
     for data in body.basic_blocks.iter() {
@@ -702,10 +711,11 @@ fn static_handles<'tcx>(
       statics.dedup();
       if !statics.is_empty() {
         handles.insert(destination.local, statics);
+        through_calls = true;
       }
     }
     if handles.len() == before {
-      return handles;
+      return (handles, through_calls);
     }
   }
 }
