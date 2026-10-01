@@ -121,12 +121,11 @@ fn main() {
   );
 }
 
-// An `Rc` in a field of the pointee of a shared argument is not written by the callee
-// effect, even in `SigOnly`.
+// The signature does not write an `Rc` in a field of the pointee of a shared argument.
 #[test]
 fn known_miss_rc_cell_in_struct_field_written_by_callee() {
-  check(
-    Tier::Missed,
+  check_modes(
+    [Tier::Missed, Tier::Maybe],
     r#"
 use std::{cell::Cell, rc::Rc};
 struct A { c: Rc<Cell<i32>> }
@@ -1462,12 +1461,12 @@ fn main() {
   );
 }
 
-// As `known_miss_rc_refcell_clone_written_by_callee` in `hidden_state.rs`, with the
-// handle in a field.
+// As `rc_refcell_clone_written_by_callee` in `hidden_state.rs`, with the handle in a
+// field.
 #[test]
-fn known_miss_rc_field_passed_directly_to_callee() {
-  check_modes(
-    [Tier::Maybe, Tier::Missed],
+fn rc_field_passed_directly_to_callee() {
+  check(
+    Tier::Maybe,
     r#"
 use std::{cell::Cell, rc::Rc};
 struct B { c: Rc<Cell<i32>> }
