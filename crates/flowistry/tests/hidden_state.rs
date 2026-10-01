@@ -684,9 +684,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_union_field_punning() {
+fn union_field_punning() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 union U { a: i32, b: u32 }
 fn main() {

@@ -286,9 +286,32 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
   /// that are queried once (e.g. when seeding the rows of the arguments).
   pub(crate) fn compute_conflicts(&self, place: Place<'tcx>) -> PlaceSet<'tcx> {
     let children = self.children(place);
+    // The fields of a union overlap: every place under a union containing `place`
+    // conflicts with it. (`children` does not enter unions.)
+    let union_members = self.conflict_parents(place).flat_map(|parent| {
+      let TyKind::Adt(adt_def, args) =
+        parent.ty(self.body.local_decls(), self.tcx).ty.kind()
+      else {
+        return Vec::new();
+      };
+      if !adt_def.is_union() {
+        return Vec::new();
+      }
+      let fields = adt_def.non_enum_variant().fields.iter_enumerated();
+      fields
+        .flat_map(|(field, def)| {
+          self.children(
+            self
+              .tcx
+              .mk_place_field(parent, field, def.ty(self.tcx, args)),
+          )
+        })
+        .collect()
+    });
     children
       .into_iter()
       .chain(self.conflict_parents(place))
+      .chain(union_members)
       .collect()
   }
 
