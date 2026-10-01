@@ -801,12 +801,12 @@ fn main() {
   );
 }
 
-// A miss of the exact tier in safe code: the write through a copy of a `&'static`
-// reference without loans is lost, in both tiers.
+// A `&'static` reference without loans stands for its own pointee, which its copies
+// alias.
 #[test]
-fn known_miss_box_leak_static_cell_copied_reference() {
+fn box_leak_static_cell_copied_reference() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::cell::Cell;
 fn main() {
@@ -1439,12 +1439,12 @@ fn main() {
   );
 }
 
-// As `known_miss_box_leak_static_cell_copied_reference`, with the `&'static` returned
-// by a local callee.
+// As `box_leak_static_cell_copied_reference`, with the `&'static` returned by a local
+// callee.
 #[test]
-fn known_miss_static_ref_returned_by_callee_copied() {
+fn static_ref_returned_by_callee_copied() {
   check(
-    Tier::Missed,
+    Tier::Exact,
     r#"
 use std::cell::Cell;
 fn leak() -> &'static Cell<i32> { Box::leak(Box::new(Cell::new(0))) }

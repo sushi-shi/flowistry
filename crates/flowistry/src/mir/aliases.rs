@@ -57,6 +57,9 @@ pub struct Aliases<'a, 'tcx> {
   tcx: TyCtxt<'tcx>,
   body: &'a Body<'tcx>,
   pub(super) loans: LoanMap<'tcx>,
+  /// The pointees of call results that point to memory no place of the body names
+  /// (see [`fresh_pointees`]).
+  fresh: HashSet<Place<'tcx>>,
 }
 
 rustc_index::newtype_index! {
@@ -90,6 +93,9 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
       tcx,
       body: &body_with_facts.body,
       loans,
+      fresh: fresh_pointees(tcx, def_id, &body_with_facts.body)
+        .map(|(_, place, _)| place)
+        .collect(),
     }
   }
 
@@ -110,6 +116,9 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
       tcx,
       body: &body_with_facts.body,
       loans,
+      fresh: fresh_pointees(tcx, def_id, &body_with_facts.body)
+        .map(|(_, place, _)| place)
+        .collect(),
     }
   }
 
@@ -252,6 +261,18 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
       }
     }
 
+    // For all calls d = f(..) whose result points to memory that none of the
+    // operands can reach (its regions are `'static`, or no input of `f` mentions them,
+    // e.g. `Box::leak`), and all d.q : &'a ω T in it: contains('a, *d.q, ω).
+    // Like the pointee of an argument, the pointee stands for memory that no place of
+    // the body names, so that the copies of the result alias each other.
+    for (region, place, mutability) in fresh_pointees(tcx, def_id, body) {
+      contains
+        .entry(region)
+        .or_default()
+        .insert((place, mutability));
+    }
+
     // For all places p : *T or p : Box<T>: contains('UNK, *p, mut).
     let unk_contains = contains.entry(UNKNOWN_REGION).or_default();
     for (region, places) in &all_pointers {
@@ -374,6 +395,15 @@ impl<'a, 'tcx> Aliases<'a, 'tcx> {
     log::trace!("contains: {contains:#?}");
 
     contains
+  }
+
+  /// Whether `place` is (inside) the pointee of a call result that points to memory
+  /// no place of the body names. Like the pointee of an argument, it is a direct
+  /// place: it stands for that memory.
+  pub fn is_fresh(&self, place: Place<'tcx>) -> bool {
+    self.fresh.iter().any(|fresh| {
+      fresh.local == place.local && place.projection.starts_with(fresh.projection)
+    })
   }
 
   /// Given a `place`, returns the set of direct places it could refer to.
@@ -612,4 +642,59 @@ fn main() {
       assert_eq!(fast.loans, all);
     });
   }
+}
+
+/// The pointees `*d.q` of the results `d` of the calls of `body` that point to
+/// memory none of their operands can reach (see [`result_points_to_fresh_memory`]),
+/// with the region and mutability of each pointer `d.q`.
+fn fresh_pointees<'tcx>(
+  tcx: TyCtxt<'tcx>,
+  def_id: DefId,
+  body: &Body<'tcx>,
+) -> impl Iterator<Item = (RegionVid, Place<'tcx>, Mutability)> {
+  body.basic_blocks.iter().flat_map(move |data| {
+    let TerminatorKind::Call {
+      func, destination, ..
+    } = &data.terminator().kind
+    else {
+      return Vec::new();
+    };
+    if !result_points_to_fresh_memory(tcx, func) {
+      return Vec::new();
+    }
+    destination
+      .interior_pointers(tcx, body, def_id)
+      .into_iter()
+      .filter(|(region, _)| *region != UNKNOWN_REGION)
+      .flat_map(|(region, places)| {
+        places
+          .into_iter()
+          .filter(|(place, _)| place.projection.len() <= MAX_ARG_POINTER_DEPTH)
+          .map(move |(place, mutability)| (region, tcx.mk_place_deref(place), mutability))
+      })
+      .collect()
+  })
+}
+
+/// Whether the result of calling `func` points to memory that its operands cannot
+/// reach: every region of the callee's output type is `'static` or mentioned by none
+/// of its inputs (e.g. `fn() -> &'static T`, or `Box::leak<'a>(Box<T>) -> &'a mut T`).
+fn result_points_to_fresh_memory<'tcx>(tcx: TyCtxt<'tcx>, func: &Operand<'tcx>) -> bool {
+  let Some((def_id, _)) = func.const_fn_def() else {
+    return false;
+  };
+  let sig = tcx.fn_sig(def_id).instantiate_identity().skip_binder();
+  let input_regions = sig
+    .inputs()
+    .iter()
+    .flat_map(|ty| ty.walk())
+    .filter_map(|arg| arg.as_region())
+    .collect::<HashSet<_>>();
+  let mut output_regions = sig
+    .output()
+    .walk()
+    .filter_map(|arg| arg.as_region())
+    .peekable();
+  output_regions.peek().is_some()
+    && output_regions.all(|region| region.is_static() || !input_regions.contains(&region))
 }

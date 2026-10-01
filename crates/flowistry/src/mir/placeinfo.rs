@@ -429,7 +429,7 @@ impl<'a, 'tcx> PlaceInfo<'a, 'tcx> {
               return true;
             }
           }
-          place.is_direct(self.body, self.tcx)
+          place.is_direct(self.body, self.tcx) || self.aliases.is_fresh(*place)
         })
         .collect()
     })
