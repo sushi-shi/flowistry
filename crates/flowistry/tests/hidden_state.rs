@@ -381,11 +381,10 @@ fn main() {
   );
 }
 
-// The callee summary loses the write that the signature reports as possible.
 #[test]
-fn known_miss_rc_refcell_clone_written_by_callee() {
-  check_modes(
-    [Tier::Maybe, Tier::Missed],
+fn rc_refcell_clone_written_by_callee() {
+  check(
+    Tier::Maybe,
     r#"
 use std::{cell::RefCell, rc::Rc};
 fn stash(c: &Rc<RefCell<i32>>, x: i32) { *c.borrow_mut() = x; }
@@ -911,5 +910,24 @@ fn main() {
     Direction::Backward,
     &["x = 0"],
     &["input = 73"],
+  );
+}
+
+#[test]
+fn cell_read_through_reference_taken_before_the_write() {
+  check(
+    Tier::Exact,
+    r#"
+use std::cell::Cell;
+fn main() {
+  let c = Cell::new(0);
+  let r = &c;
+  let input = 73;
+  r.set(input);
+  let `(y)` = r.get();
+}"#,
+    Direction::Backward,
+    &["r.get()"],
+    &["r.set(input)", "input = 73"],
   );
 }

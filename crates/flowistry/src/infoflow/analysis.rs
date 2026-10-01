@@ -31,6 +31,7 @@ use super::{
   AnalysisSession,
   domain::{GroupId, LazyMatrix, RowGroups, RowMatrix, SeedRows},
   effects::CallEffects,
+  interior::Handle,
   mutation::{
     CalleeEffect, ModularMutationVisitor, Mutation, MutationKind, MutationStatus,
     Precision,
@@ -818,10 +819,16 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
           matches!(ty.ref_mutability(), Some(Mutability::Not))
         });
         // State behind a shared reference can still be written if it is interior
-        // mutable, e.g. a `RefCell` written through a guard obtained from `&self`.
+        // mutable, e.g. a `RefCell` written through a guard obtained from `&self`, or
+        // if it is an `Rc`/`Arc` handle standing for such state (see `Handle::Owning`).
         let interior_mutable = || {
-          let ty = alias.ty(self.body.local_decls(), self.tcx).ty;
-          !ErasedTy::new(self.tcx, ty).is_freeze(self.tcx, typing_env)
+          let ty =
+            ErasedTy::new(self.tcx, alias.ty(self.body.local_decls(), self.tcx).ty);
+          !ty.is_freeze(self.tcx, typing_env)
+            || matches!(
+              Handle::parse(self.tcx, typing_env, ty),
+              Some(Handle::Owning { .. })
+            )
         };
         !has_immut || ignore_mut || interior_mutable()
       })
