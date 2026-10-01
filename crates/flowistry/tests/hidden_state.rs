@@ -136,9 +136,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_static_rwlock_in_same_function() {
+fn static_rwlock_in_same_function() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::sync::RwLock;
 static M: RwLock<i32> = RwLock::new(0);
@@ -174,9 +174,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_static_lazylock_mutex_in_same_function() {
+fn static_lazylock_mutex_in_same_function() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::sync::{LazyLock, Mutex};
 static L: LazyLock<Mutex<i32>> = LazyLock::new(|| Mutex::new(0));
@@ -440,9 +440,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_channel_send_then_recv() {
+fn channel_send_then_recv() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::sync::mpsc::channel;
 fn main() {
@@ -458,9 +458,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_channel_send_then_recv_forward() {
+fn channel_send_then_recv_forward() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::sync::mpsc::channel;
 fn main() {
@@ -518,9 +518,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_raw_pointer_returned_by_callee_then_written() {
+fn raw_pointer_returned_by_callee_then_written() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn escape(x: &mut i32) -> *mut i32 { x as *mut i32 }
 fn main() {
@@ -627,9 +627,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_transmuted_reference_written() {
+fn transmuted_reference_written() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut x = 0;

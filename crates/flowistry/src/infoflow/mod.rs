@@ -391,7 +391,7 @@ pub fn compute_flow_with_shared_handles<'a, 'tcx>(
 ) -> Option<FlowResults<'a, 'tcx>> {
   let place_info = build_place_info(session, body_id, body_with_facts);
   let shared_handles = SharedHandles::build(&place_info);
-  let hidden = HiddenState::build(&place_info, true);
+  let hidden = HiddenState::build(&place_info, session, true);
   if shared_handles.is_none() && !hidden.has_pessimistic_effects(&place_info, session) {
     return None;
   }
@@ -408,7 +408,7 @@ pub fn compute_flow_with_shared_handles<'a, 'tcx>(
 #[cfg(feature = "engine-diff")]
 fn make_pessimistic(analysis: &mut FlowAnalysis<'_, '_>) {
   analysis.shared_handles = SharedHandles::build(&analysis.place_info);
-  analysis.hidden = HiddenState::build(&analysis.place_info, true);
+  analysis.hidden = HiddenState::build(&analysis.place_info, &analysis.session, true);
 }
 
 fn build_place_info<'a, 'tcx>(

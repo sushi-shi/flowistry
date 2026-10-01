@@ -272,9 +272,9 @@ fn main() {
 
 // A pointer returned by a callee from `&mut m` aliases nothing.
 #[test]
-fn known_miss_maybe_uninit_write_through_as_mut_ptr() {
+fn maybe_uninit_write_through_as_mut_ptr() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::mem::MaybeUninit;
 fn main() {
@@ -383,9 +383,9 @@ fn main() {
 
 // The pointer into the buffer of `v` returned by `as_mut_ptr` aliases nothing.
 #[test]
-fn known_miss_vec_as_mut_ptr_then_set_len() {
+fn vec_as_mut_ptr_then_set_len() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 fn main() {
   let mut v: Vec<i32> = Vec::with_capacity(1);
@@ -401,9 +401,9 @@ fn main() {
 }
 
 #[test]
-fn known_miss_nonnull_from_mut_written() {
+fn nonnull_from_mut_written() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 use std::ptr::NonNull;
 fn main() {
@@ -576,9 +576,9 @@ fn main() {
 
 // Both references returned by `alloc` point into the same static.
 #[test]
-fn known_miss_static_pool_recycles_slot() {
+fn static_pool_recycles_slot() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     r#"
 static mut SLOT: i32 = 0;
 fn alloc() -> &'static mut i32 { unsafe { &mut *(&raw mut SLOT) } }
@@ -1151,9 +1151,9 @@ fn main() {
 
 // A static is not a handle.
 #[test]
-fn known_miss_lib_spinlock_static() {
+fn lib_spinlock_static() {
   check(
-    Tier::Missed,
+    Tier::Maybe,
     &format!(
       "{SPIN}{}",
       r#"

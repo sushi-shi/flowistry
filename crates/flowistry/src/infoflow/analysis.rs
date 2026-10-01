@@ -226,7 +226,7 @@ impl<'a, 'tcx> FlowAnalysis<'a, 'tcx> {
     // Every place that conflicts with a place reachable from an argument starts out
     // depending on the argument.
     let seeds = SeedRows::new(place_info.location_domain(), place_info.seed_rows());
-    let hidden = HiddenState::build(&place_info, false);
+    let hidden = HiddenState::build(&place_info, &session, false);
     FlowAnalysis {
       tcx,
       def_id,

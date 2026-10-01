@@ -54,13 +54,16 @@ use crate::mir::{
 
 /// State that no place of a body names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum HiddenCell {
+pub(crate) enum HiddenCell<'tcx> {
   /// A static, or the thread-local behind a `thread_local!` key (a `const`).
   Static(DefId),
   /// The state shared through the operating system (pessimistic analysis only).
   World,
   /// Memory reached through raw pointers (pessimistic analysis only).
   Escaped,
+  /// The messages in flight in the standard library's channels of a message type
+  /// (pessimistic analysis only): their ends share them through raw pointers.
+  Channel(ErasedTy<'tcx>),
 }
 
 /// The statics, and in the pessimistic analysis the other cells, that a function
@@ -361,12 +364,12 @@ impl HiddenEffects<'_> {
 
 /// The hidden cells of a body, and what each of its instructions does to them.
 pub(crate) struct HiddenState<'tcx> {
-  /// The static of each static handle local.
-  statics: FxHashMap<Local, DefId>,
+  /// The statics of each static handle local.
+  statics: FxHashMap<Local, Statics>,
   /// The exposed places and raw-derived locals, in the pessimistic analysis.
   pessimistic: Option<Exposure<'tcx>>,
   /// The cells used so far, each keyed by the local `first_cell + index`.
-  cells: RefCell<FxIndexSet<HiddenCell>>,
+  cells: RefCell<FxIndexSet<HiddenCell<'tcx>>>,
   first_cell: usize,
   effects: RefCell<FxHashMap<Location, Rc<HiddenEffects<'tcx>>>>,
 }
@@ -386,11 +389,14 @@ struct Exposure<'tcx> {
 impl<'tcx> HiddenState<'tcx> {
   /// The hidden cells of the body of `place_info`, with the cells of the pessimistic
   /// analysis if `pessimistic`.
-  pub fn build(place_info: &PlaceInfo<'_, 'tcx>, pessimistic: bool) -> Self {
-    let tcx = place_info.tcx;
+  pub fn build(
+    place_info: &PlaceInfo<'_, 'tcx>,
+    session: &AnalysisSession<'tcx>,
+    pessimistic: bool,
+  ) -> Self {
     let body = place_info.body;
     HiddenState {
-      statics: static_handles(tcx, body),
+      statics: static_handles(place_info, session, pessimistic),
       pessimistic: pessimistic.then(|| Exposure::build(place_info)),
       cells: RefCell::default(),
       first_cell: body.local_decls.len(),
@@ -405,7 +411,7 @@ impl<'tcx> HiddenState<'tcx> {
   }
 
   /// The row of `cell`.
-  fn row(&self, cell: HiddenCell) -> NormPlace<'tcx> {
+  fn row(&self, cell: HiddenCell<'tcx>) -> NormPlace<'tcx> {
     let (index, _) = self.cells.borrow_mut().insert_full(cell);
     NormPlace::hidden(Local::from_usize(self.first_cell + index))
   }
@@ -451,17 +457,22 @@ impl<'tcx> HiddenState<'tcx> {
     let mut writes = FxIndexSet::default();
     let mut operands = Vec::new();
 
-    let static_of = |place: Place<'tcx>| self.statics.get(&place.local).copied();
+    let static_of = |place: Place<'tcx>| -> &[DefId] {
+      self
+        .statics
+        .get(&place.local)
+        .map_or(&[], |statics| statics)
+    };
     for mutation in mutations {
-      if let Some(def_id) = static_of(mutation.mutated)
-        && mutation.mutated.projection.first() == Some(&ProjectionElem::Deref)
-      {
-        writes.insert(HiddenCell::Static(def_id));
+      if mutation.mutated.projection.first() == Some(&ProjectionElem::Deref) {
+        writes.extend(
+          static_of(mutation.mutated)
+            .iter()
+            .map(|s| HiddenCell::Static(*s)),
+        );
       }
       for input in &mutation.inputs {
-        if let Some(def_id) = static_of(*input) {
-          reads.insert(HiddenCell::Static(def_id));
-        }
+        reads.extend(static_of(*input).iter().map(|s| HiddenCell::Static(*s)));
       }
     }
 
@@ -496,12 +507,14 @@ impl<'tcx> HiddenState<'tcx> {
       let caller = place_info.def_id;
       let interior = InteriorMutation::of_call(tcx, caller, func);
       for arg in args {
-        let def_id = match &arg.node {
-          Operand::Constant(constant) => const_static(tcx, constant),
-          Operand::Copy(place) | Operand::Move(place) => static_of(*place),
-          Operand::RuntimeChecks(_) => None,
+        let statics = match &arg.node {
+          Operand::Constant(constant) => {
+            const_static(tcx, constant).into_iter().collect()
+          }
+          Operand::Copy(place) | Operand::Move(place) => Statics::from(static_of(*place)),
+          Operand::RuntimeChecks(_) => Statics::new(),
         };
-        if let Some(def_id) = def_id {
+        for def_id in statics {
           reads.insert(HiddenCell::Static(def_id));
           if interior == InteriorMutation::Possible && static_can_change(tcx, def_id) {
             writes.insert(HiddenCell::Static(def_id));
@@ -532,6 +545,14 @@ impl<'tcx> HiddenState<'tcx> {
         if global.escaped || raw_operand {
           reads.insert(HiddenCell::Escaped);
           writes.insert(HiddenCell::Escaped);
+        }
+        for arg in args {
+          if let Some(message) =
+            channel_message(tcx, arg.node.ty(body.local_decls(), tcx))
+          {
+            reads.insert(HiddenCell::Channel(message));
+            writes.insert(HiddenCell::Channel(message));
+          }
         }
       }
     }
@@ -574,6 +595,9 @@ impl<'tcx> HiddenState<'tcx> {
         let global = call_global_effects(session, place_info.def_id, body, func, args);
         global.world
           || global.escaped
+          || args.iter().any(|arg| {
+            channel_message(tcx, arg.node.ty(body.local_decls(), tcx)).is_some()
+          })
           || args
             .iter()
             .any(|arg| reaches_raw_pointer(tcx, arg.node.ty(body.local_decls(), tcx), 0))
@@ -600,11 +624,24 @@ impl<'tcx> Visitor<'tcx> for RawScan<'_, 'tcx> {
   }
 }
 
-/// The static handle locals of `body`, with their statics: the locals assigned a
-/// constant address of a static (or a `thread_local!` key), and the locals assigned
-/// a copy, cast or borrow of a place based on one.
-fn static_handles<'tcx>(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) -> FxHashMap<Local, DefId> {
-  let mut handles = FxHashMap::default();
+/// The statics a static handle may point to.
+type Statics = SmallVec<[DefId; 1]>;
+
+/// The static handle locals of the body of `place_info`, with their statics: the
+/// locals assigned a constant address of a static (or a `thread_local!` key), and
+/// the locals assigned a copy, cast or borrow of a place based on one.
+///
+/// In the pessimistic analysis, the result of a call that carries an address (e.g. a
+/// lock guard, or the result of `Deref`) is also a handle to the statics of the
+/// handles it is given, or else to the statics its callee may write.
+fn static_handles<'tcx>(
+  place_info: &PlaceInfo<'_, 'tcx>,
+  session: &AnalysisSession<'tcx>,
+  pessimistic: bool,
+) -> FxHashMap<Local, Statics> {
+  let tcx = place_info.tcx;
+  let body = place_info.body;
+  let mut handles = FxHashMap::<Local, Statics>::default();
   loop {
     let before = handles.len();
     for data in body.basic_blocks.iter() {
@@ -616,25 +653,89 @@ fn static_handles<'tcx>(tcx: TyCtxt<'tcx>, body: &Body<'tcx>) -> FxHashMap<Local
         if !place.projection.is_empty() || handles.contains_key(&place.local) {
           continue;
         }
-        let from_place = |source: &Place<'tcx>| handles.get(&source.local).copied();
-        let def_id = match rvalue {
-          Rvalue::Use(Operand::Constant(constant)) => const_static(tcx, constant),
-          Rvalue::ThreadLocalRef(def_id) => Some(*def_id),
+        let from_place = |source: &Place<'tcx>| handles.get(&source.local).cloned();
+        let statics = match rvalue {
+          Rvalue::Use(Operand::Constant(constant)) => {
+            const_static(tcx, constant).map(|def_id| Statics::from_elem(def_id, 1))
+          }
+          Rvalue::ThreadLocalRef(def_id) => Some(Statics::from_elem(*def_id, 1)),
           Rvalue::Use(Operand::Copy(source) | Operand::Move(source))
           | Rvalue::Cast(_, Operand::Copy(source) | Operand::Move(source), _)
           | Rvalue::Ref(_, _, source)
           | Rvalue::RawPtr(_, source) => from_place(source),
           _ => None,
         };
-        if let Some(def_id) = def_id {
-          handles.insert(place.local, def_id);
+        if let Some(statics) = statics {
+          handles.insert(place.local, statics);
         }
+      }
+      if !pessimistic {
+        continue;
+      }
+      let TerminatorKind::Call {
+        func,
+        args,
+        destination,
+        ..
+      } = &data.terminator().kind
+      else {
+        continue;
+      };
+      if !destination.projection.is_empty()
+        || handles.contains_key(&destination.local)
+        || !carries_address(destination.ty(body.local_decls(), tcx).ty)
+      {
+        continue;
+      }
+      let mut statics = args
+        .iter()
+        .filter_map(|arg| arg.node.place())
+        .filter_map(|place| handles.get(&place.local))
+        .flatten()
+        .copied()
+        .collect::<Statics>();
+      if statics.is_empty() {
+        let global = call_global_effects(session, place_info.def_id, body, func, args);
+        statics.extend(global.writes.iter().copied());
+      }
+      statics.sort_by_key(|def_id| (def_id.krate, def_id.index));
+      statics.dedup();
+      if !statics.is_empty() {
+        handles.insert(destination.local, statics);
       }
     }
     if handles.len() == before {
       return handles;
     }
   }
+}
+
+/// Whether a value of type `ty` may hold an address: a reference, a raw pointer, or
+/// a value with a lifetime.
+fn carries_address(ty: Ty<'_>) -> bool {
+  ty.walk().any(|arg| {
+    arg.as_region().is_some() || arg.as_type().is_some_and(|ty| ty.is_raw_ptr())
+  })
+}
+
+/// The message type of `ty`, if it is (a reference to) an end of a channel of the
+/// standard library.
+fn channel_message<'tcx>(tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> Option<ErasedTy<'tcx>> {
+  let TyKind::Adt(adt_def, args) = ty.peel_refs().kind() else {
+    return None;
+  };
+  let did = adt_def.did();
+  if tcx.crate_name(did.krate).as_str() != "std"
+    || !matches!(
+      tcx.item_name(did).as_str(),
+      "Sender" | "SyncSender" | "Receiver"
+    )
+  {
+    return None;
+  }
+  let path = tcx.def_path_str(did);
+  (path.contains("::mpsc::") || path.contains("::mpmc::"))
+    .then(|| ErasedTy::new(tcx, args.type_at(0)))
 }
 
 impl<'tcx> Exposure<'tcx> {
@@ -698,10 +799,20 @@ impl<'tcx> Exposure<'tcx> {
         }
       }
     }
-    // Pointer arithmetic may reach any part of the object behind the last
+    // A place exposed through a reference is the place the reference points to, and
+    // pointer arithmetic may reach any part of the object behind the last
     // dereference.
     let mut places = places
       .into_iter()
+      .flat_map(|place| {
+        let mut aliases = place_info
+          .aliases(place)
+          .iter()
+          .copied()
+          .collect::<Vec<_>>();
+        aliases.push(place);
+        aliases
+      })
       .map(|place| {
         let object = place
           .projection
