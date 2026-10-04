@@ -46,7 +46,7 @@ function M.selection(focus, pos, parameter_types)
   return pos
 end
 
-function M.show(buf, focus, pos, priority, show_influence, show_maybe, parameter_types)
+function M.show(buf, focus, pos, priority, show_influence, show_maybe, parameter_types, direction)
   M.clear(buf)
   pos = M.selection(focus, pos, parameter_types)
   if not pos then return nil end
@@ -54,8 +54,12 @@ function M.show(buf, focus, pos, priority, show_influence, show_maybe, parameter
   if not token then return nil end
   local place = ranges.smallest(focus.places, pos, function(item) return item.range end)
   if not place or #place.ranges == 0 then return nil end
-  local slice = vim.list_extend(vim.deepcopy(place.slice), place.ranges)
-  local maybe = show_maybe ~= false and place.maybe_slice or {}
+  direction = direction or "both"
+  local selected = direction == "both" and place.slice or place[direction .. "_slice"]
+  if not selected then return nil, "Directional focus requires an updated Flowistry backend. Use :Flow both or update the backend." end
+  local slice = vim.list_extend(vim.deepcopy(selected), place.ranges)
+  local maybe = show_maybe ~= false and (direction == "both" and place.maybe_slice or place["maybe_" .. direction .. "_slice"]) or {}
+  maybe = maybe or {}
   local shown = vim.list_extend(vim.deepcopy(slice), maybe)
   -- Comment tokens keep their syntax colors even when a broad MIR source span
   -- includes them. Subtract from every decoration, including optional modes.
@@ -63,9 +67,30 @@ function M.show(buf, focus, pos, priority, show_influence, show_maybe, parameter
   highlight(buf, without_comments(ranges.complement(focus.containers, shown)), "FlowistryDim", priority)
   highlight(buf, without_comments(maybe), "FlowistryMaybe", priority)
   if show_influence then
-    highlight(buf, without_comments(place.direct_influence), "FlowistryInfluence", priority + 1)
+    local visible = ranges.complement(place.direct_influence, ranges.complement(focus.containers, shown))
+    highlight(buf, without_comments(visible), "FlowistryInfluence", priority + 1)
   end
   highlight(buf, { token }, "FlowistryFocus", priority + 2)
+  return without_comments(slice)
+end
+
+function M.pinned(buf, focus, pos, priority, show_maybe, direction)
+  M.clear(buf)
+  local function selected(prefix)
+    if direction == "both" then
+      return vim.list_extend(vim.deepcopy(focus[prefix .. "pre_slice"]), focus[prefix .. "post_slice"])
+    end
+    return vim.deepcopy(focus[prefix .. direction .. "_slice"])
+  end
+  local slice = selected("")
+  local token = pos and ranges.token(buf, pos)
+  if token then slice[#slice + 1] = token end
+  local maybe = show_maybe ~= false and ranges.complement(selected("maybe_"), slice) or {}
+  local shown = vim.list_extend(vim.deepcopy(slice), maybe)
+  local function without_comments(items) return ranges.complement(items, focus.comments) end
+  highlight(buf, without_comments(ranges.complement(focus.containers, shown)), "FlowistryDim", priority)
+  highlight(buf, without_comments(maybe), "FlowistryMaybe", priority)
+  if token then highlight(buf, { token }, "FlowistryFocus", priority + 2) end
   return without_comments(slice)
 end
 

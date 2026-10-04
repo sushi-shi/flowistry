@@ -77,6 +77,23 @@ are available.
    pinned variable to unpin; use it on another variable to move the pin.
    `:Flow unpin` resumes cursor tracking from anywhere. `:Flow off` disables it.
 
+With the bundled backend, pins follow resolved local calls across functions and
+files. For `fn hello(x: i64) { goo(x); }`, pin `x` and open `goo`: post/both keeps
+the corresponding parameter and its affected uses readable. Pre follows returned
+values and reference writes back into the callee's calculations. Switching
+directions or opening a callee reuses the same result without recompiling.
+There is one active call-following pin; pinning elsewhere replaces it, and
+`:Flow unpin` releases it from any buffer.
+
+The slice follows the pinned function's local call tree, including nested calls
+and recursive cycles. It does not search for callers of the pinned function or
+cross crate boundaries. Dynamic/unresolved calls keep conservative effects at
+the call site. Other call sites are not pulled in just because they call the
+same function. The status says `Outside pinned call tree` for unrelated functions
+and files.
+Calls controlled by the pin can make the entire callee relevant. A request that
+exceeds 256 functions reports an error instead of silently showing a partial slice.
+
 A red 📌 in the sign column marks the pinned line. It takes priority over ordinary
 letter-mark signs without deleting them; unpinning reveals them again. The marker
 follows edits and formatting, disappears if the pinned token is removed, and
@@ -86,6 +103,9 @@ returns if undo restores it. Customize its color with `FlowistryPin`.
 | --- | --- |
 | `:Flow on` / `off` | Enable or disable for the current buffer |
 | `:Flow pin` / `unpin` | Pin the cursor position or resume following it |
+| `:Flow pre` | Show what can affect the selected value |
+| `:Flow post` | Show what the selected value can affect |
+| `:Flow both` | Show causes and effects together (default) |
 | `:Flow` / `:Flowistry` | Show an action menu |
 | `:Flow toggle` / `refresh` / `log` | Toggle, retry analysis, or show errors |
 | `:Flowistry toggle` | Toggle focus mode |
@@ -165,6 +185,8 @@ require("flowistry").setup({
   priority = 200,                -- above normal syntax/semantic highlights
   show_influence = false,        -- optional extra direct-influence backgrounds
   show_maybe = true,             -- tint code that matters only if shared handles alias
+  direction = "both",            -- "pre" for causes, "post" for effects
+  follow_calls = false,           -- bundled Nix plugin enables this automatically
   parameter_types = true,        -- an argument's type selects its binding (map: &LevelMap)
   progress = false,              -- analysis popups; enabled by the Nix launcher
   project = { enabled = false }, -- opt-in bounded workspace background analysis
@@ -183,7 +205,21 @@ also makes the entire argument type, including `&` and generic arguments, behave
 like its binding. Set it to `false` to keep ordinary cursor selection. Destructured
 arguments are left unchanged because their type does not identify one binding.
 Use `:Flow types` to toggle type selection during a session without clearing caches.
+
+Use `:Flow pre`, `:Flow post`, or `:Flow both` to change the dependency direction
+without recompiling. This also works while pinned. Direction refers to the flow
+of values, not source-line order: a later use of `width` can show an earlier
+calculation of `pixels` that used the same value. Reassignments remain separate.
+Branch conditions and uncertain aliases can also contribute dependencies.
 Older backends remain supported and keep their existing behavior.
+
+`follow_calls = true` requires this repository's `pin-focus` backend command.
+The bundled plugin enables it; with a custom backend command, enable it explicitly.
+Pinning performs one additional compiler request for both directions, reusing
+validated callee summaries. Cursor focus remains function-local. Pin results stay
+in editor memory and are invalidated when inputs change; they are not persisted
+as ordinary per-function focus results. `show_maybe` also applies across calls;
+the optional direct-influence background remains a cursor-focus feature.
 
 With `auto_enable=false`, use `:Flow on` when you want analysis. The launcher
 merges these overrides with its packaged backend settings.

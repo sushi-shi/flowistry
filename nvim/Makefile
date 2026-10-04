@@ -1,4 +1,4 @@
-.PHONY: test test-ui test-live test-precision test-save test-summaries test-cache test-source-selection
+.PHONY: test test-ui test-live test-precision test-save test-summaries test-cache test-source-selection test-calls
 test:
 	nvim --headless -u NONE -i NONE -l tests/run.lua
 	nvim --headless -u NONE -i NONE -l tests/project_stream.lua
@@ -6,6 +6,7 @@ test:
 	nvim --headless -u NONE -i NONE -l tests/background.lua
 	nvim --headless -u NONE -i NONE -l tests/inputs.lua
 	nvim --headless -u NONE -i NONE -l tests/cancellation.lua
+	nvim --headless -u NONE -i NONE -l tests/call_state.lua
 
 test-ui:
 	nvim --headless -n -i NONE --cmd 'let g:coc_start_at_startup=0' -c 'luafile tests/ui.lua'
@@ -27,3 +28,6 @@ test-cache:
 
 test-source-selection:
 	nvim --headless -u NONE -i NONE -l tests/source-selection.lua
+
+test-calls:
+	nvim --headless -u NONE -i NONE -l tests/calls.lua

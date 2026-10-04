@@ -15,10 +15,11 @@ pub use self::{
   analysis::{FlowAnalysis, FlowDomain},
   callsite::{FallbackReason, UnsupportedOp},
   dependencies::{
-    Direction, compute_dependencies, compute_dependency_spans, compute_focus_spans,
-    merge_spans,
+    Direction, compute_dependencies, compute_dependency_spans, compute_focus_directions,
+    compute_focus_spans, merge_spans,
   },
   domain::{LazyMatrix, RowGroups, SeedRows},
+  pinned::{PinnedBody, pinned_slice},
   session::{AnalysisSession, SummaryStats, SummaryStore},
   summary_wire::PortableSummary,
 };
@@ -41,6 +42,7 @@ mod effects;
 mod hidden;
 mod interior;
 pub mod mutation;
+mod pinned;
 mod recursive;
 mod session;
 mod shared_handles;

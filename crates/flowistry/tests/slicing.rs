@@ -60,7 +60,25 @@ fn test_focus_spans() {
             .map(|location| (mir_span.place, *location))
         })
         .collect::<Vec<_>>();
-      let spans = infoflow::compute_focus_spans(&results, vec![target], &spanner);
+      let spans = infoflow::compute_focus_spans(&results, vec![target.clone()], &spanner);
+      let mut batch = spanner
+        .mir_span_tree
+        .iter()
+        .map(|span| {
+          span
+            .locations
+            .iter()
+            .map(|location| (span.place, *location))
+            .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+      batch.push(target);
+      let batch = infoflow::compute_focus_spans(&results, batch, &spanner);
+      assert_eq!(
+        spans[0],
+        *batch.last().unwrap(),
+        "focus must not depend on batch size"
+      );
       Span::merge_overlaps(spans.into_iter().flatten().collect())
     });
   });

@@ -503,7 +503,7 @@ def crash_signature(stderr):
 
 
 OK_PREFIX = '{"Ok":{"place_info":['
-RANGE_LIST_FIELDS = ("ranges", "slice", "direct_influence", "maybe_slice")
+RANGE_LIST_FIELDS = ("ranges", "slice", "pre_slice", "post_slice", "direct_influence", "maybe_slice", "maybe_pre_slice", "maybe_post_slice")
 
 
 def canonical_entry(entry, table=None):

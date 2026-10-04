@@ -181,26 +181,36 @@ function M.request(context, args, config, callback)
   if watched then env.FLOWISTRY_RESULT_PROTOCOL = "1" end
   op:run(argv, { cwd = context.root, env = env, text = true, timeout = config.timeout_ms }, function(result)
     if result.code ~= 0 then callback(table.concat(argv, " ") .. "\n" .. failure(result)); return end
+    local function transport_error(message)
+      local detail = { message, "Command: " .. table.concat(argv, " "), "Working directory: " .. context.root }
+      for _, stream in ipairs({ "stderr", "stdout" }) do
+        local output = vim.trim(result[stream] or "")
+        if output ~= "" then
+          detail[#detail + 1] = stream .. ":\n" .. output:sub(1, 8192) .. (#output > 8192 and "\n[truncated]" or "")
+        end
+      end
+      return table.concat(detail, "\n")
+    end
     local encoded = result.stdout or ""
     local inputs = false
     if watched and encoded:match("^%s*{") then
       local ok, publication = pcall(vim.json.decode, encoded)
-      if not ok or publication.schema ~= 1
+      if not ok or type(publication) ~= "table" or publication.schema ~= 1
         or (publication.status ~= "current" and publication.status ~= "uncached")
-        or type(publication.output) ~= "string" then callback("Invalid or superseded analysis publication"); return end
+        or type(publication.output) ~= "string" then callback(transport_error("Invalid or superseded analysis publication")); return end
       encoded = publication.output
       inputs = publication.inputs
     end
     encoded = encoded:gsub("%s", "")
-    if encoded == "" and vim.trim(result.stderr or "") ~= "" then
-      callback("Flowistry produced no analysis:\n" .. vim.trim(result.stderr)); return
+    if encoded == "" then
+      callback(transport_error("Flowistry produced no analysis. The compiler may have skipped the selected Cargo target; check its target name, platform and features.")); return
     end
     decode(op, encoded, config, function(err, value, bytes)
       if value and watched then
         value._input_watch = inputs or false
         value._input_scope = require("flowistry.inputs").scope(args[2], config.selection)
       end
-      callback(err, value, bytes)
+      callback(err and transport_error(err), value, bytes)
     end)
   end)
   return op

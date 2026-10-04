@@ -9,6 +9,35 @@ COMMANDS                                                   *:Flowistry*
 :Flow                    Show an action menu.
 :Flow toggle             Toggle focus; also accepts refresh and log.
 :Flow types              Toggle parameter-type selection (map: &LevelMap).
+:Flow pre                Show what can affect the selected value (backward).
+:Flow post               Show what the selected value can affect (forward).
+:Flow both               Show both directions (default).
+
+Direction changes reuse the current analysis and also work with pinned focus.
+The statusline identifies pre/post mode. Set `direction = "pre"` or `"post"` in
+setup() to change the default. The same actions are available through :Flowistry
+and <Plug>(FlowistryPre), <Plug>(FlowistryPost), <Plug>(FlowistryBoth).
+
+Pre/post describe dependency direction, not source-line order. Earlier uses of
+the same value can be downstream of it. Reassignments and distinct fields remain
+separate; uncertain aliases and branch conditions retain conservative behavior.
+An older backend without directional results supports only :Flow both.
+
+The bundled backend enables follow_calls: one active pin follows resolved local
+callees across functions and files. Post follows affected arguments into the
+callee's uses; pre follows returned values and reference writes into their causes.
+For hello(x) calling goo(x), pin x and open goo to see its affected parameter.
+Nested calls and recursive cycles are supported. Only call sites reached from
+the pinned function participate; callers of that function are not searched.
+External crates and dynamic/unresolved calls remain conservative at the call
+site. A controlling branch can make the whole callee relevant.
+
+Pinning starts one extra compiler request; navigation and pre/post changes reuse
+its result. Saves invalidate it. Pin elsewhere to replace the pin; :Flow unpin
+works from any buffer. Unrelated files show "Outside pinned call tree". The
+backend reports slices exceeding 256 functions instead of returning partial data.
+Set follow_calls = false to keep pins function-local. A custom installation
+must enable follow_calls explicitly and provide this fork's pin-focus command.
 
 A red 📌 marks the pinned line in the sign column, above ordinary letter marks.
 Unpinning reveals those marks again. The marker follows edits and formatting;

@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::focus::{FocusOutput, ParameterAlias, PlaceInfo};
 
-const SCHEMA: u32 = 4;
+const SCHEMA: u32 = 5;
 const MAX_ENTRY: u64 = 32 * 1024 * 1024;
 
 struct Regions(Vec<String>);
@@ -484,6 +484,10 @@ struct PortablePlace {
   ranges: Vec<u32>,
   slice: Vec<u32>,
   direct_influence: Vec<u32>,
+  pre_slice: Vec<u32>,
+  post_slice: Vec<u32>,
+  maybe_pre_slice: Vec<u32>,
+  maybe_post_slice: Vec<u32>,
   maybe_slice: Vec<u32>,
 }
 #[derive(Serialize, Deserialize)]
@@ -540,6 +544,10 @@ impl Entry {
             ranges: p.ranges.clone(),
             slice: p.slice.clone(),
             direct_influence: p.direct_influence.clone(),
+            pre_slice: p.pre_slice.clone(),
+            post_slice: p.post_slice.clone(),
+            maybe_pre_slice: p.maybe_pre_slice.clone(),
+            maybe_post_slice: p.maybe_post_slice.clone(),
             maybe_slice: p.maybe_slice.clone(),
           })
         })
@@ -577,6 +585,10 @@ impl Entry {
         .chain(&place.ranges)
         .chain(&place.slice)
         .chain(&place.direct_influence)
+        .chain(&place.pre_slice)
+        .chain(&place.post_slice)
+        .chain(&place.maybe_pre_slice)
+        .chain(&place.maybe_post_slice)
         .chain(&place.maybe_slice)
         .any(|index| *index as usize >= self.ranges.len())
       {
@@ -597,6 +609,10 @@ impl Entry {
             ranges: p.ranges.clone(),
             slice: p.slice.clone(),
             direct_influence: p.direct_influence.clone(),
+            pre_slice: p.pre_slice.clone(),
+            post_slice: p.post_slice.clone(),
+            maybe_pre_slice: p.maybe_pre_slice.clone(),
+            maybe_post_slice: p.maybe_post_slice.clone(),
             maybe_slice: p.maybe_slice.clone(),
           })
         })

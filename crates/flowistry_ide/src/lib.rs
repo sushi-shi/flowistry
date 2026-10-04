@@ -28,6 +28,7 @@ mod cache;
 mod decompose;
 mod file_focus;
 mod focus;
+mod pinned;
 mod playground;
 mod plugin;
 mod positions;

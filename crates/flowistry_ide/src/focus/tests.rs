@@ -24,6 +24,140 @@ fn body_named(tcx: TyCtxt<'_>, name: &str) -> rustc_hir::BodyId {
     .unwrap()
 }
 
+#[test]
+fn value_focus_tracks_earlier_uses_without_merging_reassignments() {
+  let source = r#"
+struct Glyph<'a> { index: usize, width: usize, height: usize, pixels: &'a [u8] }
+fn glyph(bytes: &[u8], index: usize, width: usize, height: usize) -> Option<Glyph<'_>> {
+ let len = width.checked_mul(height)?;
+ let pixels = bytes.get(..len)?;
+ Some(Glyph { index, width, height, pixels })
+}
+struct Glyphs<'a> { bytes: &'a [u8], at: usize, index: usize, remaining: usize }
+const GLYPH_HEADER_SIZE: usize = 8;
+fn read_i32(bytes: &[u8], at: usize) -> Option<i32> {
+ Some(i32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?))
+}
+impl<'a> Iterator for Glyphs<'a> {
+    type Item = Glyph<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            return None;
+        }
+        let width = read_i32(self.bytes, self.at)?;
+        let height = read_i32(self.bytes, self.at + 4)?;
+        let width = usize::try_from(width).ok()?;
+        let height = usize::try_from(height).ok()?;
+        let len = width.checked_mul(height)?;
+        let pixels_at = self.at.checked_add(GLYPH_HEADER_SIZE)?;
+        let pixels = self.bytes.get(pixels_at..pixels_at.checked_add(len)?)?;
+        let glyph = Glyph {
+            index: self.index,
+            width,
+            height,
+            pixels,
+        };
+        self.at = pixels_at + len;
+        self.index += 1;
+        self.remaining -= 1;
+        Some(glyph)
+    }
+}
+
+fn reassigned(seed: usize, replacement: usize) -> (usize, usize, usize) {
+ let mut width = seed + 1;
+ let before = width * 2;
+ width = replacement;
+ let after = width * 3;
+ let chosen = width;
+ (before, after, chosen)
+}
+fn independent(seed: usize) -> (usize, usize, usize) {
+ let left = seed;
+ let right = seed;
+ let left_use = left + 1;
+ let right_use = right + 1;
+ let chosen = left;
+ (left_use, right_use, chosen)
+}
+fn main() {}
+"#;
+  borrowck_facts::enable_mir_simplification();
+  CompileBuilder::new(source).compile(|result| {
+    let tcx = result.tcx;
+    for context_mode in [ContextMode::SigOnly, ContextMode::Recurse] {
+      let session = AnalysisSession::new(tcx, EvalMode {
+        context_mode,
+        ..EvalMode::default()
+      });
+      for (function, name, pre_has, pre_not, post_has, post_not) in [
+        (
+          "next",
+          "width",
+          "read_i32",
+          "let pixels",
+          "let pixels",
+          "index: self.index",
+        ),
+        (
+          "glyph",
+          "width",
+          "width",
+          "let pixels",
+          "let pixels",
+          "index,",
+        ),
+        (
+          "reassigned",
+          "width",
+          "replacement",
+          "seed + 1",
+          "let after",
+          "let before",
+        ),
+        (
+          "independent",
+          "left",
+          "seed",
+          "let right",
+          "let left_use",
+          "let right_use",
+        ),
+      ] {
+        let output =
+          super::focus_with_session(&session, body_named(tcx, function)).unwrap();
+        let place = output
+          .place_info
+          .iter()
+          .filter(|p| snippet(tcx, &output.ranges[p.range as usize]) == name)
+          .max_by_key(|p| output.ranges[p.range as usize].start)
+          .unwrap();
+        let text = |indices: &[u32]| {
+          indices
+            .iter()
+            .map(|i| snippet(tcx, &output.ranges[*i as usize]))
+            .collect::<Vec<_>>()
+            .join("\n")
+        };
+        for (direction, slice, has, absent) in [
+          ("pre", text(&place.pre_slice), pre_has, pre_not),
+          ("post", text(&place.post_slice), post_has, post_not),
+        ] {
+          assert!(
+            slice.contains(has),
+            "{function}/{context_mode:?}/{direction} missing {has}: {slice}"
+          );
+          assert!(
+            !slice.contains(absent),
+            "{function}/{context_mode:?}/{direction} includes {absent}: {slice}"
+          );
+        }
+      }
+    }
+  });
+}
+
 fn snippet(tcx: TyCtxt<'_>, range: &CharRange) -> String {
   tcx
     .sess
@@ -124,6 +258,10 @@ fn effectful(saved: i32) -> State {
   let state = State { health: saved, timer: effect(), other: 0 };
   state
 }
+fn relevant_effect(saved: &mut i32) -> State {
+  let state = State { health: *saved, timer: { *saved += 1; 0 }, other: 0 };
+  state
+}
 fn controlled(flag: bool) -> State {
   let state = if flag { State { health: 1, timer: 2, other: 3 } }
     else { State { health: 4, timer: 5, other: 6 } };
@@ -154,12 +292,13 @@ fn main() {}
           vec!["health: saved", "timer: 0", "other: other"],
           vec![],
         ),
-        (
-          "effectful",
-          "saved",
-          vec!["health: saved", "timer: effect()"],
-          vec!["other: 0"],
-        ),
+        ("effectful", "saved", vec!["health: saved"], vec![
+          "timer: effect()",
+          "other: 0",
+        ]),
+        ("relevant_effect", "saved", vec!["*saved += 1"], vec![
+          "other: 0",
+        ]),
         ("controlled", "flag", vec!["timer: 2", "timer: 5"], vec![]),
         ("updated", "saved", vec!["health: saved", "..base"], vec![
           "timer: 0",
@@ -253,8 +392,15 @@ fn main() {
     assert_eq!(serialized.as_object().unwrap().len(), 3);
     for place in serialized["place_info"].as_array().unwrap() {
       let fields = place.as_object().unwrap();
-      assert_eq!(fields.len(), 4);
-      for field in ["range", "ranges", "slice", "direct_influence"] {
+      assert_eq!(fields.len(), 6);
+      for field in [
+        "range",
+        "ranges",
+        "slice",
+        "pre_slice",
+        "post_slice",
+        "direct_influence",
+      ] {
         assert!(fields.contains_key(field));
       }
     }
@@ -363,5 +509,80 @@ fn maybe_spans_are_subtracted_from_exact_spans() {
       super::subtract_spans(&[span(20, 30)], &[span(0, 10)]),
       vec![span(20, 30)]
     );
+  });
+}
+
+#[test]
+fn constructor_field_labels_and_shorthand_keep_independent_inputs_dimmed() {
+  let source = r#"
+struct Entry { key: String, integrity: String, values: Vec<u32> }
+impl Entry {
+  fn checksum(&self) -> String { self.key.clone() }
+  fn capture(key: String, values: Option<Vec<u32>>) -> Option<Self> {
+    let mut entry = Self {
+      key,
+      integrity: String::new(),
+      values: values?,
+    };
+    entry.integrity = entry.checksum();
+    Some(entry)
+  }
+}
+fn main() {}
+"#;
+  borrowck_facts::enable_mir_simplification();
+  CompileBuilder::new(source).compile(|result| {
+    let tcx = result.tcx;
+    for context_mode in [ContextMode::SigOnly, ContextMode::Recurse] {
+      let session = AnalysisSession::new(tcx, EvalMode {
+        context_mode,
+        ..EvalMode::default()
+      });
+      let output =
+        super::focus_with_session(&session, body_named(tcx, "capture")).unwrap();
+      for target in ["key", "integrity"] {
+        let selected = output
+          .place_info
+          .iter()
+          .filter(|place| snippet(tcx, &output.ranges[place.range as usize]) == target)
+          .max_by_key(|place| output.ranges[place.range as usize].start)
+          .unwrap();
+        let slice = selected
+          .slice
+          .iter()
+          .map(|i| snippet(tcx, &output.ranges[*i as usize]))
+          .collect::<Vec<_>>()
+          .join("\n");
+        assert!(
+          !slice.contains("values: values?"),
+          "{context_mode:?}/{target}: {slice}"
+        );
+        if target == "key" {
+          assert!(
+            !slice.contains("integrity: String::new()"),
+            "{context_mode:?}/{target}: {slice}"
+          );
+          assert!(
+            slice.contains("entry.checksum()"),
+            "{context_mode:?}/{target}: {slice}"
+          );
+        } else {
+          assert!(
+            slice.contains("String::new()"),
+            "{context_mode:?}/{target}: {slice}"
+          );
+          assert!(
+            !slice.contains("key: String"),
+            "{context_mode:?}/{target}: {slice}"
+          );
+          if context_mode == ContextMode::Recurse {
+            assert!(
+              !slice.contains("entry.checksum()"),
+              "{context_mode:?}/{target}: {slice}"
+            );
+          }
+        }
+      }
+    }
   });
 }

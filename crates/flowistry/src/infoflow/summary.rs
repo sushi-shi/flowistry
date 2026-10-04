@@ -36,6 +36,7 @@ use super::{
   session::AnalysisSession,
 };
 use crate::mir::{
+  bitset::IndexSetExt,
   engine,
   placeinfo::{NormPlace, PlaceInfo},
 };
@@ -278,6 +279,192 @@ fn origin_indices(deps: &IndexSet<Origin>) -> Vec<usize> {
   let mut indices = deps.iter().map(|origin| origin.0).collect::<Vec<_>>();
   indices.sort_unstable();
   indices
+}
+
+/// The same field-sensitive origin analysis used by callee summaries, seeded
+/// only with the inputs reached by a pin. Location provenance alone cannot
+/// distinguish two fields of the same incoming parameter (both start at Arg).
+pub(super) struct InputFlow<'tcx> {
+  results: engine::AnalysisResults<'tcx, 'tcx, SummaryAnalysis<'tcx, 'tcx>>,
+}
+
+pub(super) fn input_flow<'tcx>(
+  session: &Rc<AnalysisSession<'tcx>>,
+  def: LocalDefId,
+  seeds: Vec<Place<'tcx>>,
+  shared: bool,
+) -> InputFlow<'tcx> {
+  let tcx = session.tcx();
+  let facts = session.body(def);
+  let body = &facts.body;
+  let info = PlaceInfo::build_with_mode(tcx, def.to_def_id(), facts, session.mode());
+  let domain = Rc::new(IndexedDomain::from_iter((0 .. seeds.len()).map(Origin)));
+  let locations = info.location_domain().clone();
+  let mut flow =
+    FlowAnalysis::with_session(tcx, def.to_def_id(), body, info, session.clone());
+  if shared {
+    flow.shared_handles = super::SharedHandles::build(&flow.place_info);
+    flow.hidden = super::HiddenState::build(&flow.place_info, session, true);
+  }
+  let analysis = SummaryAnalysis {
+    flow,
+    seeds,
+    abi: CalleeAbi::of_body(tcx, def.to_def_id(), body),
+    writes: RefCell::new(OriginMatrix::new(&domain)),
+    reads: RefCell::new(IndexSet::new(&domain)),
+    domain,
+  };
+  InputFlow {
+    results: engine::iterate_to_fixpoint_by_location(tcx, body, locations, analysis),
+  }
+}
+
+impl<'tcx> InputFlow<'tcx> {
+  pub(super) fn reaches_before(&self, at: Location, place: Place<'tcx>) -> bool {
+    let state = self.results.state_before(at);
+    self
+      .results
+      .analysis
+      .flow
+      .deps_of_inputs(&state, &[place])
+      .count()
+      > 0
+  }
+
+  pub(super) fn spans(
+    &self,
+    spanner: &rustc_utils::source_map::spanner::Spanner<'tcx>,
+  ) -> Vec<rustc_span::Span> {
+    use rustc_utils::{
+      BodyExt, SpanExt, mir::location_or_arg::LocationOrArg,
+      source_map::spanner::EnclosingHirSpans,
+    };
+    let flow = &self.results.analysis.flow;
+    let body = flow.body;
+    let mut affected = Vec::new();
+    for seed in &self.results.analysis.seeds {
+      affected.push(LocationOrArg::Arg(seed.local));
+    }
+    self.results.for_each_state(|location, state| {
+      let (written, mut reads): (Vec<_>, Vec<_>) = match body.stmt_at(location) {
+        either::Either::Left(statement) => (
+          flow
+            .statement_mutations(statement, location)
+            .iter()
+            .map(|m| m.mutated)
+            .collect(),
+          vec![],
+        ),
+        either::Either::Right(terminator) => {
+          let effects = flow.effects_at(terminator, location);
+          (
+            effects.mutations.iter().map(|m| m.mutated).collect(),
+            effects.reads.clone(),
+          )
+        }
+      };
+      if let either::Either::Right(Terminator {
+        kind: TerminatorKind::SwitchInt { discr, .. },
+        ..
+      }) = body.stmt_at(location)
+      {
+        reads.extend(discr.place());
+      }
+      if flow.deps_of_inputs(state, &written).count() > 0
+        || flow
+          .deps_of_inputs(&self.results.state_before(location), &reads)
+          .count()
+          > 0
+      {
+        affected.push(LocationOrArg::Location(location));
+      }
+    });
+    let spans = affected
+      .iter()
+      .flat_map(|at| spanner.location_to_spans(*at, body, EnclosingHirSpans::OuterOnly))
+      .collect();
+    let mut spans = super::merge_spans(spans);
+    let simple = super::simple_args::collect(flow.tcx, flow.def_id.expect_local());
+    // A relevant call does not make its independent argument expressions part
+    // of the forward slice, just as in ordinary value focus.
+    for (block, data) in body.basic_blocks.iter_enumerated() {
+      if let TerminatorKind::Call { args, .. } = &data.terminator().kind {
+        for arg in args {
+          let incoming = self.results.state_before(body.terminator_loc(block));
+          let relevant = arg.node.place().is_some_and(|p| {
+            flow
+              .deps_of_inputs(&incoming, &flow.reachable_contents(p))
+              .count()
+              > 0
+          });
+          if simple.calls.contains(&arg.span) && !relevant {
+            spans = spans
+              .into_iter()
+              .flat_map(|span| span.subtract(vec![arg.span]))
+              .collect();
+          }
+        }
+      }
+      for (statement_index, statement) in data.statements.iter().enumerate() {
+        let StatementKind::Assign(assignment) = &statement.kind else {
+          continue;
+        };
+        let Rvalue::Aggregate(kind, operands) = &assignment.1 else {
+          continue;
+        };
+        if !matches!(**kind, AggregateKind::Adt(_, _, _, _, None)) {
+          continue;
+        }
+        let Some(fields) = simple.fields.get(&statement.source_info.span) else {
+          continue;
+        };
+        let at = Location {
+          block,
+          statement_index,
+        };
+        let controlled = flow
+          .control_dependencies
+          .dependent_on(block)
+          .into_iter()
+          .flat_map(|blocks| blocks.iter())
+          .any(|guard| {
+            let TerminatorKind::SwitchInt { discr, .. } =
+              &body.basic_blocks[guard].terminator().kind
+            else {
+              return false;
+            };
+            discr
+              .place()
+              .is_some_and(|p| self.reaches_before(body.terminator_loc(guard), p))
+          });
+        if controlled {
+          continue;
+        }
+        for (index, span, simple) in fields {
+          let Some(operand) = operands.get(*index) else {
+            continue;
+          };
+          if operand.place().is_some_and(|p| self.reaches_before(at, p)) {
+            continue;
+          }
+          if !simple
+            && body.all_locations().any(|other| {
+              other != at
+                && span.contains(body.source_info(other).span)
+                && affected.contains(&LocationOrArg::Location(other))
+            })
+          {
+            continue;
+          }
+          spans = spans
+            .into_iter()
+            .flat_map(|outer| outer.subtract(vec![*span]))
+            .collect();
+        }
+      }
+    }
+    spans
+  }
 }
 
 /// The flow analysis of a callee over origins.

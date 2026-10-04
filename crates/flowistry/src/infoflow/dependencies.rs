@@ -3,6 +3,7 @@ use std::{cell::RefCell, iter};
 use either::Either;
 use indexical::ToIndex;
 use log::{debug, trace};
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 use rustc_index::{IndexVec, bit_set::DenseBitSet};
 use rustc_middle::mir::*;
 use rustc_span::{Span, SpanData, SyntaxContext};
@@ -36,7 +37,7 @@ pub enum Direction {
 }
 
 #[derive(Debug, Clone)]
-struct TargetDeps {
+pub(super) struct TargetDeps {
   all_forward: Vec<LocationOrArgSet>,
   /// The location of each sub-target, which its set in `all_forward` contains.
   pivots: Vec<LocationOrArg>,
@@ -44,7 +45,7 @@ struct TargetDeps {
 
 impl TargetDeps {
   /// The target dependencies of each list of targets in `all_targets`.
-  fn all<'tcx>(
+  pub(super) fn all<'tcx>(
     all_targets: &[Vec<(Place<'tcx>, LocationOrArg)>],
     results: &FlowResults<'_, 'tcx>,
   ) -> Vec<Self> {
@@ -101,6 +102,13 @@ impl TargetDeps {
       all_target_deps[i].pivots.push(location);
     }
     all_target_deps
+  }
+
+  pub(super) fn reaches(&self, deps: &LocationOrArgSet) -> bool {
+    self
+      .all_forward
+      .iter()
+      .any(|source| deps.contains_all(source))
   }
 }
 
@@ -491,14 +499,105 @@ mod test {
 pub fn compute_focus_spans<'tcx>(
   results: &FlowResults<'_, 'tcx>,
   targets: Vec<Vec<(Place<'tcx>, LocationOrArg)>>,
-  spanner: &Spanner,
+  spanner: &Spanner<'tcx>,
 ) -> Vec<Vec<Span>> {
+  compute_focus_directions(results, targets, spanner).both
+}
+
+// Link occurrences only when both the MIR place and its reaching provenance
+// agree. Equal dependency sets alone are insufficient: two struct fields can
+// have the same creation location while still holding independent values.
+pub(super) fn value_targets<'tcx>(
+  results: &FlowResults<'_, 'tcx>,
+  targets: Vec<Vec<(Place<'tcx>, LocationOrArg)>>,
+  spanner: &Spanner<'tcx>,
+) -> Vec<Vec<(Place<'tcx>, LocationOrArg)>> {
+  let domain = results.analysis.location_domain();
+  let mut keys = FxHashMap::default();
+  let mut groups: FxHashMap<_, Vec<_>> = FxHashMap::default();
+  let mut occurrences = targets.iter().flatten().copied().collect::<Vec<_>>();
+  let selected_places = occurrences
+    .iter()
+    .map(|(place, _)| *place)
+    .collect::<FxHashSet<_>>();
+  // Results must not depend on whether the caller requests one cursor target
+  // or all of them. Find equivalent occurrences in the body's source map.
+  occurrences.extend(
+    spanner
+      .mir_span_tree
+      .iter()
+      .filter(|span| selected_places.contains(&span.place))
+      .flat_map(|span| {
+        span
+          .locations
+          .iter()
+          .map(|location| (span.place, *location))
+      }),
+  );
+  occurrences.sort_by_key(|(_, location)| match location {
+    LocationOrArg::Arg(..) => Location::START,
+    LocationOrArg::Location(location) => *location,
+  });
+  for (place, location) in occurrences {
+    if keys.contains_key(&(place, location)) {
+      continue;
+    }
+    let at = match location {
+      LocationOrArg::Arg(..) => Location::START,
+      LocationOrArg::Location(location) => location,
+    };
+    let deps = results.analysis.deps_for(&results.state_at(at), place);
+    let key = (place, deps.indices().collect::<Vec<_>>());
+    groups
+      .entry(key.clone())
+      .or_default()
+      .push((place, location));
+    keys.insert((place, location), key);
+  }
+  for ((_, deps), occurrences) in &mut groups {
+    // A definition is the earliest anchor for its value. Keeping just that
+    // anchor avoids quadratic work for locals with many equivalent reads.
+    if let Some(definition) = occurrences
+      .iter()
+      .find(|(_, location)| deps.contains(&location.to_index(domain)))
+      .copied()
+    {
+      *occurrences = vec![definition];
+    }
+  }
+  targets
+    .into_iter()
+    .map(|targets| {
+      let mut seen = FxHashSet::default();
+      targets
+        .into_iter()
+        .flat_map(|target| groups[&keys[&target]].iter().copied())
+        .filter(|target| seen.insert(*target))
+        .collect()
+    })
+    .collect()
+}
+
+/// Editor views of a selected value, computed from one dependency traversal.
+pub struct FocusDirections {
+  pub pre: Vec<Vec<Span>>,
+  pub post: Vec<Vec<Span>>,
+  pub both: Vec<Vec<Span>>,
+}
+
+/// Compute backward causes, forward effects, and their refined union for editor focus.
+pub fn compute_focus_directions<'tcx>(
+  results: &FlowResults<'_, 'tcx>,
+  targets: Vec<Vec<(Place<'tcx>, LocationOrArg)>>,
+  spanner: &Spanner<'tcx>,
+) -> FocusDirections {
   block_timer!("compute_focus_spans");
   let body = results.analysis.body;
   let simple_args = super::simple_args::collect(
     results.analysis.tcx,
     results.analysis.def_id.expect_local(),
   );
+  let targets = value_targets(results, targets, spanner);
   let target_deps = TargetDeps::all(&targets, results);
   let forward = compute_dependencies_inner(
     results,
@@ -551,16 +650,16 @@ pub fn compute_focus_spans<'tcx>(
                 .deps_for(&results.state_at(*previous), place),
             );
           }
-          Some((arg.span, deps))
+          Some((arg.span, deps, Vec::new()))
         })
         .collect::<Vec<_>>();
       Some((LocationOrArg::Location(location), inputs))
     })
     .collect::<Vec<_>>();
   // A MIR aggregate has one source range for the whole constructor. As with a
-  // forward-only call, remove plain fields whose incoming value is independent
-  // of the selection. Keep backward aggregates, effects, adjustments and macros
-  // intact. HIR field indices account for source fields written out of order.
+  // forward-only call, remove fields whose incoming value and evaluation effects
+  // are independent of the selection. Backward aggregates remain intact. HIR
+  // field indices account for source fields written out of order.
   calls.extend(body.all_locations().filter_map(|location| {
     let Either::Left(statement) = body.stmt_at(location) else {
       return None;
@@ -574,16 +673,6 @@ pub fn compute_focus_spans<'tcx>(
     let AggregateKind::Adt(_, _, _, _, None) = **kind else {
       return None;
     };
-    // Even a literal can depend on the selection through the branch that chose
-    // this constructor. Leave controlled aggregates conservative.
-    if results
-      .analysis
-      .control_dependencies
-      .dependent_on(location.block)
-      .is_some_and(|blocks| !blocks.is_empty())
-    {
-      return None;
-    }
     let fields = simple_args.fields.get(&statement.source_info.span)?;
     let incoming = if location.statement_index > 0 {
       vec![Location {
@@ -601,7 +690,7 @@ pub fn compute_focus_spans<'tcx>(
     }
     let inputs = fields
       .iter()
-      .filter_map(|(index, span)| {
+      .filter_map(|(index, span, simple)| {
         let operand = operands.get(*index)?;
         let mut deps = LocationOrArgSet::new(results.analysis.location_domain());
         if let Some(place) = operand.as_place() {
@@ -615,11 +704,47 @@ pub fn compute_focus_spans<'tcx>(
         } else if !matches!(operand, Operand::Constant(_)) {
           return None;
         }
-        Some((*span, deps))
+        // Selection of an operand at this instruction includes the aggregate's
+        // location as its pivot, even though its value predates the assignment.
+        deps.insert(LocationOrArg::Location(location));
+        // A branch matters only when the selection actually affects it. An
+        // unrelated preceding `?` must not prevent every field refinement.
+        for block in results
+          .analysis
+          .control_dependencies
+          .dependent_on(location.block)
+          .into_iter()
+          .flat_map(|blocks| blocks.iter())
+        {
+          let control = body.terminator_loc(block);
+          deps.insert(LocationOrArg::Location(control));
+          if let TerminatorKind::SwitchInt { discr, .. } =
+            &body.basic_blocks[block].terminator().kind
+            && let Some(place) = discr.as_place()
+          {
+            deps.union(&results.analysis.deps_for(&results.state_at(control), place));
+          }
+        }
+        // Preserve relevant effects within a complex initializer even if its
+        // resulting value is independent. Only the enclosing aggregate span is
+        // too broad; an actual dependency inside the field must remain visible.
+        let effects = if *simple {
+          Vec::new()
+        } else {
+          body
+            .all_locations()
+            .filter(|other| *other != location)
+            .filter(|other| span.contains(body.source_info(*other).span))
+            .map(LocationOrArg::Location)
+            .collect()
+        };
+        Some((*span, deps, effects))
       })
       .collect::<Vec<_>>();
     Some((LocationOrArg::Location(location), inputs))
   }));
+  let pre = dependency_spans(results, backward.clone(), spanner);
+  let post = dependency_spans(results, forward.clone(), spanner);
   let (dependencies, excluded): (Vec<_>, Vec<_>) = forward
     .into_iter()
     .zip(backward)
@@ -631,19 +756,32 @@ pub fn compute_focus_spans<'tcx>(
           forward.contains(*location) && !backward.contains(*location)
         })
         .flat_map(|(_, inputs)| inputs.iter())
-        .filter(|(_, deps)| {
+        .filter(|(_, deps, effects)| {
           !target
             .all_forward
             .iter()
             .any(|source| deps.contains_all(source))
+            && !effects
+              .iter()
+              .any(|location| forward.contains(*location) || backward.contains(*location))
         })
-        .map(|(span, _)| *span)
+        .map(|(span, _, _)| *span)
         .collect::<Vec<_>>();
       backward.union(&forward);
       (backward, excluded)
     })
     .unzip();
-  dependency_spans(results, dependencies, spanner)
+  let both = dependency_spans(results, dependencies, spanner)
+    .into_iter()
+    .zip(&excluded)
+    .map(|(spans, excluded)| {
+      spans
+        .into_iter()
+        .flat_map(|span| span.subtract(excluded.clone()))
+        .collect()
+    })
+    .collect();
+  let post = post
     .into_iter()
     .zip(excluded)
     .map(|(spans, excluded)| {
@@ -652,5 +790,6 @@ pub fn compute_focus_spans<'tcx>(
         .flat_map(|span| span.subtract(excluded.clone()))
         .collect()
     })
-    .collect()
+    .collect();
+  FocusDirections { pre, post, both }
 }

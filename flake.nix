@@ -67,6 +67,7 @@
                 command = { "${backend}/bin/flowistry-backend" },
                 gzip = "${pkgs.gzip}/bin/gzip",
                 batch = true,
+                follow_calls = true,
               }
               LUA
             '';
@@ -121,6 +122,9 @@
           '';
           nvim-summaries = backendTest "flowistry-nvim-summaries" ''
             nvim --headless -u NONE -i NONE -l tests/summaries.lua
+          '';
+          nvim-calls = backendTest "flowistry-nvim-calls" ''
+            nvim --headless -u NONE -i NONE -l tests/calls.lua
           '';
           nvim-cache = backendTest "flowistry-nvim-cache" ''
             nvim --headless -u NONE -i NONE -l tests/cache.lua

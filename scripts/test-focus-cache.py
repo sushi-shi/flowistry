@@ -34,7 +34,7 @@ def expanded(value):
             places = []
             for entry in value["place_info"]:
                 item = dict(entry, range=table[entry["range"]])
-                for field in ("ranges", "slice", "direct_influence", "maybe_slice"):
+                for field in ("ranges", "slice", "pre_slice", "post_slice", "direct_influence", "maybe_slice", "maybe_pre_slice", "maybe_post_slice"):
                     if field in item:
                         item[field] = [table[index] for index in item[field]]
                 places.append(item)

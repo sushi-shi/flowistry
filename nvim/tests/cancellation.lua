@@ -20,7 +20,8 @@ local function alive(pid)
   local file = io.open('/proc/' .. pid .. '/stat')
   if not file then return false end
   local stat = file:read('*a'); file:close()
-  return not stat:match('%) Z ')
+  -- The process can disappear between opening procfs and reading the file.
+  return stat ~= nil and not stat:match('%) Z ')
 end
 local passed = 0
 local function check(value, message) assert(value, message); passed = passed + 1 end

@@ -1,11 +1,37 @@
 //! Syntax metadata for the editor; this never changes the dataflow analysis.
-use rustc_hir::{BodyId, PatKind};
+use rustc_hir::{
+  BodyId, ExprKind, PatKind,
+  intravisit::{self, Visitor},
+};
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{BytePos, Span};
 
 use super::{ParameterAlias, RangeTable};
 
-pub(super) fn collect(
+/// A field label selects its initializer's value, not the containing struct.
+pub(crate) fn field_initializers(tcx: TyCtxt<'_>, body_id: BodyId) -> Vec<(Span, Span)> {
+  struct Fields(Vec<(Span, Span)>);
+  impl<'v> Visitor<'v> for Fields {
+    fn visit_expr(&mut self, expr: &'v rustc_hir::Expr<'v>) {
+      if let ExprKind::Struct(_, fields, _) = expr.kind {
+        for field in fields {
+          if !field.is_shorthand
+            && !field.ident.span.from_expansion()
+            && !field.expr.span.from_expansion()
+          {
+            self.0.push((field.ident.span, field.expr.span));
+          }
+        }
+      }
+      intravisit::walk_expr(self, expr);
+    }
+  }
+  let mut fields = Fields(Vec::new());
+  fields.visit_body(tcx.hir_body(body_id));
+  fields.0
+}
+
+pub(crate) fn collect(
   tcx: TyCtxt<'_>,
   body_id: BodyId,
   table: &mut RangeTable,

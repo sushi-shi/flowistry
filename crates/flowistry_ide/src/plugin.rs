@@ -93,6 +93,13 @@ enum FlowistryCommand {
     pos_column: usize,
   },
 
+  /// Follow a pinned value through resolved calls in the local crate.
+  PinFocus {
+    file: String,
+    pos_line: usize,
+    pos_column: usize,
+  },
+
   Decompose {
     file: String,
     pos: usize,
@@ -130,6 +137,7 @@ pub fn replay_request() -> Option<(String, PathBuf)> {
     Spans { file }
     | FileFocus { file, .. }
     | Focus { file, .. }
+    | PinFocus { file, .. }
     | Decompose { file, .. }
     | Playground { file, .. } => PathBuf::from(file),
     Preload
@@ -310,6 +318,7 @@ impl RustcPlugin for FlowistryPlugin {
       FileFocus { file, .. } => file,
       Spans { file, .. } => file,
       Focus { file, .. } => file,
+      PinFocus { file, .. } => file,
       Decompose { file, .. } => file,
       Playground { file, .. } => file,
       _ => unreachable!(),
@@ -388,6 +397,31 @@ impl RustcPlugin for FlowistryPlugin {
         postprocess(run(
           crate::playground::playground,
           compute_target,
+          &compiler_args,
+        ))
+      }
+      PinFocus {
+        file,
+        pos_line,
+        pos_column,
+      } => {
+        let range = move |file: &str| CharRange {
+          start: CharPos {
+            line: pos_line,
+            column: pos_column,
+          },
+          end: CharPos {
+            line: pos_line,
+            column: pos_column,
+          },
+          filename: Filename::intern(file),
+        };
+        let selection_file = file.clone();
+        postprocess(run(
+          move |tcx: TyCtxt<'_>, body: BodyId| {
+            crate::pinned::pinned(tcx, body, range(&selection_file))
+          },
+          move || crate::positions::Chars(range(&file)),
           &compiler_args,
         ))
       }

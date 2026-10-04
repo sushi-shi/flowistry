@@ -21,7 +21,7 @@ use rustc_utils::{
 use serde::{Deserialize, Serialize};
 
 mod direct_influence;
-mod source_selection;
+pub(crate) mod source_selection;
 #[cfg(test)]
 mod tests;
 
@@ -31,10 +31,16 @@ pub struct PlaceInfo {
   pub range: u32,
   pub ranges: Vec<u32>,
   pub slice: Vec<u32>,
+  pub pre_slice: Vec<u32>,
+  pub post_slice: Vec<u32>,
   pub direct_influence: Vec<u32>,
   /// Code relevant only when shared handles refer to the same state.
   #[serde(skip_serializing_if = "Vec::is_empty")]
   pub maybe_slice: Vec<u32>,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub maybe_pre_slice: Vec<u32>,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  pub maybe_post_slice: Vec<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -60,8 +66,8 @@ pub struct ParameterAlias {
 
 /// Builds [`FocusOutput::ranges`].
 #[derive(Default)]
-struct RangeTable {
-  ranges: Vec<CharRange>,
+pub(crate) struct RangeTable {
+  pub(crate) ranges: Vec<CharRange>,
   indices: FxHashMap<CharRange, u32>,
 }
 
@@ -99,7 +105,7 @@ pub(crate) fn focus_with_session<'tcx>(
     Spanner::new(tcx, body_id, body)
   };
 
-  let grouped_spans = spanner
+  let mut grouped_spans = spanner
     .mir_span_tree
     .iter()
     .map(|mir_span| {
@@ -117,6 +123,15 @@ pub(crate) fn focus_with_session<'tcx>(
     .map(|(k, vs)| (k, vs.into_iter().flatten().unique().collect::<Vec<_>>()))
     .collect::<Vec<_>>();
 
+  for (label, initializer) in source_selection::field_initializers(tcx, body_id) {
+    if let Some((_, targets)) = grouped_spans
+      .iter()
+      .find(|(span, _)| *span == initializer.data_untracked())
+    {
+      grouped_spans.push((label.data_untracked(), targets.clone()));
+    }
+  }
+
   let targets = grouped_spans
     .iter()
     .map(|(_, target)| target.clone())
@@ -125,12 +140,12 @@ pub(crate) fn focus_with_session<'tcx>(
   let maybe_relevant = {
     block_timer!("focus: maybe spans");
     shared_results.as_ref().map(|shared_results| {
-      infoflow::compute_focus_spans(shared_results, targets.clone(), &spanner)
+      infoflow::compute_focus_directions(shared_results, targets.clone(), &spanner)
     })
   };
   let relevant = {
     block_timer!("focus: dependency spans");
-    infoflow::compute_focus_spans(results, targets, &spanner)
+    infoflow::compute_focus_directions(results, targets, &spanner)
   };
 
   let direct = {
@@ -169,7 +184,8 @@ pub(crate) fn focus_with_session<'tcx>(
     ranges
   };
   let mut slices = Vec::with_capacity(grouped_spans.len());
-  for (i, ((mir_span, targets), slice)) in grouped_spans.iter().zip(relevant).enumerate()
+  for (i, ((mir_span, targets), slice)) in
+    grouped_spans.iter().zip(&relevant.both).enumerate()
   {
     log::debug!("Slice for {mir_span:?} is {slice:#?}");
 
@@ -219,7 +235,7 @@ pub(crate) fn focus_with_session<'tcx>(
 
     let maybe_slice = maybe_relevant
       .as_ref()
-      .map(|maybe| subtract_spans(&maybe[i], &slice))
+      .map(|maybe| subtract_spans(&maybe.both[i], slice))
       .unwrap_or_default();
 
     let Ok(range) = crate::positions::char_range(mir_span.span(), source_map) else {
@@ -228,9 +244,25 @@ pub(crate) fn focus_with_session<'tcx>(
     slices.push(PlaceInfo {
       range: table.index(range),
       ranges: to_ranges(&mut table, &[mir_span.span()]),
-      slice: to_ranges(&mut table, &slice),
+      slice: to_ranges(&mut table, slice),
+      pre_slice: to_ranges(&mut table, &relevant.pre[i]),
+      post_slice: to_ranges(&mut table, &relevant.post[i]),
       direct_influence: to_ranges(&mut table, &direct_influence),
       maybe_slice: to_ranges(&mut table, &maybe_slice),
+      maybe_pre_slice: to_ranges(
+        &mut table,
+        &maybe_relevant
+          .as_ref()
+          .map(|m| subtract_spans(&m.pre[i], &relevant.pre[i]))
+          .unwrap_or_default(),
+      ),
+      maybe_post_slice: to_ranges(
+        &mut table,
+        &maybe_relevant
+          .as_ref()
+          .map(|m| subtract_spans(&m.post[i], &relevant.post[i]))
+          .unwrap_or_default(),
+      ),
     });
   }
   log::info!(

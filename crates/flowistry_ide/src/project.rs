@@ -131,11 +131,14 @@ impl Selection {
   }
 
   pub fn modify_cargo(&self, cargo: &mut Command) {
-    if self.package.is_some() {
-      if let Err(error) = self.explicit_cargo(cargo) {
-        eprintln!("flowistry: {error:#}");
-        std::process::exit(2);
-      }
+    let selection = if self.package.is_some() {
+      self.explicit_cargo(cargo)
+    } else {
+      self.inferred_cargo(cargo)
+    };
+    if let Err(error) = selection {
+      eprintln!("flowistry: {error:#}");
+      std::process::exit(2);
     }
     if let Some(features) = &self.features {
       cargo.args(["--features", features]);
@@ -146,6 +149,93 @@ impl Selection {
     if self.no_default_features {
       cargo.arg("--no-default-features");
     }
+  }
+
+  fn inferred_cargo(&self, cargo: &mut Command) -> anyhow::Result<()> {
+    // rustc_plugin chooses the Cargo target, but uses the package name for
+    // SPECIFIC_CRATE on libraries and binaries. Cargo permits distinct names.
+    // Resolve the already selected target rather than guessing from the file.
+    let args = cargo
+      .get_args()
+      .map(|a| a.to_string_lossy())
+      .collect::<Vec<_>>();
+    let package = args
+      .windows(2)
+      .find(|p| p[0] == "-p")
+      .context("missing selected Cargo package")?;
+    let metadata = self.metadata()?;
+    let package = metadata["packages"]
+      .as_array()
+      .context("missing Cargo packages")?
+      .iter()
+      .find(|p| {
+        format!(
+          "{}:{}",
+          p["name"].as_str().unwrap_or_default(),
+          p["version"].as_str().unwrap_or_default()
+        ) == package[1]
+      })
+      .context("selected Cargo package not found")?;
+    let named = args
+      .windows(2)
+      .find(|p| matches!(p[0].as_ref(), "--bin" | "--example" | "--test" | "--bench"));
+    let target = package["targets"]
+      .as_array()
+      .context("missing Cargo targets")?
+      .iter()
+      .find(|t| {
+        let kinds = t["kind"].as_array();
+        if let Some(pair) = named {
+          t["name"].as_str() == Some(pair[1].as_ref())
+            && kinds
+              .is_some_and(|ks| ks.iter().any(|k| k.as_str() == Some(&pair[0][2 ..])))
+        } else {
+          kinds.is_some_and(|ks| {
+            ks.iter().any(|k| {
+              matches!(
+                k.as_str(),
+                Some("lib" | "rlib" | "dylib" | "cdylib" | "staticlib" | "proc-macro")
+              )
+            })
+          })
+        }
+      })
+      .context("selected Cargo target not found")?;
+    let name = target["name"]
+      .as_str()
+      .context("missing target name")?
+      .replace('-', "_");
+    cargo.env("SPECIFIC_CRATE", &name);
+    // A previous ordinary check (including one with the wrong crate filter)
+    // may have left metadata behind. Ensure the selected compiler runs again.
+    Self::invalidate_target(cargo, &name)?;
+    Ok(())
+  }
+
+  fn invalidate_target(cargo: &Command, crate_name: &str) -> anyhow::Result<()> {
+    let args = cargo.get_args().collect::<Vec<_>>();
+    let directory = args
+      .windows(2)
+      .find(|pair| pair[0] == "--target-dir")
+      .map(|pair| PathBuf::from(pair[1]).join("debug/deps"))
+      .context("missing plugin target directory")?;
+    if let Ok(entries) = std::fs::read_dir(directory) {
+      let prefix = format!("lib{crate_name}-");
+      for entry in entries {
+        let path = entry?.path();
+        if path
+          .file_name()
+          .is_some_and(|n| n.to_string_lossy().starts_with(&prefix))
+          && matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("rmeta" | "rlib")
+          )
+        {
+          std::fs::remove_file(path)?;
+        }
+      }
+    }
+    Ok(())
   }
 
   fn explicit_cargo(&self, cargo: &mut Command) -> anyhow::Result<()> {
@@ -168,38 +258,15 @@ impl Selection {
     let kind = self.target_kind.as_deref().unwrap();
     if kind == "lib" {
       command.arg("--lib");
-      // Match rustc_plugin's library invalidation: an rmeta generated while this
-      // target was a dependency must not cause Cargo to skip the analysis wrapper.
-      let args = cargo.get_args().collect::<Vec<_>>();
-      let directory = args
-        .windows(2)
-        .find(|pair| pair[0] == "--target-dir")
-        .map(|pair| PathBuf::from(pair[1]).join("debug/deps"))
-        .context("missing plugin target directory")?;
-      if let Ok(entries) = std::fs::read_dir(directory) {
-        let prefix = format!("lib{crate_name}-");
-        for entry in entries {
-          let path = entry?.path();
-          if path
-            .file_name()
-            .is_some_and(|n| n.to_string_lossy().starts_with(&prefix))
-            && matches!(
-              path.extension().and_then(|e| e.to_str()),
-              Some("rmeta" | "rlib")
-            )
-          {
-            std::fs::remove_file(path)?;
-          }
-        }
-      }
     } else {
       command
         .arg(format!("--{kind}"))
         .arg(self.target_name.as_ref().unwrap());
     }
     command
-      .env("SPECIFIC_CRATE", crate_name)
+      .env("SPECIFIC_CRATE", &crate_name)
       .env("SPECIFIC_TARGET", crate_type);
+    Self::invalidate_target(&command, &crate_name)?;
     *cargo = command;
     Ok(())
   }

@@ -15,13 +15,17 @@ function M.text()
     ["no place"] = " (select a variable)", editing = " (editing)",
     ["pinned target unavailable"] = " (pinned target unavailable)",
     ["analysis unavailable"] = " (unavailable)", error = " (error)",
+    ["pinned calls"] = " (pinned calls)", ["following calls"] = " (following calls)",
+    ["outside pinned calls"] = " (outside pinned call tree)",
   }
   local separator = ""
   if vim.g.loaded_airline == 1 then
     local ok, coc_status = pcall(vim.fn["airline#extensions#coc#get_status"])
     if ok and vim.trim(coc_status) ~= "" then separator = "| " end
   end
+  local direction = require("flowistry").direction()
   return separator .. "flowistry" .. (suffix[status] or "")
+    .. (direction ~= "both" and (" (" .. direction .. ")") or "")
     .. (require("flowistry").is_stale() and " [saved analysis]" or "")
 end
 

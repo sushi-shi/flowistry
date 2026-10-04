@@ -1,6 +1,12 @@
 -- Run with the user's airline/CoC configuration; backend delays are controlled.
 -- nvim --headless -i NONE --cmd 'let g:coc_start_at_startup=0' -c 'luafile tests/ui.lua'
 local repo = vim.fn.getcwd()
+-- The configured editor has already loaded its installed Flowistry. Exercise
+-- this checkout while retaining the real CoC/airline notification renderers.
+if package.loaded.flowistry then package.loaded.flowistry.stop() end
+for name in pairs(package.loaded) do
+  if name == "flowistry" or name:match("^flowistry%.") then package.loaded[name] = nil end
+end
 vim.opt.rtp:prepend(repo)
 vim.cmd("runtime plugin/flowistry.lua")
 local flow = require("flowistry")
@@ -96,7 +102,9 @@ local function run()
           if text:find("fixture compiler failure", 1, true) then error_popup = win; return true end
         end
       end, "CoC error popup shows the actual backend error")
-      check(vim.api.nvim_win_get_height(error_popup) <= 2, "CoC error popup stays small")
+      check(vim.api.nvim_win_get_height(error_popup) <= 4, "CoC error popup stays small")
+      check(table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(error_popup), 0, -1, false)):find(":Flow log", 1, true),
+        "CoC error popup points to full diagnostics")
       check(vim.api.nvim_get_current_win() == edit_win, "CoC error popup preserves editing focus")
     end
     await(function() return #popups() == 0 end, finish .. ": no orphan progress windows")

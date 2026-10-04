@@ -39,10 +39,24 @@ class CanonicalOutputTests(unittest.TestCase):
     def test_duplicates_and_order_are_not_changes(self):
         other = copy.deepcopy(self.output)
         for field in smoke.RANGE_LIST_FIELDS:
+            if field not in other["place_info"][0]:
+                continue
             other["place_info"][0][field] *= 3
             other["place_info"][0][field].reverse()
         other["containers"].reverse()
         self.assertEquivalent(other)
+
+    def test_directional_ranges_survive_index_expansion(self):
+        for field in ('pre_slice', 'post_slice', 'maybe_pre_slice', 'maybe_post_slice'):
+            plain = copy.deepcopy(self.output)
+            plain['place_info'][0][field] = [self.b]
+            entry = {'range': 0, 'ranges': [0], 'slice': [0, 1],
+                     'direct_influence': [1], 'maybe_slice': [0], field: [1]}
+            indexed = {'ranges': [self.a, self.b], 'place_info': [entry],
+                       'containers': self.output['containers']}
+            self.assertEqual(digest(plain), digest(indexed))
+            entry[field] = [0]
+            self.assertNotEqual(digest(plain), digest(indexed))
 
     def test_range_table_order_and_unused_entries_are_not_changes(self):
         for table, a, b in [([self.a, self.b], 0, 1), ([self.b, self.a, self.b], 1, 0)]:

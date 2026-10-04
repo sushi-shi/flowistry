@@ -14,6 +14,7 @@ local function run()
   local packaged = require("flowistry.packaged")
   assert(packaged.command[1] == expected, "plugin and backend are from different builds")
   assert(packaged.batch, "packaged backend's file-focus support is missing")
+  assert(packaged.follow_calls, "packaged backend's call-following pins are not enabled")
   local module = debug.getinfo(flow.setup, "S").source
   assert(module:find(plugin .. "/lua/flowistry/init.lua", 1, true), "test loaded source instead of installed plugin")
   vim.fn.mkdir(temp .. "/src", "p")
@@ -44,6 +45,12 @@ local function run()
     groups[mark[4].hl_group] = true
   end
   assert(groups.FlowistryFocus and groups.FlowistryDim, "missing compiler-derived highlights")
+  flow.mark()
+  assert(vim.wait(300000, function() return flow.status() == "pinned" or flow.status() == "analysis unavailable" end, 20), "pin timeout")
+  assert(flow.status() == "pinned", flow.indicator())
+  assert(vim.iter(calls):any(function(command)
+    return command[1] == expected and vim.tbl_contains(command, "pin-focus")
+  end), "default pin did not use the paired cross-function backend")
 end
 vim.schedule(function()
   local ok, err = xpcall(run, debug.traceback)

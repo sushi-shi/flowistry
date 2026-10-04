@@ -1,4 +1,4 @@
-//! Plain call inputs and constructor fields that human-facing slices may trim.
+//! Call inputs and constructor fields that human-facing slices may trim.
 use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::{
@@ -11,7 +11,7 @@ use rustc_span::Span;
 
 pub(super) struct SimpleInputs {
   pub calls: Vec<Span>,
-  pub fields: FxHashMap<Span, Vec<(FieldIdx, Span)>>,
+  pub fields: FxHashMap<Span, Vec<(FieldIdx, Span, bool)>>,
 }
 
 struct Arguments<'tcx> {
@@ -52,20 +52,29 @@ impl<'tcx> Visitor<'tcx> for Arguments<'tcx> {
       if !expr.span.from_expansion() {
         let simple = fields
           .iter()
-          .filter(|field| self.simple(field.expr) && !field.span.from_expansion())
-          .map(|field| (self.typeck.field_index(field.hir_id), field.span))
+          .filter(|field| {
+            !field.span.from_expansion() && !field.expr.span.from_expansion()
+          })
+          .map(|field| {
+            (
+              self.typeck.field_index(field.hir_id),
+              field.span,
+              self.simple(field.expr),
+            )
+          })
           .collect();
         self.inputs.fields.insert(expr.span, simple);
       }
     }
     // Nested bodies are analyzed independently; the default visitor does not
-    // enter them. Keep methods, macros and effectful expressions conservative.
+    // enter them. Call arguments remain limited to plain reads. Constructor
+    // fields additionally carry their effects for dependency-aware refinement.
     intravisit::walk_expr(self, expr);
   }
 }
 
-/// Spans of function-call arguments and struct fields that are plain reads:
-/// paths, literals, and field or array/slice index projections of them. Arguments
+/// Spans of plain function-call arguments and source-written struct fields.
+/// Plain reads are paths, literals, and field or array/slice index projections. Arguments
 /// with adjustments (such as the reborrow of a reference argument) or from macro
 /// expansions are excluded, as are all method-call arguments.
 pub(super) fn collect(tcx: TyCtxt<'_>, def_id: LocalDefId) -> SimpleInputs {

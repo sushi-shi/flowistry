@@ -124,6 +124,33 @@ impl<'mir, 'tcx, A: Analysis<'tcx>> AnalysisResults<'mir, 'tcx, A> {
     }
   }
 
+  /// State entering an instruction, before its writes can mix call operands.
+  pub fn state_before(&self, location: Location) -> A::Domain {
+    if location.statement_index > 0 {
+      return self
+        .state_at(Location {
+          statement_index: location.statement_index - 1,
+          ..location
+        })
+        .clone();
+    }
+    match &self.storage {
+      Storage::Blocks {
+        entries, bottom, ..
+      } => entries[location.block].as_ref().unwrap_or(bottom).clone(),
+      Storage::Locations(_) => {
+        let mut state = self.analysis.bottom_value(self.body);
+        if location.block == rustc_middle::mir::START_BLOCK {
+          self.analysis.initialize_start_block(self.body, &mut state);
+        }
+        for predecessor in &self.body.basic_blocks.predecessors()[location.block] {
+          state.join(&self.state_at(self.body.terminator_loc(*predecessor)));
+        }
+        state
+      }
+    }
+  }
+
   /// Calls `f` with every location of the body and the state after it, block by block
   /// in the order of [`Body::basic_blocks`], and in order within a block.
   pub fn for_each_state(&self, mut f: impl FnMut(Location, &A::Domain)) {

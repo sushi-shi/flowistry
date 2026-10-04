@@ -65,7 +65,13 @@ fn range_lists_have_no_repetitions() {
   assert!(!places.is_empty());
   let mut influenced = 0;
   for place in places {
-    for field in ["ranges", "slice", "direct_influence"] {
+    for field in [
+      "ranges",
+      "slice",
+      "pre_slice",
+      "post_slice",
+      "direct_influence",
+    ] {
       let ranges = place[field].as_array().unwrap();
       let distinct = ranges.iter().map(Value::to_string).collect::<HashSet<_>>();
       assert_eq!(
@@ -91,9 +97,15 @@ fn places_refer_to_a_table_of_distinct_ranges() {
   let mut used = HashSet::new();
   for place in output["Ok"]["place_info"].as_array().unwrap() {
     let range = place["range"].as_u64().unwrap();
-    let lists = ["ranges", "slice", "direct_influence"]
-      .into_iter()
-      .flat_map(|field| place[field].as_array().unwrap());
+    let lists = [
+      "ranges",
+      "slice",
+      "pre_slice",
+      "post_slice",
+      "direct_influence",
+    ]
+    .into_iter()
+    .flat_map(|field| place[field].as_array().unwrap());
     for index in lists.map(|index| index.as_u64().unwrap()).chain([range]) {
       assert!(
         (index as usize) < table.len(),

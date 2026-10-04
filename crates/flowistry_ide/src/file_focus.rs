@@ -99,7 +99,12 @@ impl rustc_driver::Callbacks for Callbacks {
       let filename = Filename::intern(&self.filename);
       let file = filename
         .find_source_file(source_map)
-        .map_err(|_| FlowistryError::FileNotFound)?;
+        .map_err(|_| FlowistryError::AnalysisError {
+          error: format!(
+            "{} is not compiled by the selected Cargo target. Check the target platform, enabled features, and #[cfg] module declarations.",
+            self.filename
+          ),
+        })?;
       let candidates = find_bodies(tcx);
       let selected = if let Some(identity) = &self.identity {
         let matching = candidates

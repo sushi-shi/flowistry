@@ -10,7 +10,24 @@ end
 if vim.env.FLOWISTRY_TEST_DELAY then (vim.uv or vim.loop).sleep(tonumber(vim.env.FLOWISTRY_TEST_DELAY)) end
 if vim.env.FLOWISTRY_TEST_MODE == "exit" then io.stderr:write("fixture compiler failure\n"); os.exit(1) end
 if vim.env.FLOWISTRY_TEST_MODE == "diagnostics" then io.stderr:write("error: expected Rust expression\n"); return end
-if vim.env.FLOWISTRY_TEST_MODE == "base64" then io.write("this is not base64!"); return end
+if vim.env.FLOWISTRY_TEST_MODE == "bindgen" then
+  io.stderr:write([[error: failed to run custom build command for `fixture`
+Caused by:
+  process didn't exit successfully (exit status: 101)
+  --- stderr
+  thread 'main' panicked at bindgen/lib.rs:616:27:
+  Unable to find libclang: set the LIBCLANG_PATH environment variable
+]])
+  os.exit(101)
+end
+if vim.env.FLOWISTRY_TEST_MODE == "empty" then return end
+if vim.env.FLOWISTRY_TEST_MODE == "empty-publication" then
+  io.write(vim.json.encode({ schema = 1, status = "uncached", output = "", inputs = vim.NIL })); return
+end
+if vim.env.FLOWISTRY_TEST_MODE == "base64" then
+  io.stderr:write("fixture transport diagnostic\n")
+  io.write("this is not base64!"); return
+end
 if vim.env.FLOWISTRY_TEST_MODE == "gzip" then io.write(vim.base64.encode("not gzip")); return end
 local function range(row, start, finish)
   return { filename = filename, start = { line = row, column = start }, ["end"] = { line = row, column = finish } }
@@ -62,6 +79,18 @@ elseif action == "focus" then
 else
   io.stderr:write("unexpected fixture command: " .. tostring(action)); os.exit(1)
 end
+if vim.env.FLOWISTRY_TEST_DIRECTIONS then
+  local function directions(focus)
+    for _, place in ipairs(focus.place_info) do
+      place.pre_slice = { place.slice[1] }
+      place.post_slice = { place.slice[#place.slice] }
+    end
+  end
+  if result.Ok and result.Ok.place_info then directions(result.Ok) end
+  for _, body in ipairs(result.Ok and result.Ok.bodies or {}) do
+    if type(body.focus) == "table" and body.focus.Ok then directions(body.focus.Ok) end
+  end
+end
 if vim.env.FLOWISTRY_TEST_RANGE_TABLE then
   -- The backend's range table: each distinct range once, referred to by 0-based index.
   local function tabulate(focus)
@@ -73,7 +102,7 @@ if vim.env.FLOWISTRY_TEST_RANGE_TABLE then
     end
     for _, place in ipairs(focus.place_info) do
       place.range = index(place.range)
-      for _, field in ipairs({ "ranges", "slice", "direct_influence", "maybe_slice" }) do
+      for _, field in ipairs({ "ranges", "slice", "pre_slice", "post_slice", "direct_influence", "maybe_slice", "maybe_pre_slice", "maybe_post_slice" }) do
         if place[field] then place[field] = vim.tbl_map(index, place[field]) end
       end
     end

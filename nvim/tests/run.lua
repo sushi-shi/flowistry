@@ -247,6 +247,14 @@ local function run()
   equal(groups_at(1, 5), { FlowistryDim = true }, "unrelated code stays dimmed")
   render.show(maybe_buf, maybe_focus, { 2, 5 }, 200, false, false)
   equal(groups_at(0, 3), { FlowistryDim = true }, "show_maybe = false dims possible writes like unrelated code")
+  local directional = maybe_focus.places[1]
+  directional.pre_slice, directional.post_slice = directional.slice, directional.slice
+  directional.maybe_pre_slice, directional.maybe_post_slice = { written }, {}
+  render.show(maybe_buf, maybe_focus, { 2, 5 }, 200, false, true, true, "pre")
+  equal(groups_at(0, 3), { FlowistryMaybe = true }, "pre retains its possible alias dependencies")
+  directional.direct_influence = { written }
+  render.show(maybe_buf, maybe_focus, { 2, 5 }, 200, true, true, true, "post")
+  equal(groups_at(0, 3), { FlowistryDim = true }, "post excludes pre-only alias and influence decorations")
   render.show(maybe_buf, { containers = maybe_focus.containers, places = { {
     range = seen, ranges = { seen }, slice = maybe_focus.places[1].slice, direct_influence = {},
   } } }, { 2, 5 }, 200)
@@ -473,8 +481,12 @@ local function run()
   equal(#marks(), 0, "late results cannot redraw disabled mode")
   equal(flow.status(), "off", "late results cannot resurrect state")
 
-  for _, mode in ipairs({ "exit", "diagnostics", "base64", "gzip", "error", "schema", "json" }) do
+  for _, mode in ipairs({ "exit", "diagnostics", "bindgen", "empty", "empty-publication", "base64", "gzip", "error", "schema", "json" }) do
     setup({ FLOWISTRY_TEST_MODE = mode })
+    if mode == "empty-publication" then
+      flow.setup({ command = command, auto_enable = false, batch = true, debounce_ms = 5,
+        env = { FLOWISTRY_TEST_MODE = mode } })
+    end
     local before_notes, before_win = #notes, vim.api.nvim_get_current_win()
     flow.enable()
     await(function() return flow.status() == "error" end, "failure surfaced: " .. mode)
@@ -486,13 +498,32 @@ local function run()
       if vim.api.nvim_win_get_config(win).relative == "editor" then error_popup = win end
     end
     check(error_popup ~= nil, "analysis error has a small popup")
-    check(vim.api.nvim_win_get_height(error_popup) <= 2, "error popup is at most two rows")
+    check(vim.api.nvim_win_get_height(error_popup) <= 4, "error popup stays compact")
+    local error_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(error_popup), 0, -1, false)
+    check(error_lines[#error_lines]:find(":Flow log", 1, true), "popup explains how to read the full error")
     if mode == "diagnostics" then
-      local text = table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(error_popup), 0, -1, false))
+      local text = error_lines[1]
       equal(text, "error: expected Rust expression", "popup shows the actual compiler diagnostic")
       flow.log()
       check(table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false)):find("Flowistry produced no analysis", 1, true),
         "full transport details remain available in the log")
+      vim.cmd.close()
+    elseif mode == "bindgen" then
+      check(error_lines[1]:find("libclang", 1, true), "build failure shows its missing-library cause")
+      check(error_lines[1]:find("LIBCLANG_PATH", 1, true), "build failure names the needed environment setting")
+    elseif mode == "empty" or mode == "empty-publication" or mode == "base64" then
+      flow.log()
+      local detail = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+      check(detail:find("Command:", 1, true), "transport failure includes the exact command")
+      check(detail:find("Working directory:", 1, true), "transport failure includes the working directory")
+      if mode == "base64" then
+        check(detail:find("this is not base64!", 1, true), "malformed response is preserved")
+        check(detail:find("fixture transport diagnostic", 1, true), "decoder preserves compiler stderr")
+      else
+        check(error_lines[1]:find("Flowistry produced no analysis", 1, true), "empty response popup explains the problem")
+        check(detail:find("Flowistry produced no analysis", 1, true), "empty response explains missing analysis")
+        check(not detail:find("Invalid base64", 1, true), "empty response is not misreported as base64 corruption")
+      end
       vim.cmd.close()
     end
   end
@@ -532,6 +563,48 @@ local function run()
   await(function() return completed end, "spawn failure callback delivered")
   flow.disable()
 
+  for _, tabulated in ipairs({ false, true }) do
+    setup({ FLOWISTRY_TEST_DIRECTIONS = "1", FLOWISTRY_TEST_RANGE_TABLE = tabulated and "1" or nil })
+    move(2, 8)
+    flow.enable()
+    await(function() return flow.status() == "active" end, "directional response renders")
+    local before = #calls()
+    local function dimmed(row, col)
+      for _, mark in ipairs(marks()) do
+        if mark[4].hl_group == "FlowistryDim" and ranges.contains({ start = { mark[2], mark[3] },
+          finish = { mark[4].end_row, mark[4].end_col } }, { row, col }) then return true end
+      end
+      return false
+    end
+    vim.cmd("Flow pre")
+    check(dimmed(3, 19), "pre dims downstream use")
+    check(not dimmed(1, 4), "pre keeps the defining expression")
+    check(flow.indicator():find("(pre)", 1, true), "statusline identifies pre view")
+    flow.mark()
+    move(5, 8)
+    vim.cmd("Flow post")
+    check(not dimmed(3, 19), "post keeps the downstream use of the pinned value")
+    check(dimmed(1, 4), "post dims upstream definition context")
+    check(flow.indicator():find("(post)", 1, true), "statusline identifies post view")
+    vim.cmd("Flow both")
+    check(not dimmed(1, 4) and not dimmed(3, 19), "both combines causes and effects")
+    equal(#calls(), before, "switching directions reuses analysis without a backend call")
+    flow.disable()
+  end
+
+  setup()
+  move(2, 8)
+  flow.enable()
+  await(function() return flow.status() == "active" end, "legacy backend works in both view")
+  local legacy_calls = #calls()
+  vim.cmd("Flow pre")
+  equal(flow.status(), "analysis unavailable", "legacy backend cannot silently show both for pre")
+  equal(#marks(), 0, "unsupported direction clears misleading highlights")
+  vim.cmd("Flow both")
+  equal(flow.status(), "active", "returning to both recovers without recompiling")
+  equal(#calls(), legacy_calls, "legacy view switch does not retry backend")
+  flow.disable()
+
   for _, max_lines in ipairs({ 600, 1 }) do
     flow.setup({ command = command, auto_enable = false, batch = true, batch_max_lines = max_lines, debounce_ms = 5,
       env = { FLOWISTRY_TEST_LOG = log } })
@@ -559,6 +632,12 @@ local function run()
     equal(#calls(), before_batch + (max_lines == 1 and 2 or 1), "loading another function retains earlier cached analysis")
     move(8, 3)
     await(function() return flow.status() == "analysis unavailable" end, "individual body error does not discard other cached functions")
+    flow.log()
+    check(table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false)):find("unsupported body fixture", 1, true),
+      "log includes the selected function's analysis failure")
+    vim.cmd.close()
+    move(2, 8)
+    await(function() return flow.status() == "active" end, "a body failure does not prevent analysis of another function")
     flow.disable()
   end
 
@@ -653,7 +732,7 @@ local function run()
   local native_select, menu, choose = vim.ui.select
   vim.ui.select = function(items, opts, callback) menu, choose = items, callback end
   vim.cmd("Flow")
-  equal(menu, { "on", "off", "pin", "unpin", "toggle", "refresh", "types", "project", "start", "stop", "log" }, "bare Flow offers its actions")
+  equal(menu, { "on", "off", "pin", "unpin", "toggle", "refresh", "types", "pre", "post", "both", "project", "start", "stop", "log" }, "bare Flow offers its actions")
   equal(flow.status(), "active", "opening the action menu does not toggle flow")
   choose(nil)
   equal(flow.status(), "active", "cancelling the action menu preserves state")

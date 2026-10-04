@@ -11,6 +11,7 @@ local configured = false
 local uv = vim.uv or vim.loop
 local progress_timer
 local background
+local call_pin
 local inputs = require("flowistry.inputs").new()
 local input_epoch = 0
 local defaults = {
@@ -30,6 +31,8 @@ local defaults = {
   priority = 200,
   show_influence = false,
   show_maybe = true,
+  direction = "both", -- pre: causes, post: effects, both: their union.
+  follow_calls = false, -- Enabled by the bundled backend; upstream lacks pin-focus.
   parameter_types = true, -- Focusing an argument's type selects its binding.
   progress = false, -- Session launcher enables analysis progress popups.
   project = { enabled = false, idle_ms = 300, memory_mib = 6144, timeout_seconds = 600,
@@ -57,6 +60,15 @@ local function stop(state)
 end
 
 local function clear_pin(state)
+  if call_pin and call_pin.owner == state then
+    if call_pin.pending then stop(state) end
+    call_pin = nil
+    for _, related in pairs(states) do
+      render.clear(related.buf)
+      related.slice, related.view_error = nil, nil
+    end
+    vim.schedule(function() if states[current()] then update(states[current()]) end end)
+  end
   state.mark = nil
   pins.clear(state.buf)
 end
@@ -79,6 +91,9 @@ end
 
 local function invalidate(state, preserve)
   stop(state)
+  if call_pin and call_pin.owner == state then
+    call_pin.result, call_pin.pending, call_pin.error = nil, nil, nil
+  end
   if preserve and state.bodies and not state.retained then
     state.retained = { bodies = state.bodies, inputs = {} }
   elseif not preserve then
@@ -86,6 +101,7 @@ local function invalidate(state, preserve)
   end
   state.stale = preserve and (state.stale or state.slice ~= nil) or false
   state.bodies, state.slice, state.error = nil, nil, nil
+  state.unavailable_body = nil
   state.cached = nil
   state.status = "idle"
   if not preserve then clear_pin(state); render.clear(state.buf) end
@@ -224,6 +240,10 @@ local function prepare_focus(state, value)
         slice = place_list(place.slice),
         direct_influence = place_list(place.direct_influence),
         maybe_slice = place_list(place.maybe_slice or {}),
+        pre_slice = place.pre_slice and place_list(place.pre_slice),
+        post_slice = place.post_slice and place_list(place.post_slice),
+        maybe_pre_slice = place_list(place.maybe_pre_slice or {}),
+        maybe_post_slice = place_list(place.maybe_post_slice or {}),
       }
     end
   end
@@ -290,6 +310,80 @@ local function request(state, args, request_config, handler)
   end, handler)
 end
 
+local function follows_pin(state)
+  if not call_pin or not call_pin.owner.context then return false end
+  local owner = call_pin.owner
+  local name = vim.api.nvim_buf_get_name(state.buf)
+  return state == owner or inside_root(name, owner.context.root)
+    or (call_pin.result and call_pin.result.files[uv.fs_realpath(name) or vim.fs.normalize(name)] ~= nil)
+end
+
+local function update_calls(state)
+  local pin, owner = call_pin, call_pin.owner
+  local pos = pin_position(owner)
+  if not pos then
+    render.clear(state.buf)
+    state.slice, state.status = nil, "pinned target unavailable"
+    return
+  end
+  if vim.bo[owner.buf].modified or dirty(owner.context.root) then
+    state.stale, state.status = state.slice ~= nil, "waiting for save"
+    return
+  end
+  if state ~= owner and state.busy then stop(state) end
+  if owner.error or pin.error then
+    render.clear(state.buf)
+    state.slice, state.view_error, state.status = nil, owner.error or pin.error, "analysis unavailable"
+    return
+  end
+  if not pin.result then
+    if not state.stale then render.clear(state.buf); state.slice = nil end
+    state.status = "following calls"
+    if pin.pending or owner.busy then return end
+    pin.pending = true
+    local position = ranges.position(owner.buf, { pos[1] + 1, pos[2] })
+    -- This result is for the pin's source/target, even after entering a callee file.
+    local receive = callback(owner, function(value)
+      pin.result = require("flowistry.call_slice").prepare(value, owner.context.root)
+      pin.pending = false
+      -- Pin results do not use file-focus's publication protocol. Retain broad
+      -- invalidation, including dependency edits outside the workspace.
+      inputs:observe(owner.context.root, false, "pinned calls")
+      vim.schedule(function() if states[current()] then update(states[current()]) end end)
+    end, "Following pinned calls")
+    owner.operation = request(owner, { "pin-focus", vim.api.nvim_buf_get_name(owner.buf),
+      tostring(position[1]), tostring(position[2]) }, config, function(err, value)
+      receive(err, value)
+      if call_pin == pin and owner.error then
+        pin.error, owner.error = owner.error, nil
+      end
+      if call_pin == pin and states[current()] then update(states[current()]) end
+    end)
+    return
+  end
+  local ok, focus, err = pcall(pin.result.buffer, pin.result, state.buf)
+  if not ok then err, focus = "Invalid pinned slice: " .. tostring(focus), nil end
+  if err then
+    render.clear(state.buf)
+    state.slice, state.view_error, state.status = nil, err, "analysis unavailable"
+    if pin.error ~= err then progress.error(state, err) end
+    pin.error = err
+    return
+  end
+  state.view_error, state.stale, state.cached = nil, false, false
+  state.refresh_after_save = nil
+  if not focus then
+    render.clear(state.buf)
+    state.slice, state.status = nil, "outside pinned calls"
+    return
+  end
+  state.slice = render.pinned(state.buf, focus, state == owner and pos or nil,
+    config.priority, config.show_maybe, config.direction)
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local inside = ranges.smallest(focus.bodies, { cursor[1] - 1, cursor[2] }, function(range) return range end)
+  state.status = inside and (state == owner and "pinned" or "pinned calls") or "outside pinned calls"
+end
+
 update = function(state)
   if states[state.buf] ~= state or current() ~= state.buf then return end
   -- Saving from Insert mode can let rustfmt replace whole lines and displace
@@ -306,6 +400,7 @@ update = function(state)
     return
   end
   if not state.busy then restore_unchanged(state) end
+  if follows_pin(state) then update_calls(state); return end
   if state.busy or state.error then return end
   local pinned = pin_position(state)
   if state.mark and not pinned then
@@ -382,6 +477,10 @@ update = function(state)
     if not state.stale then render.clear(state.buf) end
     if body.error then
       state.slice, state.status = nil, "analysis unavailable"
+      if state.unavailable_body ~= body then
+        progress.error(state, tostring(body.error))
+        state.unavailable_body = body
+      end
       state.refresh_after_save = nil
       return
     end
@@ -412,9 +511,17 @@ update = function(state)
     end, "Analyzing function"))
     return
   end
-  state.slice = render.show(
-    state.buf, body.focus, pos, config.priority, config.show_influence, config.show_maybe, config.parameter_types
+  local view_error
+  state.slice, view_error = render.show(
+    state.buf, body.focus, pos, config.priority, config.show_influence, config.show_maybe, config.parameter_types, config.direction
   )
+  if view_error then
+    if state.view_error ~= view_error then progress.error(state, view_error) end
+    state.view_error, state.status = view_error, "analysis unavailable"
+    return
+  end
+  if state.view_error then progress.close(state); state.view_error = nil end
+  if state.unavailable_body then progress.close(state); state.unavailable_body = nil end
   state.cached = body.cached == true
   state.stale = false
   state.status = state.slice and (state.mark and "pinned" or "active") or "no place"
@@ -445,6 +552,8 @@ function M.setup(opts)
   assert(type(config.debounce_ms) == "number" and config.debounce_ms >= 0, "debounce_ms must be nonnegative")
   assert(type(config.timeout_ms) == "number" and config.timeout_ms > 0, "timeout_ms must be positive")
   assert(type(config.auto_enable) == "boolean", "auto_enable must be a boolean")
+  assert(vim.tbl_contains({ "pre", "post", "both" }, config.direction), "direction must be pre, post, or both")
+  assert(type(config.follow_calls) == "boolean", "follow_calls must be a boolean")
   assert(type(config.cache) == "boolean", "cache must be a boolean")
   assert(config.cache_dir == nil or (type(config.cache_dir) == "string" and config.cache_dir ~= ""), "cache_dir must be a nonempty path")
   assert(not config.command or (vim.islist(config.command) and #config.command > 0), "command must be an argv list")
@@ -624,6 +733,7 @@ function M.disable(buf)
   disabled[buf] = true
   local state = states[buf]
   if state then
+    if follows_pin(state) then clear_pin(call_pin.owner) end
     background:detach(state)
     stop(state)
     clear_pin(state)
@@ -651,6 +761,14 @@ function M.mark()
   if state.mark and pins.contains(state.buf, state.mark, pos) then
     clear_pin(state)
   else
+    if config.follow_calls then
+      if call_pin then clear_pin(call_pin.owner) end
+      stop(state)
+      state.error, state.view_error = nil, nil
+      render.clear(state.buf)
+      state.slice = nil
+      call_pin = { owner = state }
+    end
     state.mark = pins.set(state.buf, pos, state.mark)
   end
   update(state)
@@ -662,8 +780,27 @@ function M.types()
   notify("argument type selection " .. (config.parameter_types and "enabled" or "disabled"))
 end
 
+function M.direction(direction)
+  if direction == nil then return config.direction end
+  if not configured then M.setup() end
+  assert(vim.tbl_contains({ "pre", "post", "both" }, direction), "direction must be pre, post, or both")
+  config.direction = direction
+  -- Repaint on the existing result. Direction is not a compiler/cache option.
+  for _, state in pairs(states) do
+    render.clear(state.buf)
+    state.slice = nil
+  end
+  if states[current()] then update(states[current()]) else M.enable() end
+  vim.cmd("redrawstatus")
+end
+
+function M.pre() M.direction("pre") end
+function M.post() M.direction("post") end
+function M.both() M.direction("both") end
+
 function M.unmark()
   local state = states[current()]
+  if call_pin then clear_pin(call_pin.owner) end
   if state then clear_pin(state); update(state) end
 end
 
@@ -738,6 +875,9 @@ function M.indicator(buf)
   end
   local labels = {
     active = "ON", pinned = "PINNED", idle = "ON",
+    ["pinned calls"] = "PINNED - following calls",
+    ["following calls"] = "Following pinned calls...",
+    ["outside pinned calls"] = "Outside pinned call tree",
     ["waiting for save"] = "Save modified project files",
     ["outside function"] = "ON - move inside a function",
     ["no place"] = "ON - select a variable", editing = "ON - editing",
@@ -750,6 +890,7 @@ function M.indicator(buf)
     (" (project %d/%s)"):format(project.completed, project.total or "?") or ""
   if project and (project.failed > 0 or project.status == "unavailable") then work = work .. " (project incomplete)" end
   return "Flowistry: " .. (labels[state.status] or state.status)
+    .. (config.direction ~= "both" and (" (" .. config.direction .. ")") or "")
     .. (state.stale and " (showing saved analysis)" or "")
     .. (not state.stale and state.slice and state.cached and " (disk cache)" or "")
     .. work
@@ -757,11 +898,17 @@ end
 
 function M.log()
   local state = states[current()]
-  local message = state and state.error or "No Flowistry error for this buffer."
+  local body
+  if state and state.bodies then
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local pos = pin_position(state) or { cursor[1] - 1, cursor[2] }
+    body = ranges.smallest(state.bodies, pos, function(item) return item.range end)
+  end
+  local message = state and (state.error or state.view_error) or body and body.error or "No Flowistry error for this buffer."
   local project = M.project_status()
   if project and project.error then message = message .. "\nProject analysis:\n" .. project.error end
   local watched = M.input_status()
-  if watched then message = message .. "\nInput invalidation:\n" .. vim.inspect(watched) end
+  if watched then message = message .. "\nInput invalidation (cache diagnostics):\n" .. vim.inspect(watched) end
   vim.cmd("botright new")
   local buf = current()
   vim.bo[buf].buftype, vim.bo[buf].bufhidden, vim.bo[buf].swapfile = "nofile", "wipe", false
